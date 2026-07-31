@@ -4,6 +4,7 @@ import {
   subclassCardArtPath,
   communityCardArtPath,
   ancestryCardArtPath,
+  featuresText,
 } from "./shared/card-render.js";
 import { activeDomainCardIds, damageThresholds, ensureLevelFields } from "./shared/advancement.js";
 
@@ -187,12 +188,15 @@ function renderDetail() {
   const cardsRow = document.createElement("div");
   cardsRow.className = "tile-grid";
   const subTier = ch.subclassTier === "foundation" ? "Foundation" : ch.subclassTier === "specialization" ? "Specialization" : "Mastery";
-  if (sub) cardsRow.appendChild(cardBlock({ id: sub.id, name: `${sub.name["en-US"]} (${subTier})`, art: subclassCardArtPath(sub.id, ch.subclassTier) }));
+  if (sub) {
+    const tierFeatures = sub[ch.subclassTier]?.features;
+    cardsRow.appendChild(cardBlock({ id: sub.id, name: `${sub.name["en-US"]} (${subTier})`, art: subclassCardArtPath(sub.id, ch.subclassTier), type: "Subclass", feature: featuresText(tierFeatures) }));
+  }
   const com = findCommunity(ch.heritage.communityId);
-  if (com) cardsRow.appendChild(cardBlock({ id: com.id, name: com.name["en-US"], art: communityCardArtPath(com.id) }, `Community: ${com.name["en-US"]}`));
+  if (com) cardsRow.appendChild(cardBlock({ id: com.id, name: com.name["en-US"], art: communityCardArtPath(com.id), type: "Community", feature: featuresText(com.features) }, `Community: ${com.name["en-US"]}`));
   for (const ancId of ch.heritage.ancestryIds) {
     const anc = findAncestry(ancId);
-    if (anc) cardsRow.appendChild(cardBlock({ id: anc.id, name: anc.name["en-US"], art: ancestryCardArtPath(anc.id) }, `Ancestry: ${anc.name["en-US"]}`));
+    if (anc) cardsRow.appendChild(cardBlock({ id: anc.id, name: anc.name["en-US"], art: ancestryCardArtPath(anc.id), type: "Ancestry", feature: featuresText(anc.features) }, `Ancestry: ${anc.name["en-US"]}`));
   }
   container.appendChild(cardsRow);
 
@@ -240,7 +244,7 @@ function renderDetail() {
       const inVault = ch.domainVaultIds.includes(cardId);
       const wrap = document.createElement("div");
       wrap.className = "card-tile";
-      wrap.appendChild(renderCardArt({ id: dc.id, name: dc.name["en-US"], art: domainCardArtPath(dc.id) }));
+      wrap.appendChild(renderCardArt({ id: dc.id, name: dc.name["en-US"], art: domainCardArtPath(dc.id), level: dc.level, type: dc.type, feature: featuresText(dc.features) }));
       const label = document.createElement("div");
       label.className = "card-tile-label";
       label.textContent = dc.name["en-US"];

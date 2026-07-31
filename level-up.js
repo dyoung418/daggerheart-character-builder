@@ -1,4 +1,4 @@
-import { renderCardArt, domainCardArtPath, subclassCardArtPath } from "./shared/card-render.js";
+import { renderCardArt, domainCardArtPath, subclassCardArtPath, featuresText } from "./shared/card-render.js";
 import {
   ADVANCEMENT_LABELS,
   availableOptionKeys,
@@ -218,11 +218,15 @@ function renderSubclassPreview(main) {
     : `You'll take the ${nextTier} card for your subclass.`;
   main.appendChild(p);
   if (character.subclassTier !== "mastery") {
+    const sub = db.subclasses.find((s) => s.id === character.subclassId);
     const preview = document.createElement("div");
     preview.className = "tile-grid";
     const tile = document.createElement("div");
     tile.className = "card-tile";
-    tile.appendChild(renderCardArt({ id: character.subclassId, name: nextTier, art: subclassCardArtPath(character.subclassId, nextTier) }));
+    tile.appendChild(renderCardArt({
+      id: character.subclassId, name: nextTier, art: subclassCardArtPath(character.subclassId, nextTier),
+      type: "Subclass", feature: featuresText(sub?.[nextTier]?.features),
+    }));
     preview.appendChild(tile);
     main.appendChild(preview);
   }
@@ -242,7 +246,7 @@ function renderMandatoryCardStep(main, cls, newLevel) {
   const grid = document.createElement("div");
   grid.className = "tile-grid";
   for (const c of cards) {
-    const card = { id: c.id, name: c.name["en-US"], art: domainCardArtPath(c.id) };
+    const card = { id: c.id, name: c.name["en-US"], art: domainCardArtPath(c.id), level: c.level, type: c.type, feature: featuresText(c.features) };
     const selected = mandatoryCardId === c.id;
     const tile = document.createElement("div");
     tile.className = "card-tile" + (selected ? " selected" : "");
@@ -267,7 +271,7 @@ function renderBonusCardStep(main, cls, newLevel) {
   const grid = document.createElement("div");
   grid.className = "tile-grid";
   for (const c of cards) {
-    const card = { id: c.id, name: c.name["en-US"], art: domainCardArtPath(c.id) };
+    const card = { id: c.id, name: c.name["en-US"], art: domainCardArtPath(c.id), level: c.level, type: c.type, feature: featuresText(c.features) };
     const selected = bonusCardId === c.id;
     const tile = document.createElement("div");
     tile.className = "card-tile" + (selected ? " selected" : "");

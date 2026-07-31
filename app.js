@@ -1,4 +1,4 @@
-import { renderCardArt, domainCardArtPath } from "./shared/card-render.js";
+import { renderCardArt, domainCardArtPath, featuresText } from "./shared/card-render.js";
 
 const DOMAINS = ["ARCANA", "BLADE", "BONE", "CODEX", "GRACE", "MIDNIGHT", "SAGE", "SPLENDOR", "VALOR"];
 const TYPES = ["ABILITY", "SPELL", "GRIMOIRE"];
@@ -44,10 +44,7 @@ async function loadCards() {
     type: c.type,
     level: c.level,
     recallCost: c.recallCost,
-    feature: (c.features || [])
-      .flatMap((f) => f.description || [])
-      .map((d) => d.paragraph?.["en-US"] || "")
-      .join(" "),
+    feature: featuresText(c.features),
     art: domainCardArtPath(c.id),
   }));
 }

@@ -181,14 +181,16 @@ h1, h2, h3, .btn-primary, .btn-ghost, .btn-small, .top-nav a {
 .card-art { aspect-ratio: 5 / 7; background: var(--panel-alt); }
 .card-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
+/* Senza arte reale il fallback deve poter crescere in altezza quanto serve: niente
+   aspect-ratio fissa né overflow:hidden, altrimenti carte con più abilità (es. Grimoire,
+   sottoclassi Mastery) vengono tagliate senza nessun indizio che manca del testo. */
+.card-art.art-missing { aspect-ratio: auto; min-height: 8rem; border-top: 4px solid var(--c-arcana); }
 .card-fallback {
-  height: 100%;
   padding: 0.75rem;
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
 }
-.card-art.art-missing { border-top: 4px solid var(--c-arcana); }
 .card-art.domain-arcana.art-missing { border-color: var(--c-arcana); }
 .card-art.domain-blade.art-missing { border-color: var(--c-blade); }
 .card-art.domain-bone.art-missing { border-color: var(--c-bone); }
@@ -201,7 +203,7 @@ h1, h2, h3, .btn-primary, .btn-ghost, .btn-small, .top-nav a {
 
 .fallback-header { display: flex; justify-content: space-between; font-size: 0.7rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em; }
 .fallback-title { font-family: var(--font-display); font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; }
-.fallback-text { font-size: 0.72rem; color: var(--text-dim); overflow: hidden; flex: 1; }
+.fallback-text { font-size: 0.72rem; color: var(--text-dim); white-space: pre-line; }
 
 .card-meta {
   padding: 0.5rem 0.75rem;
@@ -375,6 +377,10 @@ h1, h2, h3, .btn-primary, .btn-ghost, .btn-small, .top-nav a {
 
 .card-tile { cursor: pointer; border: 2px solid transparent; border-radius: 8px; overflow: hidden; background: var(--panel-alt); transition: border-color 0.12s ease, transform 0.12s ease; }
 .card-tile .card-art { aspect-ratio: 5/7; }
+/* Il fallback senza arte deve poter crescere: batte la regola sopra (stessa specificità,
+   ma dichiarata dopo) e libera anche l'overflow:hidden del tile che altrimenti taglia il testo. */
+.card-tile .card-art.art-missing { aspect-ratio: auto; min-height: 8rem; }
+.card-tile:has(.art-missing) { overflow: visible; }
 .card-tile-label { padding: 0.4rem 0.5rem; font-size: 0.72rem; text-align: center; font-family: var(--font-display); letter-spacing: 0.02em; }
 .card-tile:hover { transform: translateY(-2px); }
 .card-tile.selected { border-color: var(--accent); box-shadow: 0 0 0 1px rgba(217, 164, 65, 0.35); }

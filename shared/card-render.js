@@ -44,6 +44,18 @@ export function renderCardArt(card) {
   return wrap;
 }
 
+// Feature text for the CSS-only fallback, shared by domain cards, subclasses,
+// ancestries and communities: they all share the same shape { name, description: [{paragraph}] }.
+export function featuresText(features) {
+  return (features || [])
+    .map((f) => {
+      const name = f.name?.["en-US"] || "";
+      const desc = (f.description || []).map((d) => d.paragraph?.["en-US"] || "").join(" ");
+      return name ? `${name}: ${desc}` : desc;
+    })
+    .join("\n\n");
+}
+
 export function domainCardArtPath(id) {
   return `data/card-art/domain/${id}.png`;
 }
