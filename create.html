@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Daggerheart — New Character</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>Daggerheart <span>New Character</span></h1>
+    <nav class="top-nav">
+      <a href="index.html">Card Browser</a>
+      <a href="characters.html">My Characters</a>
+    </nav>
+  </header>
+
+  <div class="wizard-layout">
+    <aside class="wizard-nav">
+      <ol id="step-nav" class="step-nav-list"></ol>
+    </aside>
+
+    <main class="wizard-main">
+      <div id="step-panel" class="step-panel"></div>
+      <div class="wizard-actions">
+        <button id="prev-btn" class="btn-ghost">← Back</button>
+        <button id="next-btn" class="btn-primary">Next →</button>
+        <button id="finish-btn" class="btn-primary">Save and go to list</button>
+      </div>
+    </main>
+  </div>
+
+  <script type="module" src="create.js"></script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Daggerheart — My Characters</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>Daggerheart <span>My Characters</span></h1>
+    <nav class="top-nav">
+      <a href="index.html">Card Browser</a>
+      <a href="create.html">New Character</a>
+    </nav>
+  </header>
+
+  <div class="characters-layout">
+    <button id="export-csv-btn" class="btn-ghost export-csv-btn">Export CSV for the GM</button>
+    <div id="characters-list" class="characters-list"></div>
+    <div id="character-detail" class="character-detail" style="display:none"></div>
+  </div>
+
+  <script type="module" src="characters.js"></script>
+</body>
+</html>

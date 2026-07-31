@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Daggerheart — Domain Card Browser</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>Daggerheart <span>Domain Cards</span></h1>
+    <nav class="top-nav">
+      <a href="create.html">New Character</a>
+      <a href="characters.html">My Characters</a>
+    </nav>
+    <input id="search" type="search" placeholder="Search by name or text…" autocomplete="off" />
+  </header>
+
+  <div class="layout">
+    <aside class="filters">
+      <section>
+        <h2>Domain</h2>
+        <div id="domain-filters" class="chip-group"></div>
+      </section>
+      <section>
+        <h2>Type</h2>
+        <div id="type-filters" class="chip-group"></div>
+      </section>
+      <section>
+        <h2>Level</h2>
+        <div class="level-range">
+          <label>min <input id="level-min" type="number" min="1" max="10" value="1" /></label>
+          <label>max <input id="level-max" type="number" min="1" max="10" value="10" /></label>
+        </div>
+      </section>
+      <button id="reset-filters" class="btn-ghost">Reset filters</button>
+    </aside>
+
+    <main>
+      <p id="result-count" class="result-count"></p>
+      <div id="card-grid" class="card-grid"></div>
+    </main>
+
+    <aside class="loadout-panel">
+      <section>
+        <h2>Loadout <span id="loadout-count">(0/5)</span></h2>
+        <ol id="loadout-slots" class="slot-list"></ol>
+      </section>
+      <section>
+        <h2>Vault <span id="vault-count">(0)</span></h2>
+        <ol id="vault-list" class="slot-list"></ol>
+      </section>
+      <button id="clear-loadout" class="btn-ghost">Clear all</button>
+    </aside>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
