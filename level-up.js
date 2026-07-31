@@ -9,6 +9,7 @@ import {
   optionCost,
   remainingSlots,
 } from "./shared/advancement.js";
+import { escapeHtml } from "./shared/escape.js";
 
 const CHAR_STORAGE_KEY = "dh-characters-v1";
 const TRAIT_LABELS = { agility: "Agility", strength: "Strength", finesse: "Finesse", instinct: "Instinct", presence: "Presence", knowledge: "Knowledge" };
@@ -87,7 +88,7 @@ function render() {
   const newLevel = character.level + 1;
 
   if (character.level >= 10) {
-    main.innerHTML = `<p class="hint">${character.name || "This character"} is already at the maximum level (10).</p>
+    main.innerHTML = `<p class="hint">${escapeHtml(character.name || "This character")} is already at the maximum level (10).</p>
       <a class="btn-ghost" href="characters.html">← Back to list</a>`;
     return;
   }
@@ -140,7 +141,7 @@ function renderAdvancementPicker(main, newLevel) {
     const row = document.createElement("label");
     row.className = "option-row";
     row.innerHTML = `<input type="checkbox" ${isPicked ? "checked" : ""} ${disabled && !isPicked ? "disabled" : ""}/>
-      <strong>${ADVANCEMENT_LABELS[key]}</strong> <span class="hint">(slots left: ${remaining})</span>`;
+      <strong>${escapeHtml(ADVANCEMENT_LABELS[key])}</strong> <span class="hint">(slots left: ${escapeHtml(remaining)})</span>`;
     row.querySelector("input").addEventListener("change", (e) => {
       if (e.target.checked) {
         picked.add(key);
@@ -175,7 +176,7 @@ function renderTraitSubPicker(main) {
     const row = document.createElement("label");
     row.className = "option-row";
     const disabled = marked || (!isPicked && pickedTraits.length >= 2);
-    row.innerHTML = `<input type="checkbox" ${isPicked ? "checked" : ""} ${disabled ? "disabled" : ""}/> ${TRAIT_LABELS[key]}${marked ? " (already marked)" : ""}`;
+    row.innerHTML = `<input type="checkbox" ${isPicked ? "checked" : ""} ${disabled ? "disabled" : ""}/> ${escapeHtml(TRAIT_LABELS[key])}${marked ? " (already marked)" : ""}`;
     row.querySelector("input").addEventListener("change", (e) => {
       if (e.target.checked) pickedTraits.push(key);
       else pickedTraits = pickedTraits.filter((k) => k !== key);
@@ -198,7 +199,7 @@ function renderExperienceSubPicker(main) {
     const disabled = !isPicked && pickedExperienceIdx.length >= 2;
     const row = document.createElement("label");
     row.className = "option-row";
-    row.innerHTML = `<input type="checkbox" ${isPicked ? "checked" : ""} ${disabled ? "disabled" : ""}/> ${exp.name || "(unnamed)"} <span class="exp-mod">+${exp.modifier}</span>`;
+    row.innerHTML = `<input type="checkbox" ${isPicked ? "checked" : ""} ${disabled ? "disabled" : ""}/> ${escapeHtml(exp.name || "(unnamed)")} <span class="exp-mod">+${escapeHtml(exp.modifier)}</span>`;
     row.querySelector("input").addEventListener("change", (e) => {
       if (e.target.checked) pickedExperienceIdx.push(i);
       else pickedExperienceIdx = pickedExperienceIdx.filter((idx) => idx !== i);
