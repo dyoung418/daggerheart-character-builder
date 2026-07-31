@@ -184,12 +184,12 @@ h1, h2, h3, .btn-primary, .btn-ghost, .btn-small, .top-nav a {
 /* Senza arte reale il fallback deve poter crescere in altezza quanto serve: niente
    aspect-ratio fissa né overflow:hidden, altrimenti carte con più abilità (es. Grimoire,
    sottoclassi Mastery) vengono tagliate senza nessun indizio che manca del testo. */
-.card-art.art-missing { aspect-ratio: auto; min-height: 8rem; border-top: 4px solid var(--c-arcana); }
+.card-art.art-missing { aspect-ratio: auto; min-height: 8rem; border-top: 5px solid var(--c-arcana); background: var(--panel-alt); }
 .card-fallback {
-  padding: 0.75rem;
+  padding: 0.9rem 1rem;
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 0.7rem;
 }
 .card-art.domain-arcana.art-missing { border-color: var(--c-arcana); }
 .card-art.domain-blade.art-missing { border-color: var(--c-blade); }
@@ -201,9 +201,51 @@ h1, h2, h3, .btn-primary, .btn-ghost, .btn-small, .top-nav a {
 .card-art.domain-splendor.art-missing { border-color: var(--c-splendor); }
 .card-art.domain-valor.art-missing { border-color: var(--c-valor); }
 
-.fallback-header { display: flex; justify-content: space-between; font-size: 0.7rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em; }
-.fallback-title { font-family: var(--font-display); font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; }
-.fallback-text { font-size: 0.72rem; color: var(--text-dim); white-space: pre-line; }
+.fallback-header { display: flex; align-items: center; justify-content: space-between; }
+.fallback-level {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.7rem;
+  height: 1.7rem;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.82rem;
+}
+.fallback-level:empty { display: none; }
+.fallback-type {
+  font-size: 0.66rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  border: 1px solid var(--border-warm);
+  border-radius: 999px;
+  padding: 0.2rem 0.6rem;
+}
+.fallback-title {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--text);
+  padding-bottom: 0.55rem;
+  border-bottom: 1px solid var(--border-warm);
+}
+.fallback-features { display: flex; flex-direction: column; gap: 0.65rem; }
+.fallback-feature-name {
+  display: block;
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--accent-bright);
+  font-size: 0.8rem;
+  margin-bottom: 0.2rem;
+}
+.fallback-feature-desc { margin: 0; font-size: 0.82rem; line-height: 1.55; color: var(--text-dim); }
 
 .card-meta {
   padding: 0.5rem 0.75rem;

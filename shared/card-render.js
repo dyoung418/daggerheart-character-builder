@@ -9,7 +9,7 @@
 import { openLightbox } from "./lightbox.js";
 
 /**
- * @param {{ art: string, domainClass?: string, level?: number|string, type?: string, name: string, feature?: string }} card
+ * @param {{ art: string, domainClass?: string, level?: number|string, type?: string, name: string, features?: Array<{name: {"en-US": string}, description: Array<{paragraph: {"en-US": string}}>}> }} card
  * @returns {HTMLDivElement}
  */
 export function renderCardArt(card) {
@@ -36,7 +36,7 @@ export function renderCardArt(card) {
         <span class="fallback-type">${card.type ?? ""}</span>
       </div>
       <div class="fallback-title">${card.name}</div>
-      <div class="fallback-text">${card.feature ?? ""}</div>
+      <div class="fallback-features">${featuresHtml(card.features)}</div>
     `;
     wrap.appendChild(fallback);
   });
@@ -44,16 +44,23 @@ export function renderCardArt(card) {
   return wrap;
 }
 
-// Feature text for the CSS-only fallback, shared by domain cards, subclasses,
+// Feature markup for the CSS-only fallback, shared by domain cards, subclasses,
 // ancestries and communities: they all share the same shape { name, description: [{paragraph}] }.
-export function featuresText(features) {
+// Name and body stay separate elements (not one flattened string) so the fallback can
+// give them distinct typography (name stands out, body stays readable).
+function featuresHtml(features) {
   return (features || [])
     .map((f) => {
       const name = f.name?.["en-US"] || "";
       const desc = (f.description || []).map((d) => d.paragraph?.["en-US"] || "").join(" ");
-      return name ? `${name}: ${desc}` : desc;
+      return `
+        <div class="fallback-feature">
+          ${name ? `<span class="fallback-feature-name">${name}</span>` : ""}
+          <p class="fallback-feature-desc">${desc}</p>
+        </div>
+      `;
     })
-    .join("\n\n");
+    .join("");
 }
 
 export function domainCardArtPath(id) {

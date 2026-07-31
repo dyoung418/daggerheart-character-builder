@@ -4,7 +4,6 @@ import {
   subclassCardArtPath,
   communityCardArtPath,
   ancestryCardArtPath,
-  featuresText,
 } from "./shared/card-render.js";
 import { blankAdvancementState, ensureLevelFields } from "./shared/advancement.js";
 
@@ -289,7 +288,7 @@ function renderClassStep(panel) {
     for (const sub of subsForClass) {
       const card = {
         id: sub.id, name: sub.name["en-US"], art: subclassCardArtPath(sub.id, "foundation"),
-        type: "Subclass", feature: featuresText(sub.foundation?.features),
+        type: "Subclass", features: sub.foundation?.features,
       };
       const tile = cardTile(card, character.subclassId === sub.id, () => {
         character.subclassId = sub.id;
@@ -333,7 +332,7 @@ function renderHeritageStep(panel) {
   const ancGrid = document.createElement("div");
   ancGrid.className = "tile-grid";
   for (const anc of db.ancestries) {
-    const card = { id: anc.id, name: anc.name["en-US"], art: ancestryCardArtPath(anc.id), type: "Ancestry", feature: featuresText(anc.features) };
+    const card = { id: anc.id, name: anc.name["en-US"], art: ancestryCardArtPath(anc.id), type: "Ancestry", features: anc.features };
     const selected = h.ancestryIds.includes(anc.id);
     const tile = cardTile(card, selected, () => {
       if (h.ancestryMode === "pure") {
@@ -396,7 +395,7 @@ function renderHeritageStep(panel) {
   const comGrid = document.createElement("div");
   comGrid.className = "tile-grid";
   for (const com of db.communities) {
-    const card = { id: com.id, name: com.name["en-US"], art: communityCardArtPath(com.id), type: "Community", feature: featuresText(com.features) };
+    const card = { id: com.id, name: com.name["en-US"], art: communityCardArtPath(com.id), type: "Community", features: com.features };
     const tile = cardTile(card, h.communityId === com.id, () => {
       h.communityId = com.id;
       onChange();
@@ -604,7 +603,7 @@ function renderDomainCardsStep(panel) {
   const grid = document.createElement("div");
   grid.className = "tile-grid";
   for (const c of available) {
-    const card = { id: c.id, name: c.name["en-US"], art: domainCardArtPath(c.id), level: c.level, type: c.type, feature: featuresText(c.features) };
+    const card = { id: c.id, name: c.name["en-US"], art: domainCardArtPath(c.id), level: c.level, type: c.type, features: c.features };
     const selected = character.domainCardIds.includes(c.id);
     const tile = cardTile(card, selected, () => {
       if (selected) {
