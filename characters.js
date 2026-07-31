@@ -6,6 +6,7 @@ import {
   ancestryCardArtPath,
 } from "./shared/card-render.js";
 import { activeDomainCardIds, damageThresholds, ensureLevelFields } from "./shared/advancement.js";
+import { escapeHtml } from "./shared/escape.js";
 
 const CHAR_STORAGE_KEY = "dh-characters-v1";
 const TRAIT_LABELS = { agility: "Agility", strength: "Strength", finesse: "Finesse", instinct: "Instinct", presence: "Presence", knowledge: "Knowledge" };
@@ -102,8 +103,8 @@ function renderList() {
 
     row.innerHTML = `
       <div class="character-row-main">
-        <strong>${ch.name || "(unnamed)"}</strong>
-        <span>Lv ${ch.level} · ${cls ? titleCase(cls.name) : "—"}${sub ? " · " + sub.name["en-US"] : ""}</span>
+        <strong>${escapeHtml(ch.name || "(unnamed)")}</strong>
+        <span>Lv ${escapeHtml(ch.level)} · ${cls ? escapeHtml(titleCase(cls.name)) : "—"}${sub ? " · " + escapeHtml(sub.name["en-US"]) : ""}</span>
         ${complete ? "" : '<span class="badge-draft">draft</span>'}
       </div>
       <div class="character-row-actions">${actionsHtml}</div>
@@ -134,7 +135,7 @@ function renderList() {
 function statLine(label, value) {
   const div = document.createElement("div");
   div.className = "stat-line";
-  div.innerHTML = `<span>${label}</span><strong>${value}</strong>`;
+  div.innerHTML = `<span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong>`;
   return div;
 }
 
@@ -171,7 +172,7 @@ function renderDetail() {
 
   const header = document.createElement("div");
   header.className = "detail-header";
-  header.innerHTML = `<h2>${ch.name || "(unnamed)"}</h2><p>${ch.pronouns || ""} · Level ${ch.level}</p>`;
+  header.innerHTML = `<h2>${escapeHtml(ch.name || "(unnamed)")}</h2><p>${escapeHtml(ch.pronouns || "")} · Level ${escapeHtml(ch.level)}</p>`;
   container.appendChild(header);
 
   if (ch.level < 10) {
@@ -202,8 +203,8 @@ function renderDetail() {
   const summary = document.createElement("div");
   summary.className = "detail-summary";
   summary.innerHTML = `
-    <p><strong>Class:</strong> ${cls ? titleCase(cls.name) : "—"} ${sub ? "— " + sub.name["en-US"] : ""}</p>
-    <p><strong>Heritage:</strong> ${ch.heritage.ancestryMode === "mixed" ? "Mixed ancestry" : "Pure ancestry"} — features: ${ch.heritage.chosenFeatures.map((f) => f.featureName).join(", ") || "—"}</p>
+    <p><strong>Class:</strong> ${cls ? escapeHtml(titleCase(cls.name)) : "—"} ${sub ? "— " + escapeHtml(sub.name["en-US"]) : ""}</p>
+    <p><strong>Heritage:</strong> ${ch.heritage.ancestryMode === "mixed" ? "Mixed ancestry" : "Pure ancestry"} — features: ${escapeHtml(ch.heritage.chosenFeatures.map((f) => f.featureName).join(", ")) || "—"}</p>
   `;
   container.appendChild(summary);
 
@@ -272,24 +273,24 @@ function renderDetail() {
   const eqBox = document.createElement("div");
   eqBox.className = "detail-summary";
   eqBox.innerHTML = `
-    <p><strong>Primary weapon:</strong> ${primary ? primary.name["en-US"] : "—"}</p>
-    ${secondary ? `<p><strong>Secondary weapon:</strong> ${secondary.name["en-US"]}</p>` : ""}
-    <p><strong>Armor:</strong> ${armor ? armor.name["en-US"] : "—"}</p>
-    <p><strong>Potion:</strong> ${potion ? potion.name["en-US"] : "—"}</p>
+    <p><strong>Primary weapon:</strong> ${primary ? escapeHtml(primary.name["en-US"]) : "—"}</p>
+    ${secondary ? `<p><strong>Secondary weapon:</strong> ${escapeHtml(secondary.name["en-US"])}</p>` : ""}
+    <p><strong>Armor:</strong> ${armor ? escapeHtml(armor.name["en-US"]) : "—"}</p>
+    <p><strong>Potion:</strong> ${potion ? escapeHtml(potion.name["en-US"]) : "—"}</p>
   `;
   container.appendChild(eqBox);
 
   const expBox = document.createElement("div");
   expBox.className = "detail-summary";
-  expBox.innerHTML = `<p><strong>Experience:</strong> ${ch.experiences.map((e) => `${e.name || "(unnamed)"} (+${e.modifier})`).join(", ")}</p>`;
+  expBox.innerHTML = `<p><strong>Experience:</strong> ${ch.experiences.map((e) => `${escapeHtml(e.name || "(unnamed)")} (+${escapeHtml(e.modifier)})`).join(", ")}</p>`;
   container.appendChild(expBox);
 
   if (ch.background.description || ch.background.answers) {
     const bgBox = document.createElement("div");
     bgBox.className = "detail-summary";
     bgBox.innerHTML = `
-      ${ch.background.description ? `<p><strong>Background:</strong> ${ch.background.description}</p>` : ""}
-      ${ch.background.answers ? `<p><strong>Appearance:</strong> ${ch.background.answers}</p>` : ""}
+      ${ch.background.description ? `<p><strong>Background:</strong> ${escapeHtml(ch.background.description)}</p>` : ""}
+      ${ch.background.answers ? `<p><strong>Appearance:</strong> ${escapeHtml(ch.background.answers)}</p>` : ""}
     `;
     container.appendChild(bgBox);
   }
@@ -297,7 +298,7 @@ function renderDetail() {
   if (ch.connectionsNotes) {
     const connBox = document.createElement("div");
     connBox.className = "detail-summary";
-    connBox.innerHTML = `<p><strong>Connections:</strong> ${ch.connectionsNotes}</p>`;
+    connBox.innerHTML = `<p><strong>Connections:</strong> ${escapeHtml(ch.connectionsNotes)}</p>`;
     container.appendChild(connBox);
   }
 
@@ -330,8 +331,22 @@ const CSV_COLUMNS = [
 
 // Standard CSV (RFC 4180): wrap every field in double quotes, doubling any
 // double quotes it contains, to safely handle commas, quotes and newlines.
+//
+// Quoting alone does NOT stop formula injection: Excel, LibreOffice and Google
+// Sheets evaluate a field as a formula when its text starts with = + - @ (or a
+// leading tab/CR), even inside quotes. This export is explicitly meant to be
+// handed to the GM, so a character named `=HYPERLINK("http://evil","click")` —
+// or a background note starting with `=` — would run on someone else's machine.
+// Prefixing with a single quote makes the spreadsheet treat it as literal text.
+// Plain numbers are exempt: trait values are legitimately negative ("-1"), and a
+// spreadsheet evaluating "-1" just yields the number -1. Prefixing those would
+// turn every negative trait into text and break sorting/formulas for the GM.
+const FORMULA_TRIGGER = /^[=+\-@\t\r]/;
+const PLAIN_NUMBER = /^[+-]?\d+(\.\d+)?$/;
+
 function csvField(value) {
-  const s = String(value ?? "");
+  let s = String(value ?? "");
+  if (FORMULA_TRIGGER.test(s) && !PLAIN_NUMBER.test(s)) s = "'" + s;
   return '"' + s.replace(/"/g, '""') + '"';
 }
 

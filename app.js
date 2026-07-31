@@ -1,4 +1,5 @@
 import { renderCardArt, domainCardArtPath } from "./shared/card-render.js";
+import { escapeHtml } from "./shared/escape.js";
 
 const DOMAINS = ["ARCANA", "BLADE", "BONE", "CODEX", "GRACE", "MIDNIGHT", "SAGE", "SPLENDOR", "VALOR"];
 const TYPES = ["ABILITY", "SPELL", "GRIMOIRE"];
@@ -95,7 +96,7 @@ function renderGrid() {
 
     const meta = document.createElement("div");
     meta.className = "card-meta";
-    meta.innerHTML = `<strong>${card.name}</strong><span>Lv ${card.level} · ${card.domain} · ${card.type}</span>`;
+    meta.innerHTML = `<strong>${escapeHtml(card.name)}</strong><span>Lv ${escapeHtml(card.level)} · ${escapeHtml(card.domain)} · ${escapeHtml(card.type)}</span>`;
     el.appendChild(meta);
 
     const actions = document.createElement("div");

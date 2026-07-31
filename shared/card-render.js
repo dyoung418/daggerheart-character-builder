@@ -7,6 +7,7 @@
 // to the CSS-only rendering below unless you supply your own data/card-art/ folder.
 
 import { openLightbox } from "./lightbox.js";
+import { escapeHtml } from "./escape.js";
 
 /**
  * @param {{ art: string, domainClass?: string, level?: number|string, type?: string, name: string, features?: Array<{name: {"en-US": string}, description: Array<{paragraph: {"en-US": string}}>}> }} card
@@ -32,10 +33,10 @@ export function renderCardArt(card) {
     fallback.className = "card-fallback";
     fallback.innerHTML = `
       <div class="fallback-header">
-        <span class="fallback-level">${card.level ?? ""}</span>
-        <span class="fallback-type">${card.type ?? ""}</span>
+        <span class="fallback-level">${escapeHtml(card.level ?? "")}</span>
+        <span class="fallback-type">${escapeHtml(card.type ?? "")}</span>
       </div>
-      <div class="fallback-title">${card.name}</div>
+      <div class="fallback-title">${escapeHtml(card.name)}</div>
       <div class="fallback-features">${featuresHtml(card.features)}</div>
     `;
     wrap.appendChild(fallback);
@@ -55,8 +56,8 @@ function featuresHtml(features) {
       const desc = (f.description || []).map((d) => d.paragraph?.["en-US"] || "").join(" ");
       return `
         <div class="fallback-feature">
-          ${name ? `<span class="fallback-feature-name">${name}</span>` : ""}
-          <p class="fallback-feature-desc">${desc}</p>
+          ${name ? `<span class="fallback-feature-name">${escapeHtml(name)}</span>` : ""}
+          <p class="fallback-feature-desc">${escapeHtml(desc)}</p>
         </div>
       `;
     })

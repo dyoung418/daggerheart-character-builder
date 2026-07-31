@@ -6,6 +6,7 @@ import {
   ancestryCardArtPath,
 } from "./shared/card-render.js";
 import { blankAdvancementState, ensureLevelFields } from "./shared/advancement.js";
+import { escapeHtml } from "./shared/escape.js";
 
 const CHAR_STORAGE_KEY = "dh-characters-v1";
 const TRAIT_KEYS = ["agility", "strength", "finesse", "instinct", "presence", "knowledge"];
@@ -250,8 +251,8 @@ function renderClassStep(panel) {
   const nameRow = document.createElement("div");
   nameRow.className = "field-row";
   nameRow.innerHTML = `
-    <label>Character name <input id="pc-name" type="text" value="${character.name}" placeholder="Name" /></label>
-    <label>Pronouns <input id="pc-pronouns" type="text" value="${character.pronouns}" placeholder="e.g. she/her" /></label>
+    <label>Character name <input id="pc-name" type="text" value="${escapeHtml(character.name)}" placeholder="Name" /></label>
+    <label>Pronouns <input id="pc-pronouns" type="text" value="${escapeHtml(character.pronouns)}" placeholder="e.g. she/her" /></label>
   `;
   panel.appendChild(nameRow);
   nameRow.querySelector("#pc-name").addEventListener("input", (e) => { character.name = e.target.value; persistCurrentCharacter(); });
@@ -266,7 +267,7 @@ function renderClassStep(panel) {
   for (const cls of db.classes) {
     const tile = document.createElement("div");
     tile.className = "class-tile" + (character.classId === cls.id ? " selected" : "");
-    tile.innerHTML = `<strong>${titleCase(cls.name)}</strong><span>${cls.domains.map(titleCase).join(" · ")}</span>`;
+    tile.innerHTML = `<strong>${escapeHtml(titleCase(cls.name))}</strong><span>${escapeHtml(cls.domains.map(titleCase).join(" · "))}</span>`;
     tile.addEventListener("click", () => {
       character.classId = cls.id;
       character.subclassId = null;
@@ -371,7 +372,7 @@ function renderHeritageStep(panel) {
         const btn = document.createElement("button");
         btn.type = "button";
         btn.className = "feature-pick" + (chosen ? " selected" : "");
-        btn.innerHTML = `<strong>${feat.name["en-US"]}</strong><span>${featureText(feat)}</span>`;
+        btn.innerHTML = `<strong>${escapeHtml(feat.name["en-US"])}</strong><span>${escapeHtml(featureText(feat))}</span>`;
         btn.addEventListener("click", () => {
           h.chosenFeatures = h.chosenFeatures.filter((f) => f.ancestryId !== ancId);
           h.chosenFeatures.push({ ancestryId: ancId, featureName: feat.name["en-US"] });
@@ -513,7 +514,7 @@ function renderEquipmentStep(panel) {
   for (const a of armors) {
     const row = document.createElement("label");
     row.className = "option-row";
-    row.innerHTML = `<input type="radio" name="armor" value="${a.id}" ${e.armorId === a.id ? "checked" : ""}/> <strong>${a.name["en-US"]}</strong> — thresholds ${a.baseMajorThreshold}/${a.baseSevereThreshold}, score ${a.baseScore}`;
+    row.innerHTML = `<input type="radio" name="armor" value="${escapeHtml(a.id)}" ${e.armorId === a.id ? "checked" : ""}/> <strong>${escapeHtml(a.name["en-US"])}</strong> — thresholds ${escapeHtml(a.baseMajorThreshold)}/${escapeHtml(a.baseSevereThreshold)}, score ${escapeHtml(a.baseScore)}`;
     row.querySelector("input").addEventListener("change", () => { e.armorId = a.id; onChange(); });
     armorList.appendChild(row);
   }
@@ -546,7 +547,7 @@ function weaponSelect(weapons, selectedId, onSelect) {
     const dmg = `${w.damage.dice} ${w.damage.type === "PHYSICAL" ? "phy" : "mag"}`;
     const row = document.createElement("label");
     row.className = "option-row";
-    row.innerHTML = `<input type="radio" name="weapon-${w.type}-${w.burden}" value="${w.id}" ${selectedId === w.id ? "checked" : ""}/> <strong>${w.name["en-US"]}</strong> — ${w.trait} · ${w.range} · ${dmg}`;
+    row.innerHTML = `<input type="radio" name="weapon-${escapeHtml(w.type)}-${escapeHtml(w.burden)}" value="${escapeHtml(w.id)}" ${selectedId === w.id ? "checked" : ""}/> <strong>${escapeHtml(w.name["en-US"])}</strong> — ${escapeHtml(w.trait)} · ${escapeHtml(w.range)} · ${escapeHtml(dmg)}`;
     row.querySelector("input").addEventListener("change", () => onSelect(w.id));
     list.appendChild(row);
   }
@@ -558,10 +559,10 @@ function renderBackgroundStep(panel) {
   const b = character.background;
   panel.innerHTML = `
     <label class="block-label">Description / answers to background questions
-      <textarea id="bg-desc" rows="6">${b.description}</textarea>
+      <textarea id="bg-desc" rows="6">${escapeHtml(b.description)}</textarea>
     </label>
     <label class="block-label">Appearance (clothes, eyes, body, skin, attitude — free text)
-      <textarea id="bg-answers" rows="4">${b.answers}</textarea>
+      <textarea id="bg-answers" rows="4">${escapeHtml(b.answers)}</textarea>
     </label>
   `;
   panel.querySelector("#bg-desc").addEventListener("input", (e) => { b.description = e.target.value; persistCurrentCharacter(); });
@@ -578,7 +579,7 @@ function renderExperiencesStep(panel) {
   character.experiences.forEach((exp, i) => {
     const row = document.createElement("div");
     row.className = "field-row";
-    row.innerHTML = `<label>Experience ${i + 1} <input type="text" value="${exp.name}" placeholder="e.g. Assassin of the Sapphire Syndicate" /></label> <span class="exp-mod">+2</span>`;
+    row.innerHTML = `<label>Experience ${i + 1} <input type="text" value="${escapeHtml(exp.name)}" placeholder="e.g. Assassin of the Sapphire Syndicate" /></label> <span class="exp-mod">+2</span>`;
     row.querySelector("input").addEventListener("input", (e) => {
       character.experiences[i].name = e.target.value;
       onTextChange();
@@ -623,7 +624,7 @@ function renderDomainCardsStep(panel) {
 function renderConnectionsStep(panel) {
   panel.innerHTML = `
     <p class="hint">Connections involve the rest of the party: jot down here whatever you decide together at the table.</p>
-    <textarea id="conn-notes" rows="8">${character.connectionsNotes}</textarea>
+    <textarea id="conn-notes" rows="8">${escapeHtml(character.connectionsNotes)}</textarea>
   `;
   panel.querySelector("#conn-notes").addEventListener("input", (e) => {
     character.connectionsNotes = e.target.value;

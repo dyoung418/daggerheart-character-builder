@@ -502,7 +502,10 @@ h1, h2, h3, .btn-primary, .btn-ghost, .btn-small, .top-nav a {
 .badge-draft { display: inline-block; background: var(--panel-alt); color: var(--accent); font-size: 0.65rem; padding: 0.1rem 0.4rem; border-radius: 4px; width: fit-content; letter-spacing: 0.04em; }
 .confirm-text { font-size: 0.78rem; color: #e07a7a; margin-right: 0.4rem; }
 
-.character-detail { max-width: 900px; background: var(--panel); border: 1px solid var(--border); border-top: 2px solid var(--accent); border-radius: 10px; padding: 1.25rem; margin-top: 1rem; }
+/* Hidden until characters.js opens a sheet (it sets an inline display:block).
+   Kept here rather than as a style="" attribute on the element so the pages can
+   ship a Content-Security-Policy without needing style-src 'unsafe-inline'. */
+.character-detail { display: none; max-width: 900px; background: var(--panel); border: 1px solid var(--border); border-top: 2px solid var(--accent); border-radius: 10px; padding: 1.25rem; margin-top: 1rem; }
 .detail-header h2 { margin: 0.5rem 0 0; font-family: var(--font-display); text-transform: uppercase; letter-spacing: 0.02em; color: var(--accent-bright); }
 .detail-header p { margin: 0 0 0.5rem; color: var(--text-dim); }
 .detail-summary { margin: 0.75rem 0; font-size: 0.85rem; line-height: 1.5; }
