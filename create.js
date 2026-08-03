@@ -463,6 +463,7 @@ function renderTraitsStep(panel) {
 
   const grid = document.createElement("div");
   grid.className = "traits-grid";
+  const subclass = selectedSubclass();
   for (const k of TRAIT_KEYS) {
     const row = document.createElement("div");
     row.className = "trait-row";
@@ -477,7 +478,11 @@ function renderTraitsStep(panel) {
     }
     const gained = (character.traits[k] ?? 0) - (current ?? 0);
     const nowLabel = levelled && gained > 0 ? `<span class="hint">→ ${character.traits[k] > 0 ? "+" : ""}${character.traits[k]} now</span>` : "";
-    row.innerHTML = `<label>${TRAIT_LABELS[k]}</label><select data-trait="${k}">${optionsHtml}</select>${nowLabel}`;
+    const isSpellcastTrait = subclass && subclass.spellcastTrait === k.toUpperCase();
+    const trailing = nowLabel || isSpellcastTrait
+      ? `<span class="trait-row-trailing">${nowLabel}${isSpellcastTrait ? spellcastBadge() : ""}</span>`
+      : "";
+    row.innerHTML = `<label>${TRAIT_LABELS[k]}</label><select data-trait="${k}">${optionsHtml}</select>${trailing}`;
     grid.appendChild(row);
   }
   panel.appendChild(grid);
