@@ -104,6 +104,9 @@ function applyEntry(state, entry) {
 
   if (entry.mandatoryCardId) state.cardIds.push(entry.mandatoryCardId);
   for (const id of extraCardIds) state.cardIds.push(id);
+  // Cards a feature gained at this level handed over outright, rather than ones bought with an
+  // advancement slot — the School of Knowledge's "take an additional domain card" at each tier.
+  for (const id of entry.grantedCardIds || []) state.cardIds.push(id);
 
   // The optional swap allowed on every level up. Replacing in place keeps the collection's
   // order stable, so the loadout/vault split doesn't shuffle when an early level is edited.
@@ -261,8 +264,10 @@ export function validateEntry(ch, entry, db) {
   const stress = stressTotal(state.stressSlotsBonus + picks.filter((p) => p.key === "stress").length, granted.stressSlots);
   if (stress > MAX_STRESS_SLOTS) errors.push(`This would take Stress past the maximum of ${MAX_STRESS_SLOTS}.`);
 
+  let tierAfterPicks = state.subclassTier;
   for (const _ of picks.filter((p) => p.key === "subclass")) {
     if (state.subclassTier === "mastery") errors.push("The subclass is already at Mastery.");
+    tierAfterPicks = nextSubclassTier(tierAfterPicks);
   }
 
   // Cards: owned so far, plus everything this level adds, so duplicates surface wherever
@@ -283,6 +288,19 @@ export function validateEntry(ch, entry, db) {
     for (const pick of picks.filter((p) => p.key === "domainCard")) {
       check(pick.cardId, extraCardLevelCap(level, pick.slotTier), `Extra domain card (tier ${pick.slotTier} slot)`);
     }
+
+    // Cards granted by a feature gained at this level. How many is the difference between what
+    // the character's effects grant before this level's picks and after them, so the rule lives
+    // in effects.js rather than here; only your level caps these, since they aren't slots.
+    const before = granted.extraDomainCards;
+    const after = effectBonuses({ ...characterAtLevel(ch, state), subclassTier: tierAfterPicks }, db).extraDomainCards;
+    const expected = Math.max(0, after - before);
+    const grantedCards = entry.grantedCardIds || [];
+    if (grantedCards.length !== expected) {
+      errors.push(`Extra domain card from a subclass upgrade: ${grantedCards.length} chosen, ${expected} granted at this level.`);
+    }
+    for (const id of grantedCards) check(id, level, "Extra domain card from a subclass upgrade");
+
     const swap = entry.exchange;
     if (swap?.outCardId || swap?.inCardId) {
       const out = byId.get(swap.outCardId);
@@ -349,6 +367,9 @@ export function describeCards(ch, entry, db) {
   const byId = cardsById(db);
   const lines = [];
   if (entry.mandatoryCardId) lines.push(`Card: ${cardName(byId.get(entry.mandatoryCardId))}`);
+  for (const id of entry.grantedCardIds || []) {
+    lines.push(`Card from your subclass: ${cardName(byId.get(id))}`);
+  }
   if (entry.exchange?.outCardId && entry.exchange.inCardId) {
     lines.push(`Exchanged ${cardName(byId.get(entry.exchange.outCardId))} → ${cardName(byId.get(entry.exchange.inCardId))}`);
   }

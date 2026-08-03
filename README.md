@@ -48,10 +48,35 @@ Experience step for the ancestry one, the level up screen for the cards), and un
 the sheet says so and the bonus isn't counted. It never blocks saving or levelling up, so a
 character made before this existed stays editable.
 
-**Not implemented yet:** the School of Knowledge's extra domain card works at character
-creation (*Prepared*), but the equivalents on its Specialization and Mastery cards
-(*Accomplished*, *Brilliant*) don't yet add a card at level up. *Bare Bones* isn't implemented
-either — see [Known gaps](#known-gaps).
+A feature can also hand you a domain card outright — the School of Knowledge's cards each say
+"take an additional domain card of your level or lower". You pick it in the wizard for the
+Foundation card and on the level up screen when you take the Specialization or Mastery upgrade,
+in both cases on top of the guaranteed card and anything bought with an advancement slot.
+
+### Adding a card
+
+When new cards come out, a stat change should be one entry in `shared/effects.js` and nothing
+else. Keys are `<entityId>:<discriminator>` — the tier for subclasses, the feature name for
+ancestries, armor and weapons; domain cards use the id alone. Armor and weapon features that
+mean the same thing wherever they appear are keyed `armor:<feature>` / `weapon:<feature>`, so a
+new shield with the existing `Protective` wording needs nothing at all.
+
+Nothing outside that file names a card, a subclass or an ancestry. The pages work from what an
+entry declares:
+
+- **Which stat it moves** — any key in `EFFECT_STAT_KEYS`. Values may be numbers or functions
+  of the character, and `when` gates them.
+- **Where it comes from** — `collectEffects` tags each one `ancestry` / `subclass` / `armor` /
+  `weapon` / `domainCard`, and that tag decides where a `choice` gets asked: ancestry choices in
+  the wizard, card choices on the level up screen.
+- **What shape of choice it asks for** — `shared/effect-choice.js` renders "pick N of these
+  benefits" and "pick N of your Experiences" for both screens.
+- **How many cards it grants** — the level up screen compares what your effects grant before
+  this level's picks against after, so anything that starts granting cards partway through a
+  career is picked up by being catalogued.
+
+New code is needed only for a genuinely new *kind* of thing: a stat the app doesn't compute, or
+a choice that isn't one of the two shapes above.
 
 ## Running it
 
@@ -85,6 +110,11 @@ worth building without a caller.
 Equipping and unequipping is the feature that unlocks all three at once: *Bare Bones*, the
 base-override effect kind it needs, and the plain unarmored rule for characters who don't have
 it. Until then, a nullable `armorId` keeps the door open.
+
+**Characters saved before domain card counts were derived** assume the usual 2 starting cards
+when their creation cards are worked out for the first time, even for a School of Knowledge
+wizard who took 3. It's a one-off migration guess in `ensureLevelFields`, which has no data
+files to consult; re-picking the starting cards in the wizard corrects it.
 
 **Multiclassing** is deliberately out of scope — rare in play, and a lot of data and UI for a
 tool this size.

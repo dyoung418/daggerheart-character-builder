@@ -273,6 +273,14 @@ export const EFFECTS = {
   },
 };
 
+// Every stat an effect can move. Adding a new one is the only change that needs code outside
+// this file; adding a new card, ancestry feature or piece of equipment that moves an existing
+// one is a new entry above and nothing else.
+export const EFFECT_STAT_KEYS = [
+  "evasion", "hitPointSlots", "stressSlots", "majorThreshold", "severeThreshold",
+  "armorScore", "attack", "spellcast", "extraDomainCards",
+];
+
 function lookup(...keys) {
   for (const key of keys) {
     if (Object.prototype.hasOwnProperty.call(EFFECTS, key)) return { key, effect: EFFECTS[key] };
@@ -297,9 +305,14 @@ function tiersUpTo(tier) {
 /**
  * Every effect a character currently has, in the order they'd read down their sheet.
  *
- * Each entry is { key, label, effect, scope }. `label` is what the "?" breakdown shows, so it
- * names the thing the player chose rather than the rule id. `scope` is "primary"/"secondary"
- * for a weapon's own attack bonus and "character" for everything else.
+ * Each entry is { key, label, effect, source, scope }:
+ *  - `label` is what the "?" breakdown shows, so it names the thing the player chose rather
+ *    than the rule id.
+ *  - `source` is where it came from: "ancestry", "subclass", "armor", "weapon" or "domainCard".
+ *    Pages use it to decide WHERE a choice gets asked, so that a new card with a choice lands
+ *    on the level up screen and a new ancestry feature with one lands in the wizard, both
+ *    without either page learning its name.
+ *  - `scope` is "primary"/"secondary" for a weapon's own attack bonus, "character" otherwise.
  *
  * @param {object} ch a character (already through ensureLevelFields)
  * @param {object} db whatever data the calling page loaded; sources whose data is missing are
@@ -308,13 +321,13 @@ function tiersUpTo(tier) {
  */
 export function collectEffects(ch, db) {
   const found = [];
-  const add = (hit, label, scope = "character") => {
-    if (hit) found.push({ key: hit.key, label, effect: hit.effect, scope });
+  const add = (hit, source, label, scope = "character") => {
+    if (hit) found.push({ key: hit.key, label, effect: hit.effect, source, scope });
   };
 
   for (const chosen of ch.heritage?.chosenFeatures || []) {
     const anc = (db?.ancestries || []).find((a) => a.id === chosen.ancestryId);
-    add(lookup(`${chosen.ancestryId}:${chosen.featureName}`),
+    add(lookup(`${chosen.ancestryId}:${chosen.featureName}`), "ancestry",
       `${displayName(anc, "Ancestry")} — ${chosen.featureName}`);
   }
 
@@ -325,13 +338,13 @@ export function collectEffects(ch, db) {
       // The feature name comes from the entry, not from data/: a tier can hold two features
       // and only one of them is the one being encoded (Stalwart's Foundation is Unwavering
       // AND Iron Will; only Unwavering moves a stat).
-      add(hit, `${displayName(sub, "Subclass")}${hit?.effect.feature ? ` — ${hit.effect.feature}` : ""}`);
+      add(hit, "subclass", `${displayName(sub, "Subclass")}${hit?.effect.feature ? ` — ${hit.effect.feature}` : ""}`);
     }
   }
 
   const armor = (db?.armors || []).find((a) => a.id === ch.equipment?.armorId);
   for (const name of featureNames(armor)) {
-    add(lookup(`${armor.id}:${name}`, `armor:${name}`), `${displayName(armor, "Armor")} (${name})`);
+    add(lookup(`${armor.id}:${name}`, `armor:${name}`), "armor", `${displayName(armor, "Armor")} (${name})`);
   }
 
   const weaponSlots = [["primary", ch.equipment?.primaryWeaponId]];
@@ -339,22 +352,27 @@ export function collectEffects(ch, db) {
   for (const [scope, weaponId] of weaponSlots) {
     const weapon = (db?.weapons || []).find((w) => w.id === weaponId);
     for (const name of featureNames(weapon)) {
-      add(lookup(`${weapon.id}:${name}`, `weapon:${name}`), `${displayName(weapon, "Weapon")} (${name})`, scope);
+      add(lookup(`${weapon.id}:${name}`, `weapon:${name}`), "weapon", `${displayName(weapon, "Weapon")} (${name})`, scope);
     }
   }
 
-  // Loadout cards apply while they're in the loadout; the two cards whose text says the bonus
-  // is permanent keep applying from the vault, which is where those cards tell you to put them.
+  // Loadout cards apply while they're in the loadout; a card whose text says the bonus is
+  // permanent keeps applying from the vault, which is where those cards tell you to put them.
   const vaulted = ch.domainVaultIds || [];
   for (const cardId of ch.domainCardIds || []) {
     const hit = lookup(cardId);
     if (!hit) continue;
     if (vaulted.includes(cardId) && !hit.effect.permanent) continue;
     const card = (db?.domainCards || []).find((c) => c.id === cardId);
-    add(hit, displayName(card, cardId));
+    add(hit, "domainCard", displayName(card, cardId));
   }
 
   return found;
+}
+
+/** The choice a source asks for, if it asks for one at all. */
+export function choiceFor(key) {
+  return EFFECTS[key]?.choice || null;
 }
 
 // How many of each domain are in the loadout — the requirement the *-Touched cards check.
@@ -373,11 +391,28 @@ export function effectValue(value, ctx) {
   return typeof value === "function" ? value(ctx) : value;
 }
 
-// The choices a character still owes an answer for: effects whose text says "choose", where
-// ch.effectChoices has nothing recorded yet. Shown as a nudge, never as a block — a character
-// saved before this existed must stay editable.
+/** A blank answer, or a copy of one already recorded so re-opening a screen shows it. */
+export function blankAnswer(saved) {
+  return {
+    optionId: saved?.optionId ?? null,
+    optionIds: [...(saved?.optionIds || [])],
+    experienceIds: [...(saved?.experienceIds || [])],
+  };
+}
+
+/** True once an answer picks as many things as the choice asks for. */
+export function isAnswered(choice, answer) {
+  if (!choice || !answer) return false;
+  if (choice.kind === "benefit") return answer.optionIds.length === choice.pick;
+  const option = choice.options.find((o) => o.id === answer.optionId);
+  return !!option && answer.experienceIds.length === option.pick;
+}
+
+// The choices a character still owes an answer for. Half-answered counts as owing: an empty
+// answer object gets written the moment a picker renders, so mere presence proves nothing.
+// Shown as a nudge, never as a block — a character saved before this existed stays editable.
 export function unresolvedChoices(ch, db) {
   return collectEffects(ch, db)
-    .filter((e) => e.effect.choice && !ch.effectChoices?.[e.key])
+    .filter((e) => e.effect.choice && !isAnswered(e.effect.choice, ch.effectChoices?.[e.key]))
     .map((e) => ({ key: e.key, label: e.label, prompt: e.effect.choice.prompt }));
 }

@@ -9,7 +9,8 @@ import { blankSlotsUsed, ensureLevelFields } from "./shared/advancement.js";
 import { recomputeCharacter } from "./shared/history.js";
 import { derivedStats } from "./shared/derived-stats.js";
 import { statLine } from "./shared/stat-line.js";
-import { EFFECTS, collectEffects } from "./shared/effects.js";
+import { EFFECTS, blankAnswer, collectEffects } from "./shared/effects.js";
+import { renderEffectChoice } from "./shared/effect-choice.js";
 import { escapeHtml } from "./shared/escape.js";
 
 const CHAR_STORAGE_KEY = "dh-characters-v1";
@@ -687,35 +688,23 @@ function renderExperiencesStep(panel) {
   renderExperienceChoices(panel);
 }
 
-// Clank's Purposeful Design says to pick one of your Experiences — which only exist on this
-// step, several steps after the ancestry is chosen, so this is where it gets asked. Answering
-// is optional: leaving it blank just means the bonus isn't counted.
+// An ancestry feature that says "choose" gets asked here rather than on the heritage step:
+// Clank's Purposeful Design picks one of your Experiences, and those don't exist until now.
+//
+// Nothing here knows which feature that is. Anything in effects.js sourced from an ancestry
+// and carrying a `choice` lands on this step, in whatever shape it asks for. Answering is
+// optional — leaving it blank just means the bonus isn't counted.
 function renderExperienceChoices(panel) {
   for (const entry of collectEffects(character, db)) {
-    const choice = entry.effect.choice;
-    if (!choice || choice.kind !== "experience") continue;
-    const option = choice.options[0];
-    if (choice.options.length !== 1) continue; // multi-shape choices are asked at level up
-
-    const answer = character.effectChoices[entry.key] || { optionId: option.id, experienceIds: [] };
-    const hint = document.createElement("p");
-    hint.className = "hint sub-pick-heading";
-    hint.textContent = choice.prompt;
-    panel.appendChild(hint);
-
-    const list = document.createElement("div");
-    list.className = "option-list";
-    character.experiences.forEach((exp, i) => {
-      const row = document.createElement("label");
-      row.className = "option-row";
-      row.innerHTML = `<input type="radio" name="choice-${escapeHtml(entry.key)}" ${answer.experienceIds[0] === exp.id ? "checked" : ""}/> ${escapeHtml(exp.name || `Experience ${i + 1}`)}`;
-      row.querySelector("input").addEventListener("change", () => {
-        character.effectChoices[entry.key] = { optionId: option.id, experienceIds: [exp.id] };
-        onChange();
-      });
-      list.appendChild(row);
+    if (entry.source !== "ancestry" || !entry.effect.choice) continue;
+    const answer = (character.effectChoices[entry.key] ||= blankAnswer());
+    renderEffectChoice(panel, {
+      key: entry.key,
+      choice: entry.effect.choice,
+      answer,
+      experiences: character.experiences,
+      onChange,
     });
-    panel.appendChild(list);
   }
 }
 

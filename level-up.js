@@ -25,7 +25,8 @@ import {
   validateEntry,
 } from "./shared/history.js";
 import { effectBonuses, hitPointTotal, stressTotal } from "./shared/derived-stats.js";
-import { EFFECTS } from "./shared/effects.js";
+import { blankAnswer, choiceFor } from "./shared/effects.js";
+import { renderEffectChoice } from "./shared/effect-choice.js";
 import { escapeHtml } from "./shared/escape.js";
 
 const CHAR_STORAGE_KEY = "dh-characters-v1";
@@ -41,6 +42,8 @@ let character = null;
 // WHICH tier's slot it marks, because that caps the extra domain card's level.
 let picks = []; // { key, slotTier, traits: [], experienceIds: [], cardId: null }
 let mandatoryCardId = null;
+// Cards handed over by a feature gained at this level, one slot per card granted.
+let grantedCardIds = [];
 // Answers to the "choose two of the following" cards taken on this screen, keyed by card id.
 let pendingChoices = {};
 let exchange = null; // optional { outCardId, inCardId }: the swap allowed on every level up
@@ -233,6 +236,7 @@ function render() {
   renderAdvancementGrid(main, newLevel);
   renderSubPickers(main, cls, newLevel);
   renderMandatoryCardStep(main, cls, newLevel);
+  renderGrantedCardStep(main, cls, newLevel);
   renderExchangeSection(main, cls);
   renderCardChoices(main, newLevel);
 
@@ -445,6 +449,9 @@ function claimedCardIds(except) {
   for (const p of picksFor("domainCard")) {
     if (p.cardId && p !== except) claimed.push(p.cardId);
   }
+  grantedCardIds.forEach((id, i) => {
+    if (id && except !== `granted${i}`) claimed.push(id);
+  });
   if (exchange?.inCardId && except !== "exchange") claimed.push(exchange.inCardId);
   return claimed;
 }
@@ -480,6 +487,41 @@ function renderMandatoryCardStep(main, cls, newLevel) {
   main.appendChild(h);
   const cards = eligibleDomainCards(cls, newLevel, claimedCardIds("mandatory"));
   renderCardGrid(main, cards, mandatoryCardId, (id) => { mandatoryCardId = id; });
+}
+
+// Some features hand you a domain card outright, on top of the guaranteed one and any you buy
+// with an advancement slot — the School of Knowledge's cards say "Take an additional domain
+// card of your level or lower" at every tier.
+//
+// How many is worked out by asking effects.js what the character grants before this level's
+// picks and what they'd grant after, and taking the difference. So a feature that starts
+// granting cards partway through a career is picked up by being catalogued, with no code here
+// naming it. Unlike the advancement option, this isn't a slot, so only your level caps it.
+function grantedCardCount() {
+  const at = characterAtLevel(character, context);
+  const before = effectBonuses(at, db).extraDomainCards;
+  const after = effectBonuses({ ...at, subclassTier: subclassTierAfterPicks() }, db).extraDomainCards;
+  return Math.max(0, after - before);
+}
+
+function renderGrantedCardStep(main, cls, newLevel) {
+  const count = grantedCardCount();
+  // Resized with explicit nulls rather than by setting .length: a hole left by the latter is
+  // skipped by .some(), which would let the confirm button light up with the card unchosen.
+  while (grantedCardIds.length < count) grantedCardIds.push(null);
+  grantedCardIds.length = count;
+  if (count === 0) return;
+
+  const h = document.createElement("h3");
+  h.textContent = count === 1 ? "Extra domain card from your subclass" : "Extra domain cards from your subclass";
+  main.appendChild(h);
+
+  for (let i = 0; i < count; i++) {
+    const ordinal = count > 1 ? ` (${ORDINALS[i]})` : "";
+    subHeading(main, `Granted card${ordinal}: any card of level ${newLevel} or lower from your domains.`);
+    const cards = eligibleDomainCards(cls, newLevel, claimedCardIds(`granted${i}`));
+    renderCardGrid(main, cards, grantedCardIds[i] || null, (id) => { grantedCardIds[i] = id; });
+  }
 }
 
 // Optional swap allowed on every level up: "you can also exchange one domain card you've
@@ -536,13 +578,13 @@ function renderExchangeSection(main, cls) {
 // is the only moment the player is thinking about it.
 
 function cardsBeingTaken() {
-  const ids = [mandatoryCardId, ...picksFor("domainCard").map((p) => p.cardId), exchange?.inCardId];
+  const ids = [mandatoryCardId, ...picksFor("domainCard").map((p) => p.cardId), ...grantedCardIds, exchange?.inCardId];
   return ids.filter(Boolean);
 }
 
 function renderCardChoices(main, newLevel) {
   const pending = cardsBeingTaken()
-    .map((id) => ({ id, choice: EFFECTS[id]?.choice }))
+    .map((id) => ({ id, choice: choiceFor(id) }))
     .filter((x) => x.choice);
   if (pending.length === 0) return;
 
@@ -551,82 +593,16 @@ function renderCardChoices(main, newLevel) {
   main.appendChild(h);
 
   for (const { id, choice } of pending) {
-    subHeading(main, choice.prompt);
-    if (choice.kind === "benefit") renderBenefitChoice(main, id, choice);
-    else renderExperienceChoice(main, id, choice, newLevel);
-  }
-}
-
-function choiceAnswer(key) {
-  if (!pendingChoices[key]) {
     // Re-opening a level that already took the card shows the answer that was given.
-    const saved = character.effectChoices?.[key];
-    pendingChoices[key] = {
-      optionId: saved?.optionId ?? null,
-      optionIds: [...(saved?.optionIds || [])],
-      experienceIds: [...(saved?.experienceIds || [])],
-    };
-  }
-  return pendingChoices[key];
-}
-
-function renderBenefitChoice(main, key, choice) {
-  const answer = choiceAnswer(key);
-  const list = document.createElement("div");
-  list.className = "option-list";
-  for (const opt of choice.options) {
-    const isPicked = answer.optionIds.includes(opt.id);
-    const disabled = !isPicked && answer.optionIds.length >= choice.pick;
-    const row = document.createElement("label");
-    row.className = "option-row";
-    row.innerHTML = `<input type="checkbox" ${isPicked ? "checked" : ""} ${disabled ? "disabled" : ""}/> ${escapeHtml(opt.label)}`;
-    row.querySelector("input").addEventListener("change", (e) => {
-      if (e.target.checked) answer.optionIds.push(opt.id);
-      else answer.optionIds = answer.optionIds.filter((x) => x !== opt.id);
-      render();
+    pendingChoices[id] ||= blankAnswer(character.effectChoices?.[id]);
+    renderEffectChoice(main, {
+      key: id,
+      choice,
+      answer: pendingChoices[id],
+      experiences: experiencesForPicking(newLevel),
+      onChange: render,
     });
-    list.appendChild(row);
   }
-  main.appendChild(list);
-}
-
-function renderExperienceChoice(main, key, choice, newLevel) {
-  const answer = choiceAnswer(key);
-  if (choice.options.length > 1) {
-    const row = document.createElement("div");
-    row.className = "field-row";
-    row.innerHTML = choice.options.map((o) =>
-      `<label><input type="radio" name="choice-${escapeHtml(key)}" value="${escapeHtml(o.id)}" ${answer.optionId === o.id ? "checked" : ""}/> ${escapeHtml(o.label)}</label>`).join("");
-    row.querySelectorAll("input").forEach((r) => r.addEventListener("change", (e) => {
-      answer.optionId = e.target.value;
-      answer.experienceIds = [];
-      render();
-    }));
-    main.appendChild(row);
-  } else {
-    answer.optionId = choice.options[0].id;
-  }
-
-  const option = choice.options.find((o) => o.id === answer.optionId);
-  if (!option) return;
-
-  const list = document.createElement("div");
-  list.className = "option-list";
-  for (const exp of experiencesForPicking(newLevel)) {
-    const isPicked = answer.experienceIds.includes(exp.id);
-    const disabled = !isPicked && answer.experienceIds.length >= option.pick;
-    const name = exp.pending ? "(the new Experience from this level)" : (exp.name || "(unnamed)");
-    const row = document.createElement("label");
-    row.className = "option-row";
-    row.innerHTML = `<input type="checkbox" ${isPicked ? "checked" : ""} ${disabled ? "disabled" : ""}/> ${escapeHtml(name)} <span class="exp-mod">+${escapeHtml(exp.modifier)}</span>`;
-    row.querySelector("input").addEventListener("change", (e) => {
-      if (e.target.checked) answer.experienceIds.push(exp.id);
-      else answer.experienceIds = answer.experienceIds.filter((x) => x !== exp.id);
-      render();
-    });
-    list.appendChild(row);
-  }
-  main.appendChild(list);
 }
 
 // Answers collected on this screen, written to the character on confirm. Left unanswered they
@@ -657,6 +633,8 @@ function stepValidation(newLevel) {
   if (new Set(allTraits).size !== allTraits.length) return false;
 
   if (!mandatoryCardId) return false;
+  if (grantedCardIds.length !== grantedCardCount()) return false;
+  if (grantedCardIds.some((id) => !id)) return false;
   if (exchange && !exchange.inCardId) return false;
   return true;
 }
@@ -681,6 +659,7 @@ function currentEntry(level) {
       return entry;
     }),
     mandatoryCardId,
+    grantedCardIds: grantedCardIds.filter(Boolean),
     exchange: exchange?.outCardId && exchange.inCardId ? { ...exchange } : null,
   };
 }
@@ -825,6 +804,7 @@ function applyLevelUp(newLevel) {
       return entry;
     }),
     mandatoryCardId,
+    grantedCardIds: grantedCardIds.filter(Boolean),
     exchange: exchange?.outCardId && exchange.inCardId ? { ...exchange } : null,
   });
 
@@ -843,6 +823,7 @@ function applyLevelUp(newLevel) {
 
   picks = [];
   mandatoryCardId = null;
+  grantedCardIds = [];
   exchange = null;
   pendingChoices = {};
 
@@ -859,6 +840,7 @@ function loadPicksFrom(entry) {
     cardId: p.cardId || null,
   }));
   mandatoryCardId = entry.mandatoryCardId || null;
+  grantedCardIds = [...(entry.grantedCardIds || [])];
   exchange = entry.exchange ? { ...entry.exchange } : null;
   pendingChoices = {};
 }

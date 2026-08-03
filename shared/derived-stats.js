@@ -18,7 +18,7 @@ import {
   MAX_STRESS_SLOTS,
   damageThresholds,
 } from "./advancement.js";
-import { collectEffects, effectValue, loadoutDomainCounts } from "./effects.js";
+import { EFFECT_STAT_KEYS, collectEffects, effectValue, loadoutDomainCounts } from "./effects.js";
 
 export const TRAIT_KEYS = ["agility", "strength", "finesse", "instinct", "presence", "knowledge"];
 export const TRAIT_LABELS = {
@@ -135,11 +135,16 @@ function partsFor(contributions, key, ctx, scope) {
   return parts;
 }
 
-/** The stat bonuses a character has from effects, for callers doing their own arithmetic. */
+/**
+ * The stat bonuses a character has from effects, for callers doing their own arithmetic —
+ * the level up screen's slot gating, the history validation, the extra domain card count.
+ * Every key in EFFECT_STAT_KEYS is present, so a new one in effects.js turns up here with
+ * no change needed at either end.
+ */
 export function effectBonuses(ch, db) {
   const { contributions, ctx } = gather(ch, db);
   const totals = {};
-  for (const key of ["evasion", "hitPointSlots", "stressSlots", "armorScore", "extraDomainCards"]) {
+  for (const key of EFFECT_STAT_KEYS) {
     totals[key] = partsFor(contributions, key, ctx).reduce((sum, p) => sum + p.value, 0);
   }
   return totals;

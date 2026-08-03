@@ -51,6 +51,8 @@ const {
 } = await import(`./shared/derived-stats.js${RUN}`);
 const {
   EFFECTS,
+  blankAnswer,
+  isAnswered,
   unresolvedChoices,
 } = await import(`./shared/effects.js${RUN}`);
 
@@ -751,6 +753,72 @@ group("The 12-point caps are hard: effects reach them sooner, never past");
   eq("7 + 6 advancements + 2 granted would be 15, but stops at 12", s.hitPoints.total, MAX_HIT_POINT_SLOTS);
   check("and the breakdown says it clamped", !!s.hitPoints.note);
   eq("effectBonuses reports the grant so the slot gating can see it", effectBonuses(ch, FX_DB).hitPointSlots, 2);
+}
+
+group("A subclass upgrade that grants a domain card actually hands one over");
+{
+  // The School of Knowledge takes an extra card at every tier. The level up screen works out
+  // how many by asking what the character's effects grant before this level's picks and after
+  // them, so nothing outside effects.js names the subclass.
+  const KNOW_DB = {
+    classes: [{ id: "cls", name: "WIZARD", domains: ["VALOR", "BLADE"], startingHitPoints: 5, startingEvasion: 11 }],
+    subclasses: [
+      { id: "core_subclass_school_of_knowledge", foundation: {}, specialization: {}, mastery: {} },
+      { id: "sub" },
+    ],
+    domainCards: ["k1", "k2", "k3", "k4"].map((id, i) => ({ id, name: { "en-US": id }, domain: "BLADE", level: i + 1 })),
+  };
+  const know = (over) => {
+    const ch = newCharacter();
+    ch.subclassId = "core_subclass_school_of_knowledge";
+    ch.baseline.subclassTier = "foundation";
+    return Object.assign(ch, over);
+  };
+
+  // Level 5 with a subclass upgrade: Foundation -> Specialization, and Accomplished grants one.
+  const upgrade = entry(5, [{ key: "subclass", slotTier: 3 }, { key: "evasion", slotTier: 3 }], "k1");
+  has("taking the upgrade without the granted card is flagged",
+    validateEntry(know({ level: 5 }), upgrade, KNOW_DB), "1 granted at this level");
+
+  const withCard = { ...upgrade, grantedCardIds: ["k2"] };
+  eq("with the card chosen it adds up", validateEntry(know({ level: 5 }), withCard, KNOW_DB), []);
+
+  has("a second granted card is one too many",
+    validateEntry(know({ level: 5 }), { ...upgrade, grantedCardIds: ["k2", "k3"] }, KNOW_DB),
+    "2 chosen, 1 granted");
+
+  // Not an advancement slot, so only your level caps it — no tier cap.
+  has("and it still has to be a card you could take",
+    validateEntry(know({ level: 5 }), { ...upgrade, grantedCardIds: ["k1"] }, KNOW_DB),
+    "already in the collection");
+
+  // A level with no subclass upgrade grants nothing, even for this subclass.
+  const noUpgrade = entry(4, [{ key: "evasion", slotTier: 2 }, { key: "stress", slotTier: 2 }], "k1");
+  eq("a level without the upgrade grants no card", validateEntry(know({ level: 4 }), noUpgrade, KNOW_DB), []);
+  has("so recording one there is wrong",
+    validateEntry(know({ level: 4 }), { ...noUpgrade, grantedCardIds: ["k2"] }, KNOW_DB),
+    "1 chosen, 0 granted");
+
+  // The replay has to put it in the collection alongside the guaranteed card.
+  const ch = know({ level: 4 });
+  ch.level = 5;
+  ch.levelUps.push(withCard);
+  recomputeCharacter(ch);
+  eq("and the replay adds it to the collection", ch.domainCardIds.includes("k2"), true);
+  eq("alongside the guaranteed one", ch.domainCardIds.includes("k1"), true);
+}
+
+group("Answers are only complete when they pick everything asked for");
+{
+  const vitality = EFFECTS["core_domain_card_vitality"].choice;
+  eq("a blank answer isn't an answer", isAnswered(vitality, blankAnswer()), false);
+  eq("one of two isn't either", isAnswered(vitality, { optionIds: ["stress"] }), false);
+  eq("two of two is", isAnswered(vitality, { optionIds: ["stress", "hitPoint"] }), true);
+
+  const motc = EFFECTS["core_domain_card_master_of_the_craft"].choice;
+  eq("+3 to one needs one Experience named",
+    isAnswered(motc, { optionId: "one", experienceIds: ["e1"] }), true);
+  eq("+2 to two needs two", isAnswered(motc, { optionId: "two", experienceIds: ["e1"] }), false);
 }
 
 group("Every id in effects.js still exists in data/");
