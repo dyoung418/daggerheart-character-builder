@@ -191,6 +191,47 @@ check("stress lands exactly on 12, so it can't breach", 6 + 6 === MAX_STRESS_SLO
 
 // ---------- migration ----------
 
+// The creation wizard hands over a character with none of these fields and traits still
+// unassigned, which is a different starting point from anything loaded out of storage.
+group("A character straight out of the creation wizard");
+{
+  const fresh = ensureLevelFields({
+    id: "new", classId: null, subclassId: null,
+    traits: { agility: null, strength: null, finesse: null, instinct: null, presence: null, knowledge: null },
+    experiences: [
+      { id: "exp_start1", name: "", modifier: 2, baseModifier: 2, sinceLevel: 1 },
+      { id: "exp_start2", name: "", modifier: 2, baseModifier: 2, sinceLevel: 1 },
+    ],
+    domainCardIds: [], creationDomainCardIds: [], domainVaultIds: [],
+    level: 1, proficiency: 1,
+    traitMarks: { agility: false, strength: false, finesse: false, instinct: false, presence: false, knowledge: false },
+    hitPointSlotsBonus: 0, stressSlotsBonus: 0, evasionBonus: 0, subclassTier: "foundation",
+    advancementSlotsUsed: blankSlotsUsed(),
+  });
+  eq("it baselines at level 1", fresh.baselineLevel, 1);
+  check("it has somewhere to record levels", Array.isArray(fresh.levelUps));
+  check("it has a baseline to replay from", !!fresh.baseline);
+  eq("unassigned traits survive normalisation", fresh.baseline.traits.agility, null);
+
+  // The traits step writes to the baseline and re-derives; that must not throw on nulls.
+  fresh.baseline.traits.agility = 2;
+  recomputeCharacter(fresh);
+  eq("assigning a starting trait shows up on the character", fresh.traits.agility, 2);
+  eq("the ones still unassigned stay null", fresh.traits.strength, null);
+
+  // Then the cards, which the wizard sets the same way.
+  fresh.creationDomainCardIds = ["c1", "c2"];
+  recomputeCharacter(fresh);
+  eq("starting cards become the collection", fresh.domainCardIds, ["c1", "c2"]);
+
+  record(fresh, 2, [{ key: "evasion", slotTier: 2 }, { key: "stress", slotTier: 2 }], "c3");
+  eq("and it levels up from there", fresh.level, 2);
+  eq("the level 2 achievement grants proficiency", fresh.proficiency, 2);
+  eq("the new Experience is tagged with the level that granted it",
+    fresh.experiences.map((e) => e.sinceLevel), [1, 1, 2]);
+  eq("the collection keeps the starting cards", fresh.domainCardIds, ["c1", "c2", "c3"]);
+}
+
 group("A character saved before any of this still opens");
 {
   const legacy = {
