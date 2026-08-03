@@ -94,8 +94,11 @@ history replay, the derived stats and the effects catalogue in `shared/advanceme
 fixtures, using the same ES modules the app loads. One group is the exception and reads `data/`
 for real: it asserts that every id `effects.js` names still exists, since an upstream rename
 would otherwise drop a bonus silently. No dependencies, no build step, nothing to install, and
-nothing the app itself loads. Delete the three `tests.*` files and the app is completely
-unaffected.
+nothing the app itself loads. Delete the `tests.*` files and the app is completely unaffected.
+
+Every file the suite touches — including the suite itself — is fetched with a per-run token, so
+after an edit a plain reload is enough. That matters more than it sounds: a cached copy doesn't
+fail, it passes, against code you've already changed.
 
 ## Known gaps
 

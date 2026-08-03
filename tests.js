@@ -6,10 +6,14 @@
 //
 // Nothing in the app imports this file.
 
-// Loaded with a per-run token so a reload always tests the code as it is on disk. Without
-// it the browser will happily re-run the whole suite against a cached copy of a module you
-// just edited and report green, which is worse than not running it at all.
-const RUN = `?run=${Date.now()}`;
+// Every module is loaded with a per-run token so a reload always tests the code as it is on
+// disk. Without it the browser will happily re-run the whole suite against a cached copy of a
+// module you just edited and report green, which is worse than not running it at all.
+//
+// The token is the one tests-boot.js put on this file's own URL, so the whole run — this file
+// included — is busted by a single value. Opened without one (importing tests.js directly),
+// it falls back to a fresh token so the modules under test are still read from disk.
+const RUN = new URL(import.meta.url).search || `?run=${Date.now()}`;
 
 const {
   BASE_STRESS_SLOTS,
@@ -134,6 +138,16 @@ function buildTo(levelUps, level) {
 // and compares that with the copy loaded here. If they disagree, something is stale and
 // every result below is untrustworthy — so say so rather than report a confident green.
 group("The modules under test are the ones on disk");
+{
+  // tests-boot.js is what puts the token on this file's URL. Without it the browser can serve
+  // a cached tests.js, and the suite reports green against a file you've already changed.
+  check(
+    "this file was loaded through tests-boot.js, so it isn't a cached copy either",
+    new URL(import.meta.url).searchParams.has("run"),
+    "tests.js was loaded directly, without a cache-busting token. tests.html should point at\n" +
+    "tests-boot.js. Hard-reload (Ctrl+Shift+R) before trusting anything below.",
+  );
+}
 {
   const probe = newCharacter();
   probe.level = 2;

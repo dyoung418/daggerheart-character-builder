@@ -19,13 +19,15 @@
 <body>
   <h1>Advancement &amp; level history tests</h1>
   <p class="lede">
-    Checks the rules and replay logic in <code>shared/advancement.js</code> and
-    <code>shared/history.js</code>. Open this page to run them — there's nothing to install
-    and nothing to build, same as the rest of the app. Nothing here is loaded by the app
-    itself.
+    Checks the rules, the replay logic, the derived stats and the effects catalogue in
+    <code>shared/advancement.js</code>, <code>shared/history.js</code>,
+    <code>shared/derived-stats.js</code> and <code>shared/effects.js</code>. Open this page to
+    run them — there's nothing to install and nothing to build, same as the rest of the app.
+    Every file is re-fetched on each run, so a reload is enough after an edit. Nothing here is
+    loaded by the app itself.
   </p>
   <div id="summary" class="summary running">Running…</div>
   <div id="results"></div>
-  <script type="module" src="tests.js"></script>
+  <script type="module" src="tests-boot.js"></script>
 </body>
 </html>
