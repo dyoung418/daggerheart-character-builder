@@ -9,9 +9,17 @@
 // Everything here is a pure function over plain objects: no DOM, no storage.
 
 import {
+  ADVANCEMENT_LABELS,
+  MAX_HIT_POINT_SLOTS,
+  MAX_STRESS_SLOTS,
+  extraCardLevelCap,
   isLevelAchievement,
   nextSubclassTier,
+  optionCost,
+  slotsInTier,
   slotsPerPick,
+  tierForLevel,
+  totalSlotsForOption,
 } from "./advancement.js";
 
 const TRAIT_KEYS = ["agility", "strength", "finesse", "instinct", "presence", "knowledge"];
@@ -153,4 +161,184 @@ export function recordedLevels(ch) {
 
 export function levelUpAt(ch, level) {
   return (ch.levelUps || []).find((e) => e.level === level) || null;
+}
+
+// ---------- validation ----------
+
+// The character as the choices for `level` were made against: everything below it applied,
+// plus that level's own tier achievement, which happens first (Step One on the sheet) and
+// is why a trait freed at 5 or 8 can be raised the very same level.
+export function contextForLevel(ch, level) {
+  const state = stateAtLevel(ch, level);
+  applyAchievement(state, level);
+  return state;
+}
+
+function cardsById(db) {
+  const map = new Map();
+  for (const c of db?.domainCards || []) map.set(c.id, c);
+  return map;
+}
+
+function cardName(card) {
+  return card?.name?.["en-US"] || "that card";
+}
+
+// Everything wrong with one level's choices, as sentences a player can act on. Shared by
+// the level up screen and the history list so the two can't disagree about what's legal.
+export function validateEntry(ch, entry, db) {
+  const level = entry.level;
+  const errors = [];
+  const state = contextForLevel(ch, level);
+  const cls = (db?.classes || []).find((c) => c.id === ch.classId);
+  const byId = cardsById(db);
+  const tier = tierForLevel(level);
+
+  const picks = entry.picks || [];
+  const spent = picks.reduce((sum, p) => sum + optionCost(p.key), 0);
+  if (spent !== 2) errors.push(`${spent} of the 2 choice points for this level are spent.`);
+
+  // Slots: what this level marks, on top of what every other level already marked.
+  const marked = {};
+  for (const pick of picks) {
+    (marked[pick.key] ||= {})[pick.slotTier] = (marked[pick.key]?.[pick.slotTier] || 0) + slotsPerPick(pick.key);
+  }
+  for (const [key, perTier] of Object.entries(marked)) {
+    for (const [slotTier, count] of Object.entries(perTier)) {
+      const t = Number(slotTier);
+      if (t > tier) {
+        errors.push(`${ADVANCEMENT_LABELS[key]}: a tier ${t} slot isn't available at level ${level}.`);
+        continue;
+      }
+      const already = state.slotsUsed?.[key]?.[t] || 0;
+      if (already + count > slotsInTier(key, t)) {
+        errors.push(`${ADVANCEMENT_LABELS[key]}: no tier ${t} slot left to mark.`);
+      }
+    }
+    if ((state.slotsUsed?.[key] ? Object.values(state.slotsUsed[key]).reduce((a, b) => a + b, 0) : 0)
+      + Object.values(perTier).reduce((a, b) => a + b, 0) > totalSlotsForOption(key, tier)) {
+      errors.push(`${ADVANCEMENT_LABELS[key]}: more slots marked than this tier allows.`);
+    }
+  }
+
+  // Traits: two distinct unmarked ones per pick, and all distinct across the level.
+  const traitsThisLevel = [];
+  for (const pick of picks.filter((p) => p.key === "traits")) {
+    const keys = pick.traits || [];
+    if (new Set(keys).size !== 2) errors.push("Trait increase: pick exactly 2 different traits.");
+    for (const key of keys) {
+      if (state.traitMarks[key]) errors.push(`${titleCase(key)} is already marked this tier and can't be raised again yet.`);
+      if (traitsThisLevel.includes(key)) errors.push(`${titleCase(key)} is picked twice at this level.`);
+      traitsThisLevel.push(key);
+    }
+  }
+
+  for (const pick of picks.filter((p) => p.key === "experience")) {
+    const ids = pick.experienceIds || [];
+    if (new Set(ids).size !== 2) errors.push("Experience increase: pick exactly 2 different Experiences.");
+    for (const id of ids) {
+      const exp = (ch.experiences || []).find((e) => e.id === id);
+      if (!exp) errors.push("An Experience picked at this level no longer exists.");
+      else if (exp.sinceLevel > level) errors.push(`"${exp.name || "(unnamed)"}" wasn't gained until level ${exp.sinceLevel}.`);
+    }
+  }
+
+  const cls_ = cls;
+  const hp = (cls_?.startingHitPoints || 0) + state.hitPointSlotsBonus + picks.filter((p) => p.key === "hitPoint").length;
+  if (cls_ && hp > MAX_HIT_POINT_SLOTS) errors.push(`This would take Hit Points past the maximum of ${MAX_HIT_POINT_SLOTS}.`);
+  const stress = 6 + state.stressSlotsBonus + picks.filter((p) => p.key === "stress").length;
+  if (stress > MAX_STRESS_SLOTS) errors.push(`This would take Stress past the maximum of ${MAX_STRESS_SLOTS}.`);
+
+  for (const _ of picks.filter((p) => p.key === "subclass")) {
+    if (state.subclassTier === "mastery") errors.push("The subclass is already at Mastery.");
+  }
+
+  // Cards: owned so far, plus everything this level adds, so duplicates surface wherever
+  // they come from.
+  const owned = new Set(state.cardIds);
+  const check = (id, cap, what) => {
+    if (!id) { errors.push(`${what}: no card chosen.`); return; }
+    const card = byId.get(id);
+    if (!card) { errors.push(`${what}: that card no longer exists.`); return; }
+    if (owned.has(id)) errors.push(`${what}: ${cardName(card)} is already in the collection.`);
+    if (card.level > cap) errors.push(`${what}: ${cardName(card)} is level ${card.level}, above the limit of ${cap}.`);
+    if (cls_ && !cls_.domains.includes(card.domain)) errors.push(`${what}: ${cardName(card)} isn't in a domain this class has access to.`);
+    owned.add(id);
+  };
+
+  if (db) {
+    check(entry.mandatoryCardId, level, "New domain card");
+    for (const pick of picks.filter((p) => p.key === "domainCard")) {
+      check(pick.cardId, extraCardLevelCap(level, pick.slotTier), `Extra domain card (tier ${pick.slotTier} slot)`);
+    }
+    const swap = entry.exchange;
+    if (swap?.outCardId || swap?.inCardId) {
+      const out = byId.get(swap.outCardId);
+      if (!out || !owned.has(swap.outCardId)) errors.push("Exchange: the card being given up isn't in the collection at this level.");
+      else {
+        owned.delete(swap.outCardId);
+        check(swap.inCardId, out.level, "Exchange");
+      }
+    }
+  }
+
+  return errors;
+}
+
+function titleCase(str) {
+  return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+// Every recorded level that no longer adds up, with the reasons. Levels the player has
+// explicitly accepted are reported but not counted as needing attention.
+export function validateLevelUps(ch, db) {
+  return entriesFor(ch)
+    .map((entry) => ({ level: entry.level, accepted: !!entry.acceptedAsIs, errors: validateEntry(ch, entry, db) }))
+    .filter((r) => r.errors.length > 0);
+}
+
+export function unresolvedProblems(ch, db) {
+  return validateLevelUps(ch, db).filter((r) => !r.accepted);
+}
+
+// ---------- description ----------
+
+const SHORT_LABELS = {
+  traits: "+1 to two traits",
+  hitPoint: "+1 Hit Point slot",
+  stress: "+1 Stress slot",
+  experience: "+1 to two Experiences",
+  domainCard: "Extra domain card",
+  evasion: "+1 Evasion",
+  subclass: "Subclass upgrade",
+  proficiency: "+1 Proficiency",
+};
+
+// A one-line summary of what was chosen at a level, for the history list.
+export function describeLevelUp(ch, entry, db) {
+  const byId = cardsById(db);
+  const parts = [];
+  for (const pick of entry.picks || []) {
+    if (pick.key === "traits") {
+      parts.push((pick.traits || []).map((k) => `+1 ${titleCase(k)}`).join(", "));
+    } else if (pick.key === "experience") {
+      const names = (pick.experienceIds || []).map((id) => (ch.experiences || []).find((e) => e.id === id)?.name || "(unnamed)");
+      parts.push(`+1 to ${names.join(" & ")}`);
+    } else if (pick.key === "domainCard") {
+      parts.push(`${SHORT_LABELS.domainCard}: ${cardName(byId.get(pick.cardId))}`);
+    } else {
+      parts.push(SHORT_LABELS[pick.key] || pick.key);
+    }
+  }
+  return parts;
+}
+
+export function describeCards(ch, entry, db) {
+  const byId = cardsById(db);
+  const lines = [];
+  if (entry.mandatoryCardId) lines.push(`Card: ${cardName(byId.get(entry.mandatoryCardId))}`);
+  if (entry.exchange?.outCardId && entry.exchange.inCardId) {
+    lines.push(`Exchanged ${cardName(byId.get(entry.exchange.outCardId))} → ${cardName(byId.get(entry.exchange.inCardId))}`);
+  }
+  return lines;
 }

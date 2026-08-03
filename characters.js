@@ -5,16 +5,38 @@ import {
   communityCardArtPath,
   ancestryCardArtPath,
 } from "./shared/card-render.js";
-import { activeDomainCardIds, damageThresholds, ensureLevelFields } from "./shared/advancement.js";
+import {
+  ADVANCEMENT_LABELS,
+  SLOT_TIERS,
+  activeDomainCardIds,
+  availableOptionKeys,
+  damageThresholds,
+  ensureLevelFields,
+  extraCardLevelCap,
+  slotsInTier,
+  slotsPerPick,
+  tierForLevel,
+} from "./shared/advancement.js";
+import {
+  describeCards,
+  describeLevelUp,
+  recomputeCharacter,
+  unresolvedProblems,
+  validateLevelUps,
+} from "./shared/history.js";
 import { escapeHtml } from "./shared/escape.js";
 
 const CHAR_STORAGE_KEY = "dh-characters-v1";
+const UNDO_STORAGE_KEY = "dh-level-edit-undo-v1";
 const TRAIT_LABELS = { agility: "Agility", strength: "Strength", finesse: "Finesse", instinct: "Instinct", presence: "Presence", knowledge: "Knowledge" };
+const CIRCLED = ["", "①", "②", "③", "④", "⑤", "⑥", "⑦", "⑧", "⑨", "⑩"];
 
 const db = {};
 let characters = [];
 let openId = null; // id of the character open in detail view, null = list view
 let pendingDeleteId = null; // id awaiting delete confirmation (inline confirm, never window.confirm)
+let pendingRemoveLevel = null; // level awaiting remove confirmation, same inline pattern
+let historyOpen = false; // keeps the level history accordion open across re-renders
 
 function titleCase(str) {
   return str.charAt(0) + str.slice(1).toLowerCase();
@@ -150,6 +172,276 @@ function cardBlock(card, caption) {
   return wrap;
 }
 
+// ---------- level history ----------
+
+// The advancement grid as a read-only summary, with the level that marked each slot
+// written into it — the same layout as the level up screen and the printed sheet, so the
+// whole slot economy (and what's still free) reads at a glance.
+function renderHistoryGrid(ch) {
+  const markedAt = {}; // key -> tier -> [levels]
+  for (const entry of ch.levelUps || []) {
+    for (const pick of entry.picks || []) {
+      const perTier = (markedAt[pick.key] ||= {});
+      const list = (perTier[pick.slotTier] ||= []);
+      for (let i = 0; i < slotsPerPick(pick.key); i++) list.push(entry.level);
+    }
+  }
+
+  const maxTier = tierForLevel(ch.level);
+  const tiers = SLOT_TIERS.filter((t) => t <= maxTier);
+  const grid = document.createElement("div");
+  grid.className = "advancement-grid history-grid";
+
+  const head = document.createElement("div");
+  head.className = "adv-row adv-head";
+  head.appendChild(labelSpan(""));
+  for (const tier of tiers) {
+    const cell = document.createElement("span");
+    cell.className = "adv-tier-group";
+    cell.textContent = `Tier ${tier}`;
+    head.appendChild(cell);
+  }
+  grid.appendChild(head);
+
+  for (const key of availableOptionKeys(ch.level)) {
+    const row = document.createElement("div");
+    row.className = "adv-row";
+    const label = key === "domainCard"
+      ? `Extra domain card (${tiers.map((t) => `≤${extraCardLevelCap(10, t)}`).join(" / ")})`
+      : ADVANCEMENT_LABELS[key];
+    row.appendChild(labelSpan(label));
+
+    for (const tier of tiers) {
+      const cell = document.createElement("span");
+      cell.className = "adv-tier-group";
+      const total = slotsInTier(key, tier);
+      if (total === 0) {
+        cell.textContent = "—";
+        cell.classList.add("adv-tier-empty");
+        row.appendChild(cell);
+        continue;
+      }
+      // Slots marked before recording started have no level to show, so they read as a
+      // plain filled box rather than pretending to a level they can't know.
+      const levels = markedAt[key]?.[tier] || [];
+      const unattributed = Math.max(0, (ch.baseline?.slotsUsed?.[key]?.[tier] || 0));
+      for (let i = 0; i < total; i++) {
+        const box = document.createElement("span");
+        box.className = "slot-box";
+        if (i < unattributed) {
+          box.classList.add("filled");
+          box.title = "Marked before level history was recorded";
+        } else if (i - unattributed < levels.length) {
+          const lv = levels[i - unattributed];
+          box.classList.add("filled", "numbered");
+          box.textContent = CIRCLED[lv] || lv;
+          box.title = `Marked at level ${lv}`;
+        } else {
+          box.classList.add("open");
+        }
+        cell.appendChild(box);
+      }
+      row.appendChild(cell);
+    }
+    grid.appendChild(row);
+  }
+  return grid;
+}
+
+function labelSpan(text) {
+  const span = document.createElement("span");
+  span.className = "adv-label";
+  span.textContent = text;
+  return span;
+}
+
+function levelHistoryRow(ch, entry, problem, isLast) {
+  const row = document.createElement("div");
+  row.className = "level-row" + (problem && !problem.accepted ? " flagged" : "");
+
+  const main = document.createElement("div");
+  main.className = "level-row-main";
+  const parts = describeLevelUp(ch, entry, db);
+  const cards = describeCards(ch, entry, db);
+  const flag = problem && !problem.accepted ? "⚠ " : "";
+  const accepted = entry.acceptedAsIs ? ` <span class="level-accepted">✓ kept as is</span>` : "";
+  main.innerHTML = `<strong>L${escapeHtml(entry.level)}</strong> ${escapeHtml(flag)}${escapeHtml(parts.join(" · ") || "(nothing recorded)")}${accepted}` +
+    cards.map((c) => `<div class="level-row-sub">${escapeHtml(c)}</div>`).join("");
+  if (problem) {
+    for (const err of problem.errors) {
+      main.innerHTML += `<div class="level-row-error">└ ${escapeHtml(err)}</div>`;
+    }
+  }
+  row.appendChild(main);
+
+  const actions = document.createElement("div");
+  actions.className = "level-row-actions";
+
+  if (pendingRemoveLevel === entry.level) {
+    const text = document.createElement("span");
+    text.className = "confirm-text";
+    text.textContent = `Remove level ${entry.level}? Stats go back to level ${entry.level - 1}.`;
+    actions.appendChild(text);
+    actions.appendChild(button("Yes, remove", "btn-danger btn-small", () => removeLevel(ch, entry.level)));
+    actions.appendChild(button("Cancel", "btn-ghost btn-small", () => { pendingRemoveLevel = null; renderAll(); }));
+  } else {
+    const edit = document.createElement("a");
+    edit.className = "btn-small";
+    edit.href = `level-up.html?id=${ch.id}&level=${entry.level}`;
+    edit.textContent = problem && !problem.accepted ? "Fix" : "Edit";
+    actions.appendChild(edit);
+
+    if (problem && !problem.accepted) {
+      actions.appendChild(button("Keep as is", "btn-ghost btn-small", () => {
+        entry.acceptedAsIs = true;
+        saveCharacters();
+        renderAll();
+      }));
+    }
+    if (isLast) {
+      actions.appendChild(button("Remove", "btn-ghost btn-small", () => { pendingRemoveLevel = entry.level; renderAll(); }));
+    }
+  }
+  row.appendChild(actions);
+  return row;
+}
+
+function button(label, className, onClick) {
+  const b = document.createElement("button");
+  b.className = className;
+  b.textContent = label;
+  b.addEventListener("click", onClick);
+  return b;
+}
+
+function renderLevelHistory(container, ch) {
+  const entries = [...(ch.levelUps || [])].sort((a, b) => a.level - b.level);
+  const problems = validateLevelUps(ch, db);
+  const problemFor = (level) => problems.find((p) => p.level === level);
+  const unresolved = problems.filter((p) => !p.accepted).length;
+
+  const details = document.createElement("details");
+  details.className = "level-history";
+  details.open = historyOpen;
+  details.addEventListener("toggle", () => { historyOpen = details.open; });
+
+  const summary = document.createElement("summary");
+  const count = entries.length;
+  summary.textContent = `Level history (${count} recorded level${count === 1 ? "" : "s"})` +
+    (unresolved ? ` · ⚠ ${unresolved} need${unresolved === 1 ? "s" : ""} attention` : "");
+  details.appendChild(summary);
+
+  if (ch.level > 1) details.appendChild(renderHistoryGrid(ch));
+
+  const list = document.createElement("div");
+  list.className = "level-list";
+
+  // Levels reached before choices were recorded can't be broken down, so they're one row
+  // that says so rather than rows guessing at what was picked.
+  if (ch.baselineLevel > 1) {
+    const row = document.createElement("div");
+    row.className = "level-row";
+    row.innerHTML = `<div class="level-row-main"><strong>L1–${escapeHtml(ch.baselineLevel)}</strong> <span class="hint">reached before level history was recorded, so these choices can't be changed</span></div>`;
+    list.appendChild(row);
+  } else {
+    const row = document.createElement("div");
+    row.className = "level-row";
+    row.innerHTML = `<div class="level-row-main"><strong>L1</strong> Character creation</div>`;
+    const actions = document.createElement("div");
+    actions.className = "level-row-actions";
+    const edit = document.createElement("a");
+    edit.className = "btn-small";
+    edit.href = `create.html?id=${ch.id}`;
+    edit.textContent = "Edit";
+    actions.appendChild(edit);
+    row.appendChild(actions);
+    list.appendChild(row);
+  }
+
+  entries.forEach((entry, i) => {
+    list.appendChild(levelHistoryRow(ch, entry, problemFor(entry.level), i === entries.length - 1));
+  });
+
+  if (entries.length === 0 && ch.baselineLevel > 1) {
+    const hint = document.createElement("p");
+    hint.className = "hint";
+    hint.textContent = "Levels gained from now on will be recorded here and can be changed afterwards.";
+    list.appendChild(hint);
+  }
+
+  details.appendChild(list);
+
+  if (loadUndo(ch.id)) {
+    const undoRow = document.createElement("div");
+    undoRow.className = "level-undo";
+    undoRow.appendChild(button("Undo last level edit", "btn-ghost btn-small", () => undoLastEdit(ch)));
+    details.appendChild(undoRow);
+  }
+
+  container.appendChild(details);
+}
+
+function removeLevel(ch, level) {
+  saveUndo(ch);
+  ch.levelUps = (ch.levelUps || []).filter((e) => e.level !== level);
+  ch.experiences = (ch.experiences || []).filter((e) => e.sinceLevel < level);
+  ch.level = level - 1;
+  recomputeCharacter(ch);
+  ch.updatedAt = new Date().toISOString();
+  pendingRemoveLevel = null;
+  saveCharacters();
+  renderAll();
+}
+
+// A single undo slot, so a cascade of fixes can be walked back one step. It holds only the
+// recorded truth: the derived stats come back from replaying it.
+function saveUndo(ch) {
+  const snapshot = {
+    id: ch.id,
+    at: new Date().toISOString(),
+    levelUps: JSON.parse(JSON.stringify(ch.levelUps || [])),
+    experiences: JSON.parse(JSON.stringify(ch.experiences || [])),
+    level: ch.level,
+    baseline: JSON.parse(JSON.stringify(ch.baseline)),
+    baselineLevel: ch.baselineLevel,
+    creationDomainCardIds: [...(ch.creationDomainCardIds || [])],
+    domainVaultIds: [...(ch.domainVaultIds || [])],
+  };
+  try {
+    localStorage.setItem(UNDO_STORAGE_KEY, JSON.stringify(snapshot));
+  } catch {
+    // storage full or unavailable: undo is a convenience, never block the edit for it
+  }
+}
+
+function loadUndo(charId) {
+  try {
+    const raw = localStorage.getItem(UNDO_STORAGE_KEY);
+    if (!raw) return null;
+    const snap = JSON.parse(raw);
+    return snap && snap.id === charId ? snap : null;
+  } catch {
+    return null;
+  }
+}
+
+function undoLastEdit(ch) {
+  const snap = loadUndo(ch.id);
+  if (!snap) return;
+  ch.levelUps = snap.levelUps;
+  ch.experiences = snap.experiences;
+  ch.level = snap.level;
+  ch.baseline = snap.baseline;
+  ch.baselineLevel = snap.baselineLevel;
+  ch.creationDomainCardIds = snap.creationDomainCardIds;
+  ch.domainVaultIds = snap.domainVaultIds;
+  recomputeCharacter(ch);
+  ch.updatedAt = new Date().toISOString();
+  localStorage.removeItem(UNDO_STORAGE_KEY);
+  saveCharacters();
+  renderAll();
+}
+
 function renderDetail() {
   const ch = characters.find((c) => c.id === openId);
   const container = document.getElementById("character-detail");
@@ -175,6 +467,17 @@ function renderDetail() {
   header.innerHTML = `<h2>${escapeHtml(ch.name || "(unnamed)")}</h2><p>${escapeHtml(ch.pronouns || "")} · Level ${escapeHtml(ch.level)}</p>`;
   container.appendChild(header);
 
+  // Levelling up on top of choices that no longer add up just compounds the problem, so
+  // it waits until they're either fixed or explicitly kept.
+  const blocking = unresolvedProblems(ch, db);
+  if (blocking.length > 0) {
+    const banner = document.createElement("p");
+    banner.className = "warn-banner";
+    const levels = blocking.map((p) => `level ${p.level}`).join(", ");
+    banner.textContent = `⚠ Choices at ${levels} no longer add up. Open Level history below to fix them, or keep them as they are.`;
+    container.appendChild(banner);
+  }
+
   if (ch.level < 10) {
     const levelUpBtn = document.createElement("a");
     levelUpBtn.className = "btn-primary";
@@ -182,6 +485,11 @@ function renderDetail() {
     levelUpBtn.textContent = "Level Up";
     levelUpBtn.style.display = "inline-block";
     levelUpBtn.style.marginBottom = "0.75rem";
+    if (blocking.length > 0) {
+      levelUpBtn.classList.add("disabled-link");
+      levelUpBtn.removeAttribute("href");
+      levelUpBtn.title = "Resolve the flagged levels before gaining a new one.";
+    }
     container.appendChild(levelUpBtn);
   }
 
@@ -230,6 +538,8 @@ function renderDetail() {
     statsBox2.appendChild(statLine("Damage thresholds", `${th.major} / ${th.severe}`));
   }
   container.appendChild(statsBox2);
+
+  renderLevelHistory(container, ch);
 
   if (ch.domainCardIds.length > 0) {
     const dcHeader = document.createElement("h3");
@@ -402,6 +712,14 @@ function exportCsv() {
 async function init() {
   await loadAllData();
   loadCharacters();
+  // Returning from a level edit reopens the character with the history showing, so any
+  // level the edit knocked out of shape is in front of you rather than a click away.
+  const params = new URLSearchParams(location.search);
+  const open = params.get("id") || params.get("open");
+  if (open && characters.some((c) => c.id === open)) {
+    openId = open;
+    historyOpen = params.get("history") === "1";
+  }
   renderAll();
   document.getElementById("export-csv-btn").addEventListener("click", exportCsv);
 }
