@@ -21,6 +21,14 @@ python3 -m http.server 8080
 
 then open `http://localhost:8080`. Any static file server works.
 
+## Tests
+
+Open `tests.html` in the browser — that's all. It checks the advancement rules and the level
+history replay in `shared/advancement.js` and `shared/history.js` against hand-written
+fixtures, using the same ES modules the app loads. No dependencies, no build step, nothing to
+install, and nothing the app itself loads. Delete the three `tests.*` files and the app is
+completely unaffected.
+
 ## Security notes
 
 The app has no backend and no accounts: every character lives in the `localStorage`

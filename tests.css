@@ -1,0 +1,71 @@
+/* Solo per tests.html: l'app non carica questo foglio. */
+
+:root {
+  --bg: #131019;
+  --panel: #1e1723;
+  --panel-alt: #271f2c;
+  --border: #3d3040;
+  --text: #f1ecdf;
+  --text-dim: #ad9fa8;
+  --accent: #d9a441;
+  --green: #4e9c6d;
+  --red: #c0392b;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 1.5rem clamp(1rem, 5vw, 3rem) 4rem;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+h1 { font-size: 1.3rem; margin: 0 0 0.4rem; letter-spacing: 0.01em; }
+.lede { color: var(--text-dim); max-width: 60ch; margin: 0 0 1.2rem; font-size: 0.85rem; }
+code { background: var(--panel-alt); padding: 0.1em 0.35em; border-radius: 4px; font-size: 0.9em; }
+
+.summary {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 0.7rem 1rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 1.2rem;
+}
+.summary.running { color: var(--text-dim); }
+.summary.ok { border-color: var(--green); color: var(--green); }
+.summary.bad { border-color: var(--red); color: var(--red); }
+
+.group { margin-bottom: 1.1rem; }
+.group h2 {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  margin: 0 0 0.4rem;
+  font-weight: 600;
+}
+
+.check {
+  display: flex;
+  gap: 0.6rem;
+  align-items: baseline;
+  padding: 0.3rem 0.6rem;
+  border-left: 2px solid transparent;
+  border-radius: 0 4px 4px 0;
+}
+.check + .check { margin-top: 1px; }
+.check .mark { flex: 0 0 1rem; font-weight: 700; }
+.check.pass .mark { color: var(--green); }
+.check.fail { background: rgba(192, 57, 43, 0.12); border-left-color: var(--red); }
+.check.fail .mark { color: var(--red); }
+.check .detail { color: var(--text-dim); font-size: 0.8rem; }
+.check.fail .detail { color: #e8a49c; white-space: pre-wrap; font-family: ui-monospace, monospace; }

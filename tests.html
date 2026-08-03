@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="
+    default-src 'self';
+    script-src 'self';
+    style-src 'self';
+    img-src 'self';
+    connect-src 'self';
+    object-src 'none';
+    base-uri 'none';
+    form-action 'none'" />
+  <meta name="referrer" content="no-referrer" />
+  <title>Daggerheart — Tests</title>
+  <link rel="stylesheet" href="tests.css" />
+</head>
+<body>
+  <h1>Advancement &amp; level history tests</h1>
+  <p class="lede">
+    Checks the rules and replay logic in <code>shared/advancement.js</code> and
+    <code>shared/history.js</code>. Open this page to run them — there's nothing to install
+    and nothing to build, same as the rest of the app. Nothing here is loaded by the app
+    itself.
+  </p>
+  <div id="summary" class="summary running">Running…</div>
+  <div id="results"></div>
+  <script type="module" src="tests.js"></script>
+</body>
+</html>
