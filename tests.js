@@ -170,6 +170,11 @@ eq("an unset tier falls back to foundation, like ensureLevelFields", subclassTie
 eq("so does a tier name we don't recognise", subclassTiersUpTo("legendary"), ["foundation"]);
 eq("the ladder and the labels agree on which tiers exist",
   SUBCLASS_TIER_ORDER.map((t) => SUBCLASS_TIER_LABELS[t]), ["Foundation", "Specialization", "Mastery"]);
+// The sheet renders these in array order, so the order here is the left-to-right order of the
+// cards. It comes from the constant ladder, never from the character, so it can't drift.
+eq("always foundation → specialization → mastery, whatever tier you're at",
+  ["mastery", "foundation", "specialization"].map((t) => subclassTiersUpTo(t).join(" → ")),
+  ["foundation → specialization → mastery", "foundation", "foundation → specialization"]);
 
 group("Extra domain card: capped by your level AND by the slot's tier");
 eq("tier caps as printed on the sheet", TIER_CARD_CAP, { 2: 4, 3: 7, 4: 10 });
