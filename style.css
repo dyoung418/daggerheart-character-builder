@@ -427,6 +427,13 @@ h1, h2, h3, .btn-primary, .btn-ghost, .btn-small, .top-nav a {
   gap: 0.75rem;
   margin: 0.5rem 0 1rem;
 }
+/* Senza arte le tessere non mostrano un'immagine ma un blocco di testo, e 140px sono troppo
+   pochi per leggerlo: una colonna più larga (come quella del browser delle carte) evita le
+   righe di due o tre parole. Vale per tutta la griglia appena una tessera perde l'arte, così
+   le colonne restano allineate. */
+.tile-grid:has(.art-missing) {
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
 
 .card-tile { cursor: pointer; border: 2px solid transparent; border-radius: 8px; overflow: hidden; background: var(--panel-alt); transition: border-color 0.12s ease, transform 0.12s ease; }
 .card-tile .card-art { aspect-ratio: 5/7; }
