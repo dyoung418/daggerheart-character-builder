@@ -12,6 +12,11 @@ import { escapeHtml } from "./shared/escape.js";
 const CHAR_STORAGE_KEY = "dh-characters-v1";
 const TRAIT_KEYS = ["agility", "strength", "finesse", "instinct", "presence", "knowledge"];
 const TRAIT_LABELS = { agility: "Agility", strength: "Strength", finesse: "Finesse", instinct: "Instinct", presence: "Presence", knowledge: "Knowledge" };
+
+function spellcastBadge() {
+  return `<span class="badge-spellcast" title="Spellcasting trait">★ spellcasting</span>`;
+}
+
 const TRAIT_ARRAY = [2, 1, 1, 0, 0, -1];
 const MINOR_HEALTH_POTION_ID = "core_consumable_minor_health_potion";
 const MINOR_STAMINA_POTION_ID = "core_consumable_minor_stamina_potion";
