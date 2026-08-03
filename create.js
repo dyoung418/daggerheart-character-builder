@@ -123,7 +123,9 @@ function initCharacter() {
     }
   }
   const newId = "char_" + Math.random().toString(36).slice(2, 10);
-  character = blankCharacter(newId);
+  // Through the same normalisation as a character loaded from storage, so a brand new one
+  // has the baseline and level history fields the rest of the app expects.
+  character = ensureLevelFields(blankCharacter(newId));
   const list = loadAllCharacters();
   list.push(character);
   saveAllCharacters(list);
