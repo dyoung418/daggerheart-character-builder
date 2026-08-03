@@ -246,6 +246,17 @@ h1, h2, h3, .btn-primary, .btn-ghost, .btn-small, .top-nav a {
   margin-bottom: 0.2rem;
 }
 .fallback-feature-desc { margin: 0; font-size: 0.82rem; line-height: 1.55; color: var(--text-dim); }
+/* Una descrizione può avere più paragrafi e liste puntate (es. gli elementi del Warden of
+   the Elements): ogni voce ha il suo elemento, quindi serve lo stacco fra l'una e l'altra. */
+.fallback-feature-desc + .fallback-feature-desc { margin-top: 0.4rem; }
+.fallback-feature-list {
+  margin: 0.3rem 0 0;
+  padding-left: 1.1rem;
+  font-size: 0.82rem;
+  line-height: 1.55;
+  color: var(--text-dim);
+}
+.fallback-feature-list li { margin-bottom: 0.15rem; }
 
 .card-meta {
   padding: 0.5rem 0.75rem;

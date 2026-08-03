@@ -8,6 +8,7 @@ import {
 import {
   ADVANCEMENT_LABELS,
   SLOT_TIERS,
+  SUBCLASS_TIER_LABELS,
   activeDomainCardIds,
   availableOptionKeys,
   damageThresholds,
@@ -15,6 +16,7 @@ import {
   extraCardLevelCap,
   slotsInTier,
   slotsPerPick,
+  subclassTiersUpTo,
   tierForLevel,
 } from "./shared/advancement.js";
 import {
@@ -495,10 +497,13 @@ function renderDetail() {
 
   const cardsRow = document.createElement("div");
   cardsRow.className = "tile-grid";
-  const subTier = ch.subclassTier === "foundation" ? "Foundation" : ch.subclassTier === "specialization" ? "Specialization" : "Mastery";
+  // Every subclass card the character has, not just the newest: a Specialization or Mastery
+  // upgrade adds a card to the subclass, it doesn't replace the one below it, and the features
+  // on the earlier cards are still in play.
   if (sub) {
-    const tierFeatures = sub[ch.subclassTier]?.features;
-    cardsRow.appendChild(cardBlock({ id: sub.id, name: `${sub.name["en-US"]} (${subTier})`, art: subclassCardArtPath(sub.id, ch.subclassTier), type: "Subclass", features: tierFeatures }));
+    for (const tier of subclassTiersUpTo(ch.subclassTier)) {
+      cardsRow.appendChild(cardBlock({ id: sub.id, name: `${sub.name["en-US"]} (${SUBCLASS_TIER_LABELS[tier]})`, art: subclassCardArtPath(sub.id, tier), type: "Subclass", features: sub[tier]?.features }));
+    }
   }
   const com = findCommunity(ch.heritage.communityId);
   if (com) cardsRow.appendChild(cardBlock({ id: com.id, name: com.name["en-US"], art: communityCardArtPath(com.id), type: "Community", features: com.features }, `Community: ${com.name["en-US"]}`));
@@ -674,7 +679,7 @@ function csvRowForCharacter(ch) {
 
   const row = [
     ch.name, ch.pronouns, ch.level, ch.proficiency,
-    cls ? titleCase(cls.name) : "", sub ? sub.name["en-US"] : "", ch.subclassTier,
+    cls ? titleCase(cls.name) : "", sub ? sub.name["en-US"] : "", SUBCLASS_TIER_LABELS[ch.subclassTier] ?? ch.subclassTier,
     ancestries, com ? com.name["en-US"] : "",
     ch.traits.agility, ch.traits.strength, ch.traits.finesse, ch.traits.instinct, ch.traits.presence, ch.traits.knowledge,
     cls ? cls.startingEvasion + ch.evasionBonus : "", cls ? cls.startingHitPoints + ch.hitPointSlotsBonus : "", 6 + ch.stressSlotsBonus, "2/6",

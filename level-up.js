@@ -4,6 +4,7 @@ import {
   MAX_HIT_POINT_SLOTS,
   MAX_STRESS_SLOTS,
   SLOT_TIERS,
+  SUBCLASS_TIER_LABELS,
   availableOptionKeys,
   ensureLevelFields,
   extraCardLevelCap,
@@ -394,14 +395,18 @@ function renderExperienceSubPicker(main, pick, ordinal, newLevel) {
 
 function renderSubclassPreview(main) {
   const nextTier = nextSubclassTier(context.subclassTier);
-  subHeading(main, `You'll take the ${nextTier} card for your subclass.`);
   const sub = db.subclasses.find((s) => s.id === character.subclassId);
+  const label = SUBCLASS_TIER_LABELS[nextTier];
+  const name = sub ? `${sub.name["en-US"]} (${label})` : label;
+  // "Add", not "take": the new card joins the ones already on the sheet instead of replacing
+  // them, and the features of the earlier cards keep working.
+  subHeading(main, `You'll add the ${label} card to your subclass. The cards you already have still apply.`);
   const preview = document.createElement("div");
   preview.className = "tile-grid";
   const tile = document.createElement("div");
   tile.className = "card-tile";
   tile.appendChild(renderCardArt({
-    id: character.subclassId, name: nextTier, art: subclassCardArtPath(character.subclassId, nextTier),
+    id: character.subclassId, name, art: subclassCardArtPath(character.subclassId, nextTier),
     type: "Subclass", features: sub?.[nextTier]?.features,
   }));
   preview.appendChild(tile);
