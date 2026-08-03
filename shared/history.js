@@ -21,7 +21,15 @@ import {
   tierForLevel,
   totalSlotsForOption,
 } from "./advancement.js";
-import { hitPointTotal, stressTotal } from "./derived-stats.js";
+import { effectBonuses, hitPointTotal, stressTotal } from "./derived-stats.js";
+
+// The character as it stood at some level, for the purpose of asking shared/effects.js what
+// it was granting then. Rewinding the subclass tier and the card collection matters: a cap
+// check on level 4 must not count a Vitality card the character only picked up at level 7.
+// Everything else an effect can key on — ancestry, equipment — can't change on a level up.
+export function characterAtLevel(ch, state) {
+  return { ...ch, subclassTier: state.subclassTier, domainCardIds: state.cardIds, domainVaultIds: [] };
+}
 
 const TRAIT_KEYS = ["agility", "strength", "finesse", "instinct", "presence", "knowledge"];
 
@@ -244,10 +252,13 @@ export function validateEntry(ch, entry, db) {
     }
   }
 
+  // Slots granted by ancestry, subclass or a card count towards the cap: a Giant reaches 12
+  // Hit Points one advancement sooner than everyone else, so this must see them too.
   const cls_ = cls;
-  const hp = hitPointTotal(cls_, state.hitPointSlotsBonus + picks.filter((p) => p.key === "hitPoint").length);
+  const granted = effectBonuses(characterAtLevel(ch, state), db);
+  const hp = hitPointTotal(cls_, state.hitPointSlotsBonus + picks.filter((p) => p.key === "hitPoint").length, granted.hitPointSlots);
   if (cls_ && hp > MAX_HIT_POINT_SLOTS) errors.push(`This would take Hit Points past the maximum of ${MAX_HIT_POINT_SLOTS}.`);
-  const stress = stressTotal(state.stressSlotsBonus + picks.filter((p) => p.key === "stress").length);
+  const stress = stressTotal(state.stressSlotsBonus + picks.filter((p) => p.key === "stress").length, granted.stressSlots);
   if (stress > MAX_STRESS_SLOTS) errors.push(`This would take Stress past the maximum of ${MAX_STRESS_SLOTS}.`);
 
   for (const _ of picks.filter((p) => p.key === "subclass")) {

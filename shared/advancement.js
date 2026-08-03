@@ -189,6 +189,10 @@ export function ensureLevelFields(ch) {
   if (!ch.subclassTier) ch.subclassTier = "foundation";
   if (!hasPerTierSlots(ch.advancementSlotsUsed)) ch.advancementSlotsUsed = splitFlatSlotTotals(ch.advancementSlotsUsed);
   if (!ch.domainVaultIds) ch.domainVaultIds = [];
+  // Answers to the few features that say "choose": Clank's Purposeful Design, Vitality, Master
+  // of the Craft. Keyed by the shared/effects.js key that asked. Missing answers are shown as a
+  // nudge on the sheet, never enforced — characters saved before this existed must stay editable.
+  if (!ch.effectChoices) ch.effectChoices = {};
   // The 2 cards picked during character creation, kept apart from the ones gained on level
   // up so the creation wizard can edit them without touching the rest of the collection.
   if (!ch.creationDomainCardIds) ch.creationDomainCardIds = (ch.domainCardIds || []).slice(0, 2);

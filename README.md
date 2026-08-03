@@ -8,10 +8,50 @@ Built out of a personal need: converting a tabletop party from D&D 5e to Daggerh
 
 - **Card browser** (`index.html`) — filter the 189 domain cards by domain, type, and level; build a 5-card loadout plus a vault, saved locally.
 - **Character creator** (`create.html`) — a 9-step wizard following the Core Rulebook's character creation steps exactly (class → subclass, ancestry/community, traits, derived stats, equipment, background, experience, domain cards, connections), with the same hard validation the book describes (fixed trait array, mixed-ancestry rule, weapon burden, etc.).
-- **Character list & sheet** (`characters.html`) — save multiple characters locally, view a read-only sheet, export a CSV summary for your GM. The sheet shows every subclass card the character has earned (Foundation, then Specialization and Mastery as they're taken), because an upgrade *adds* a card rather than replacing the one below it — the earlier cards' features are still in play. Every derived stat — Evasion, Hit Points, Stress, damage thresholds, Armor Score, your attack modifier per equipped weapon, and which trait your Spellcast Rolls use — has a **?** next to it that shows exactly what the number is built from, so a total you didn't expect can be checked rather than guessed at. A collapsible **Level history** shows which level marked each advancement slot and lets you go back and change any past level up decision, remove the most recent level, or undo the last edit. If changing an early level makes a later one stop adding up, you're told before saving and the affected levels are flagged until you fix them — or keep them as they are, for houserules.
+- **Character list & sheet** (`characters.html`) — save multiple characters locally, view a read-only sheet, export a CSV summary for your GM. The sheet shows every subclass card the character has earned (Foundation, then Specialization and Mastery as they're taken), because an upgrade *adds* a card rather than replacing the one below it — the earlier cards' features are still in play. Every derived stat — Evasion, Hit Points, Stress, damage thresholds, Armor Score, your attack modifier per equipped weapon, and which trait your Spellcast Rolls use — has a **?** next to it that shows exactly what the number is built from, so a total you didn't expect can be checked rather than guessed at. The numbers include what your ancestry, subclass, equipment and loadout do to them (see [Which bonuses show up](#which-bonuses-show-up)). A collapsible **Level history** shows which level marked each advancement slot and lets you go back and change any past level up decision, remove the most recent level, or undo the last edit. If changing an early level makes a later one stop adding up, you're told before saving and the affected levels are flagged until you fix them — or keep them as they are, for houserules.
 - **Level up** (`level-up.html`) — levels 1–10 following the official advancement rules (tiers, level achievements at 2/5/8, the generic per-tier advancement options with their slot limits). Advancements are marked on a grid laid out like the one printed on the character sheet, so you can spend both of a level's picks on the same option when it still has free slots, and it's clear which tier's slot you're using — that matters for the extra domain card, whose level is capped both by your level and by the tier of the slot you mark. Hit Point and Stress slots stop at 12, and the optional card exchange allowed on every level up is available too. Multiclassing is intentionally not implemented — it's rare in play and would add a lot of complexity for little benefit in a tool this size.
 
 Everything is static HTML/CSS/vanilla JS (ES modules), no build step, no backend. All data lives in `localStorage` in your own browser — nothing is sent anywhere.
+
+## Which bonuses show up
+
+Plenty of things move a stat: a Giant gets an extra Hit Point slot, School of War gets another,
+Stalwart raises your damage thresholds at every tier, Gambeson Armor gives +1 Evasion and a
+Halberd costs you a point of Finesse. The SRD states all of this as prose, and `data/` is a
+straight re-export of it (see [Data source](#data-source)), so the prose→numbers mapping lives
+in `shared/effects.js` instead — one hand-maintained file, each entry commented with the
+sentence it encodes. A data refresh can't overwrite it, and `tests.html` checks that every id it
+names still exists upstream.
+
+A bonus is counted when it's true **right now** given only what the app stores — your permanent
+choices, what's in your loadout, how you're equipped — and needs no action during play:
+
+1. Permanent changes (Giant's *Endurance*, *Vitality*).
+2. A card in your loadout whose bonus applies the whole time it's there (*Untouchable*).
+3. A `*-Touched` card once its four-cards-in-domain requirement is met — judged per benefit.
+4. A card in your loadout whose only other requirement is how you're configured rather than
+   something you do (*Fortified Armor*: "while you are wearing armor").
+
+Anything that costs Stress or Hope, is "once per rest", or depends on the state of play
+(Vulnerable, Hope ≥ 2, all Stress marked) or on the fiction (*Sage-Touched*'s "natural
+environment") is left out — it isn't on at the moment you look at the sheet, and this tool
+tracks choices and loadouts, not the comings and goings of a scene. Where a card you have
+does qualify but one of its benefits doesn't, the sheet lists that benefit under **bonuses you
+have but that aren't counted**, so four Codex cards giving you nothing visible reads as a
+decision rather than a bug.
+
+Moving a card between loadout and vault changes the numbers, and the sheet updates as you do it.
+
+Three features say "choose" rather than granting something outright — Clank's *Purposeful
+Design*, *Vitality* and *Master of the Craft*. You're asked where the effect is gained (the
+Experience step for the ancestry one, the level up screen for the cards), and until you answer,
+the sheet says so and the bonus isn't counted. It never blocks saving or levelling up, so a
+character made before this existed stays editable.
+
+**Not implemented yet:** the School of Knowledge's extra domain card works at character
+creation (*Prepared*), but the equivalents on its Specialization and Mastery cards
+(*Accomplished*, *Brilliant*) don't yet add a card at level up. *Bare Bones* isn't implemented
+either — see [Known gaps](#known-gaps).
 
 ## Running it
 
@@ -24,10 +64,30 @@ then open `http://localhost:8080`. Any static file server works.
 ## Tests
 
 Open `tests.html` in the browser — that's all. It checks the advancement rules, the level
-history replay and the derived stats in `shared/advancement.js`, `shared/history.js` and
-`shared/derived-stats.js` against hand-written fixtures, using the same ES modules the app loads. No dependencies, no build step, nothing to
-install, and nothing the app itself loads. Delete the three `tests.*` files and the app is
-completely unaffected.
+history replay, the derived stats and the effects catalogue in `shared/advancement.js`,
+`shared/history.js`, `shared/derived-stats.js` and `shared/effects.js` against hand-written
+fixtures, using the same ES modules the app loads. One group is the exception and reads `data/`
+for real: it asserts that every id `effects.js` names still exists, since an upstream rename
+would otherwise drop a bonus silently. No dependencies, no build step, nothing to install, and
+nothing the app itself loads. Delete the three `tests.*` files and the app is completely
+unaffected.
+
+## Known gaps
+
+**Armor is mandatory, and there's no own-vs-equip.** `equipment` is four ids, all implicitly
+worn or wielded, and the wizard requires you to pick armor. The SRD's unarmored rule (Armor
+Score 0, Major threshold = your level, Severe = twice your level) is implemented, but nothing
+can currently reach it. Consequently *Bare Bones* — which replaces your base Armor Score and
+thresholds when you choose not to equip armor — is **not** implemented: it would be the only
+user of an effect kind that overrides a base rather than adding to it, and that mechanism isn't
+worth building without a caller.
+
+Equipping and unequipping is the feature that unlocks all three at once: *Bare Bones*, the
+base-override effect kind it needs, and the plain unarmored rule for characters who don't have
+it. Until then, a nullable `armorId` keeps the door open.
+
+**Multiclassing** is deliberately out of scope — rare in play, and a lot of data and UI for a
+tool this size.
 
 ## Security notes
 

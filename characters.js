@@ -27,6 +27,7 @@ import {
 } from "./shared/history.js";
 import { derivedStats } from "./shared/derived-stats.js";
 import { statLine } from "./shared/stat-line.js";
+import { unresolvedChoices } from "./shared/effects.js";
 import { escapeHtml } from "./shared/escape.js";
 
 const signed = (n) => (n > 0 ? `+${n}` : String(n));
@@ -562,6 +563,8 @@ function renderDetail() {
   }
   container.appendChild(statsBox2);
 
+  renderStatNotes(container, ch, stats);
+
   renderLevelHistory(container, ch);
 
   if (ch.domainCardIds.length > 0) {
@@ -615,7 +618,15 @@ function renderDetail() {
 
   const expBox = document.createElement("div");
   expBox.className = "detail-summary";
-  expBox.innerHTML = `<p><strong>Experience:</strong> ${ch.experiences.map((e) => `${escapeHtml(e.name || "(unnamed)")} (+${escapeHtml(e.modifier)})`).join(", ")}</p>`;
+  const expHeading = document.createElement("p");
+  expHeading.innerHTML = "<strong>Experience:</strong>";
+  expBox.appendChild(expHeading);
+  const expList = document.createElement("div");
+  expList.className = "derived-box";
+  for (const exp of stats.experiences) {
+    expList.appendChild(statLine(exp.name || "(unnamed)", `+${exp.total}`, exp.parts.length > 1 ? exp : null));
+  }
+  expBox.appendChild(expList);
   container.appendChild(expBox);
 
   if (ch.background.description || ch.background.answers) {
@@ -640,6 +651,47 @@ function renderDetail() {
   editBtn.textContent = "Edit";
   editBtn.addEventListener("click", () => { location.href = `create.html?id=${ch.id}`; });
   container.appendChild(editBtn);
+}
+
+// Two things the numbers above can't say for themselves.
+//
+// The first is the choices a feature asked for and never got an answer to — a character built
+// before this app read those features has none of them recorded. It's a nudge, never a block.
+//
+// The second is the opposite: bonuses the character genuinely has but that aren't in the
+// totals, because they need an action in play. Without this, someone with four Codex cards
+// meets Codex-Touched's requirement, sees nothing change, and reasonably concludes it's broken.
+function renderStatNotes(container, ch, stats) {
+  const pending = unresolvedChoices(ch, db);
+  if (pending.length > 0) {
+    const box = document.createElement("div");
+    box.className = "problem-box";
+    box.innerHTML = `<strong>Still to choose:</strong>` +
+      pending.map((p) => `<div>└ ${escapeHtml(p.prompt)}</div>`).join("") +
+      `<div class="hint">Until you pick, these grant nothing. Level up screen for cards; Edit → Experience for ancestry features.</div>`;
+    container.appendChild(box);
+  }
+
+  if (stats.exclusions.length > 0) {
+    const note = document.createElement("details");
+    note.className = "exchange-section";
+    const summary = document.createElement("summary");
+    summary.textContent = `${stats.exclusions.length} bonus${stats.exclusions.length === 1 ? "" : "es"} you have but that aren't counted above`;
+    note.appendChild(summary);
+    const hint = document.createElement("p");
+    hint.className = "hint";
+    hint.textContent = "These stats only count what's true from your choices and your loadout. " +
+      "Anything you have to spend, act or rest for is left out, because it isn't on at the moment you look:";
+    note.appendChild(hint);
+    const list = document.createElement("ul");
+    for (const reason of stats.exclusions) {
+      const li = document.createElement("li");
+      li.textContent = reason;
+      list.appendChild(li);
+    }
+    note.appendChild(list);
+    container.appendChild(note);
+  }
 }
 
 function renderAll() {
@@ -693,13 +745,16 @@ function csvRowForCharacter(ch) {
   const activeIds = activeDomainCardIds(ch);
   const loadoutNames = activeIds.map((id) => findDomainCard(id)?.name["en-US"]).filter(Boolean).join("; ");
   const vaultNames = ch.domainVaultIds.map((id) => findDomainCard(id)?.name["en-US"]).filter(Boolean).join("; ");
-  const expText = ch.experiences.map((e) => `${e.name || "(unnamed)"} (+${e.modifier})`).join("; ");
+  const expText = stats.experiences.map((e) => `${e.name || "(unnamed)"} (+${e.total})`).join("; ");
 
+  // Effective traits, matching the sheet: the GM wants the number the player rolls with, which
+  // includes their armor's -1 Agility.
+  const t = stats.traits;
   const row = [
     ch.name, ch.pronouns, ch.level, ch.proficiency,
     cls ? titleCase(cls.name) : "", sub ? sub.name["en-US"] : "", SUBCLASS_TIER_LABELS[ch.subclassTier] ?? ch.subclassTier,
     ancestries, com ? com.name["en-US"] : "",
-    ch.traits.agility, ch.traits.strength, ch.traits.finesse, ch.traits.instinct, ch.traits.presence, ch.traits.knowledge,
+    t.agility.total, t.strength.total, t.finesse.total, t.instinct.total, t.presence.total, t.knowledge.total,
     stats.evasion ? stats.evasion.total : "", stats.hitPoints ? stats.hitPoints.total : "", stats.stress.total, "2/6",
     stats.majorThreshold ? stats.majorThreshold.total : "", stats.severeThreshold ? stats.severeThreshold.total : "",
     stats.armorScore ? stats.armorScore.total : "",

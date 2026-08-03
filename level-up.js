@@ -17,13 +17,15 @@ import {
   tierForLevel,
 } from "./shared/advancement.js";
 import {
+  characterAtLevel,
   contextForLevel,
   experiencesAtLevel,
   recomputeCharacter,
   unresolvedProblems,
   validateEntry,
 } from "./shared/history.js";
-import { hitPointTotal, stressTotal } from "./shared/derived-stats.js";
+import { effectBonuses, hitPointTotal, stressTotal } from "./shared/derived-stats.js";
+import { EFFECTS } from "./shared/effects.js";
 import { escapeHtml } from "./shared/escape.js";
 
 const CHAR_STORAGE_KEY = "dh-characters-v1";
@@ -39,6 +41,8 @@ let character = null;
 // WHICH tier's slot it marks, because that caps the extra domain card's level.
 let picks = []; // { key, slotTier, traits: [], experienceIds: [], cardId: null }
 let mandatoryCardId = null;
+// Answers to the "choose two of the following" cards taken on this screen, keyed by card id.
+let pendingChoices = {};
 let exchange = null; // optional { outCardId, inCardId }: the swap allowed on every level up
 
 // With ?level=N the screen edits a level already taken instead of gaining a new one: same
@@ -56,12 +60,15 @@ async function loadJson(name) {
 }
 
 async function loadAllData() {
-  const [classes, subclasses, domainCards] = await Promise.all([
-    loadJson("classes"), loadJson("subclasses"), loadJson("domain-cards"),
+  // Ancestries are here for the Hit Point and Stress slots a Giant or a Human is born with:
+  // those count towards the cap of 12, so the slot gating can't be right without them.
+  const [classes, subclasses, domainCards, ancestries] = await Promise.all([
+    loadJson("classes"), loadJson("subclasses"), loadJson("domain-cards"), loadJson("ancestries"),
   ]);
   db.classes = classes;
   db.subclasses = subclasses;
   db.domainCards = domainCards;
+  db.ancestries = ancestries;
 }
 
 function loadAllCharacters() {
@@ -123,12 +130,19 @@ function subclassTierAfterPicks() {
   return tier;
 }
 
+// Slots an ancestry, subclass or card grants count towards the maximum of 12, so a Giant runs
+// out of Hit Point advancements one sooner. Asked of the character as it stood at this level,
+// not as it stands now, so editing an old level doesn't count a card taken later.
+function grantedSlots() {
+  return effectBonuses(characterAtLevel(character, context), db);
+}
+
 function hitPointsAfterPicks() {
-  return hitPointTotal(selectedClass(), context.hitPointSlotsBonus + picksFor("hitPoint").length);
+  return hitPointTotal(selectedClass(), context.hitPointSlotsBonus + picksFor("hitPoint").length, grantedSlots().hitPointSlots);
 }
 
 function stressAfterPicks() {
-  return stressTotal(context.stressSlotsBonus + picksFor("stress").length);
+  return stressTotal(context.stressSlotsBonus + picksFor("stress").length, grantedSlots().stressSlots);
 }
 
 // Why a given slot can't be marked right now (null when it can).
@@ -220,6 +234,7 @@ function render() {
   renderSubPickers(main, cls, newLevel);
   renderMandatoryCardStep(main, cls, newLevel);
   renderExchangeSection(main, cls);
+  renderCardChoices(main, newLevel);
 
   renderConfirmBar(main, newLevel);
 }
@@ -513,6 +528,117 @@ function renderExchangeSection(main, cls) {
   main.appendChild(details);
 }
 
+// ---------- choices a card asks you to make ----------
+//
+// A couple of cards say "permanently gain two of the following" rather than granting something
+// outright. The answer belongs to the character, not to the level up, so it's written straight
+// to character.effectChoices on confirm — but it's asked here, where the card is taken, which
+// is the only moment the player is thinking about it.
+
+function cardsBeingTaken() {
+  const ids = [mandatoryCardId, ...picksFor("domainCard").map((p) => p.cardId), exchange?.inCardId];
+  return ids.filter(Boolean);
+}
+
+function renderCardChoices(main, newLevel) {
+  const pending = cardsBeingTaken()
+    .map((id) => ({ id, choice: EFFECTS[id]?.choice }))
+    .filter((x) => x.choice);
+  if (pending.length === 0) return;
+
+  const h = document.createElement("h3");
+  h.textContent = "Choices from the cards you're taking";
+  main.appendChild(h);
+
+  for (const { id, choice } of pending) {
+    subHeading(main, choice.prompt);
+    if (choice.kind === "benefit") renderBenefitChoice(main, id, choice);
+    else renderExperienceChoice(main, id, choice, newLevel);
+  }
+}
+
+function choiceAnswer(key) {
+  if (!pendingChoices[key]) {
+    // Re-opening a level that already took the card shows the answer that was given.
+    const saved = character.effectChoices?.[key];
+    pendingChoices[key] = {
+      optionId: saved?.optionId ?? null,
+      optionIds: [...(saved?.optionIds || [])],
+      experienceIds: [...(saved?.experienceIds || [])],
+    };
+  }
+  return pendingChoices[key];
+}
+
+function renderBenefitChoice(main, key, choice) {
+  const answer = choiceAnswer(key);
+  const list = document.createElement("div");
+  list.className = "option-list";
+  for (const opt of choice.options) {
+    const isPicked = answer.optionIds.includes(opt.id);
+    const disabled = !isPicked && answer.optionIds.length >= choice.pick;
+    const row = document.createElement("label");
+    row.className = "option-row";
+    row.innerHTML = `<input type="checkbox" ${isPicked ? "checked" : ""} ${disabled ? "disabled" : ""}/> ${escapeHtml(opt.label)}`;
+    row.querySelector("input").addEventListener("change", (e) => {
+      if (e.target.checked) answer.optionIds.push(opt.id);
+      else answer.optionIds = answer.optionIds.filter((x) => x !== opt.id);
+      render();
+    });
+    list.appendChild(row);
+  }
+  main.appendChild(list);
+}
+
+function renderExperienceChoice(main, key, choice, newLevel) {
+  const answer = choiceAnswer(key);
+  if (choice.options.length > 1) {
+    const row = document.createElement("div");
+    row.className = "field-row";
+    row.innerHTML = choice.options.map((o) =>
+      `<label><input type="radio" name="choice-${escapeHtml(key)}" value="${escapeHtml(o.id)}" ${answer.optionId === o.id ? "checked" : ""}/> ${escapeHtml(o.label)}</label>`).join("");
+    row.querySelectorAll("input").forEach((r) => r.addEventListener("change", (e) => {
+      answer.optionId = e.target.value;
+      answer.experienceIds = [];
+      render();
+    }));
+    main.appendChild(row);
+  } else {
+    answer.optionId = choice.options[0].id;
+  }
+
+  const option = choice.options.find((o) => o.id === answer.optionId);
+  if (!option) return;
+
+  const list = document.createElement("div");
+  list.className = "option-list";
+  for (const exp of experiencesForPicking(newLevel)) {
+    const isPicked = answer.experienceIds.includes(exp.id);
+    const disabled = !isPicked && answer.experienceIds.length >= option.pick;
+    const name = exp.pending ? "(the new Experience from this level)" : (exp.name || "(unnamed)");
+    const row = document.createElement("label");
+    row.className = "option-row";
+    row.innerHTML = `<input type="checkbox" ${isPicked ? "checked" : ""} ${disabled ? "disabled" : ""}/> ${escapeHtml(name)} <span class="exp-mod">+${escapeHtml(exp.modifier)}</span>`;
+    row.querySelector("input").addEventListener("change", (e) => {
+      if (e.target.checked) answer.experienceIds.push(exp.id);
+      else answer.experienceIds = answer.experienceIds.filter((x) => x !== exp.id);
+      render();
+    });
+    list.appendChild(row);
+  }
+  main.appendChild(list);
+}
+
+// Answers collected on this screen, written to the character on confirm. Left unanswered they
+// simply grant nothing and the sheet nudges about it — an unanswered choice never blocks a
+// level up, the same way it never blocks saving a character. The Experience this level grants
+// keeps the id the picker used (pendingExperienceId), so nothing needs remapping here.
+function commitCardChoices() {
+  for (const id of cardsBeingTaken()) {
+    if (pendingChoices[id]) character.effectChoices[id] = pendingChoices[id];
+  }
+}
+
 // ---------- confirm ----------
 
 function stepValidation(newLevel) {
@@ -648,6 +774,7 @@ function writeEntry(target, newLevel) {
 function commitLevelEdit(newLevel) {
   saveUndoSnapshot();
   writeEntry(character, newLevel);
+  commitCardChoices();
   character.updatedAt = new Date().toISOString();
   persistCharacter();
   location.href = `characters.html?open=${character.id}&history=1`;
@@ -707,6 +834,8 @@ function applyLevelUp(newLevel) {
     character.creationDomainCardIds = character.creationDomainCardIds.map((id) => (id === exchange.outCardId ? exchange.inCardId : id));
   }
 
+  commitCardChoices();
+
   character.level = newLevel;
   recomputeCharacter(character);
   character.updatedAt = new Date().toISOString();
@@ -715,6 +844,7 @@ function applyLevelUp(newLevel) {
   picks = [];
   mandatoryCardId = null;
   exchange = null;
+  pendingChoices = {};
 
   render();
 }
@@ -730,6 +860,7 @@ function loadPicksFrom(entry) {
   }));
   mandatoryCardId = entry.mandatoryCardId || null;
   exchange = entry.exchange ? { ...entry.exchange } : null;
+  pendingChoices = {};
 }
 
 async function init() {

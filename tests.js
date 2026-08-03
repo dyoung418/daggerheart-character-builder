@@ -44,10 +44,15 @@ const {
 } = await import(`./shared/history.js${RUN}`);
 const {
   derivedStats,
+  effectBonuses,
   evasionTotal,
   hitPointTotal,
   stressTotal,
 } = await import(`./shared/derived-stats.js${RUN}`);
+const {
+  EFFECTS,
+  unresolvedChoices,
+} = await import(`./shared/effects.js${RUN}`);
 
 // ---------- tiny runner ----------
 
@@ -614,6 +619,169 @@ group("The level up screen and the sheet share the same arithmetic");
 eq("hit points", hitPointTotal(STAT_DB.classes[0], 2), 9);
 eq("stress no longer hardcodes 6 in four places", stressTotal(0), BASE_STRESS_SLOTS);
 eq("evasion", evasionTotal(STAT_DB.classes[0], 1), 10);
+eq("slots granted by an ancestry count towards the maximum too", hitPointTotal(STAT_DB.classes[0], 2, 1), 10);
+
+// ---------- effects: choices that change a stat ----------
+//
+// These use the real ids from data/, because an entry in effects.js keyed to an id that
+// doesn't exist grants nothing at all, silently — the exact failure the last group guards.
+
+// The pieces of data/ these checks name, in the shape the real files use.
+const FX_DB = {
+  classes: STAT_DB.classes,
+  subclasses: [
+    { id: "core_subclass_school_of_war", spellcastTrait: "KNOWLEDGE", foundation: { features: [{ name: { "en-US": "Battlemage" } }] } },
+    { id: "core_subclass_stalwart", foundation: { features: [{ name: { "en-US": "Unwavering" } }] }, specialization: { features: [{ name: { "en-US": "Unrelenting" } }] }, mastery: { features: [{ name: { "en-US": "Undaunted" } }] } },
+    { id: "sub", spellcastTrait: "KNOWLEDGE" },
+  ],
+  ancestries: [
+    { id: "core_ancestry_giant", name: { "en-US": "Giant" }, features: [{ name: { "en-US": "Endurance" } }, { name: { "en-US": "Reach" } }] },
+    { id: "core_ancestry_simiah", name: { "en-US": "Simiah" }, features: [{ name: { "en-US": "Natural Climber" } }, { name: { "en-US": "Nimble" } }] },
+  ],
+  armors: [
+    ...STAT_DB.armors,
+    { id: "core_armor_full_plate_armor", name: { "en-US": "Full Plate Armor" }, baseScore: 4, baseMajorThreshold: 8, baseSevereThreshold: 17, features: [{ name: { "en-US": "Very Heavy" } }] },
+    { id: "core_armor_channeling_armor", name: { "en-US": "Channeling Armor" }, baseScore: 5, baseMajorThreshold: 13, baseSevereThreshold: 36, features: [{ name: { "en-US": "Channeling" } }] },
+  ],
+  weapons: [
+    ...STAT_DB.weapons,
+    { id: "core_weapon_broadsword", name: { "en-US": "Broadsword" }, trait: "AGILITY", burden: "ONE_HANDED", features: [{ name: { "en-US": "Reliable" } }] },
+    { id: "core_weapon_tower_shield", name: { "en-US": "Tower Shield" }, trait: "AGILITY", burden: "ONE_HANDED", features: [{ name: { "en-US": "Barrier" } }] },
+  ],
+  domainCards: [
+    { id: "core_domain_card_untouchable", name: { "en-US": "Untouchable" }, domain: "BONE", level: 1 },
+    { id: "core_domain_card_vitality", name: { "en-US": "Vitality" }, domain: "BLADE", level: 5 },
+    { id: "core_domain_card_codex_touched", name: { "en-US": "Codex-Touched" }, domain: "CODEX", level: 7 },
+    ...["a", "b", "c"].map((s) => ({ id: `codex_${s}`, name: { "en-US": `Codex ${s}` }, domain: "CODEX", level: 1 })),
+  ],
+};
+
+const heritage = (ancestryId, featureName) => ({
+  heritage: { ancestryMode: "pure", ancestryIds: [ancestryId], chosenFeatures: [{ ancestryId, featureName }], communityId: null },
+});
+
+group("An ancestry feature that grants a stat actually grants it");
+{
+  const giant = derivedStats(statChar(heritage("core_ancestry_giant", "Endurance")), FX_DB);
+  eq("a Giant's Endurance is one more Hit Point slot", giant.hitPoints.total, 8);
+  eq("and the breakdown says where it came from", giant.hitPoints.parts[1].label, "Giant — Endurance");
+
+  // With a mixed ancestry the player takes ONE feature per ancestry, so a Giant who took Reach
+  // instead of Endurance gets nothing. Keying on the ancestry id alone would get this wrong.
+  const reach = derivedStats(statChar(heritage("core_ancestry_giant", "Reach")), FX_DB);
+  eq("a Giant who took Reach instead gets no extra slot", reach.hitPoints.total, 7);
+
+  // Nimble is Simiah's SECOND feature, unlike every other stat feature in the book.
+  const simiah = derivedStats(statChar(heritage("core_ancestry_simiah", "Nimble")), FX_DB);
+  eq("Simiah's Nimble is +1 Evasion", simiah.evasion.total, 10);
+}
+
+group("A subclass tier implies the tiers below it, and their bonuses stack");
+{
+  const war = derivedStats(statChar({ subclassId: "core_subclass_school_of_war" }), FX_DB);
+  eq("School of War's Battlemage is one more Hit Point slot", war.hitPoints.total, 8);
+
+  const at = (tier) => derivedStats(statChar({
+    subclassId: "core_subclass_stalwart", subclassTier: tier, level: 1,
+    equipment: { armorId: "gambeson" },
+  }), FX_DB).majorThreshold.total;
+  // Gambeson's Major is 5, plus level 1 = 6 before any subclass bonus.
+  eq("Stalwart at Foundation is +1", at("foundation"), 7);
+  eq("at Specialization it's +1 and +2", at("specialization"), 9);
+  eq("at Mastery it's +1, +2 and +3", at("mastery"), 12);
+}
+
+group("Equipment changes traits, Evasion, Armor Score and attacks");
+{
+  const plate = derivedStats(statChar({ equipment: { weaponMode: "two-handed", primaryWeaponId: "staff", armorId: "core_armor_full_plate_armor" } }), FX_DB);
+  eq("Full Plate is -2 Evasion", plate.evasion.total, 7);
+  eq("and -1 Agility", plate.traits.agility.total, 0);
+
+  // The -1 Agility has to reach the attack roll, since attack uses the effective trait.
+  const sword = derivedStats(statChar({ equipment: { weaponMode: "one-handed", primaryWeaponId: "core_weapon_broadsword", secondaryWeaponId: "core_weapon_tower_shield", armorId: "core_armor_full_plate_armor" } }), FX_DB);
+  eq("an Agility weapon's attack uses the reduced Agility, plus Reliable's +1", sword.primaryAttack.total, 1);
+  eq("Reliable applies to its own weapon only", sword.secondaryAttack.total, 0);
+  eq("Tower Shield's Barrier is +2 Armor Score", sword.armorScore.total, 6);
+  eq("Barrier's -1 Evasion lands too", sword.evasion.total, 6);
+
+  // "+1 to Spellcast Rolls" is not "+1 to Knowledge": a plain Knowledge roll doesn't get it.
+  const chan = derivedStats(statChar({ equipment: { armorId: "core_armor_channeling_armor" } }), FX_DB);
+  eq("Channeling armor shows on the Spellcast box", chan.spellcast.display, "Knowledge +1");
+  eq("but never on the trait itself", chan.traits.knowledge.total, -1);
+}
+
+group("Loadout cards apply, vaulted ones don't");
+{
+  const withCard = (over) => statChar({ domainCardIds: ["core_domain_card_untouchable"], ...over });
+  // Agility is +1 in the fixture; half of 1 rounds UP to 1, per the SRD's rounding rule.
+  eq("Untouchable is half your Agility, rounded up", derivedStats(withCard(), FX_DB).evasion.total, 10);
+  eq("vaulting it takes the bonus away",
+    derivedStats(withCard({ domainVaultIds: ["core_domain_card_untouchable"] }), FX_DB).evasion.total, 9);
+
+  // Codex-Touched needs 4 Codex cards in the loadout, and even then both its benefits cost
+  // something. It's catalogued so the sheet can say so rather than looking broken.
+  const codex = (ids) => derivedStats(statChar({ domainCardIds: ids }), FX_DB);
+  eq("under 4 Codex cards, nothing is even mentioned", codex(["core_domain_card_codex_touched", "codex_a"]).exclusions.length, 0);
+  eq("at 4, the sheet explains why nothing changed",
+    codex(["core_domain_card_codex_touched", "codex_a", "codex_b", "codex_c"]).exclusions.length, 2);
+}
+
+group("A card that says 'choose' grants nothing until it's answered");
+{
+  const owned = { domainCardIds: ["core_domain_card_vitality"], domainVaultIds: ["core_domain_card_vitality"] };
+  const unanswered = derivedStats(statChar(owned), FX_DB);
+  eq("Vitality with no answer recorded adds nothing", [unanswered.hitPoints.total, unanswered.stress.total], [7, 6]);
+  eq("and the sheet is told to ask", unresolvedChoices(statChar(owned), FX_DB).length, 1);
+
+  const answered = statChar({ ...owned, effectChoices: { core_domain_card_vitality: { optionIds: ["stress", "hitPoint"] } } });
+  const s = derivedStats(answered, FX_DB);
+  // The card tells you to vault it, so a permanent choice has to survive being vaulted.
+  eq("answered, it grants both chosen benefits even from the vault", [s.hitPoints.total, s.stress.total], [8, 7]);
+  eq("and nothing is left to ask", unresolvedChoices(answered, FX_DB).length, 0);
+}
+
+group("The 12-point caps are hard: effects reach them sooner, never past");
+{
+  const ch = statChar({
+    subclassId: "core_subclass_school_of_war",
+    ...heritage("core_ancestry_giant", "Endurance"),
+    hitPointSlotsBonus: 6,
+  });
+  const s = derivedStats(ch, FX_DB);
+  eq("7 + 6 advancements + 2 granted would be 15, but stops at 12", s.hitPoints.total, MAX_HIT_POINT_SLOTS);
+  check("and the breakdown says it clamped", !!s.hitPoints.note);
+  eq("effectBonuses reports the grant so the slot gating can see it", effectBonuses(ch, FX_DB).hitPointSlots, 2);
+}
+
+group("Every id in effects.js still exists in data/");
+{
+  // The one group that reads data/ for real. An upstream refresh that renames an id would
+  // otherwise drop an effect silently: no error, just a number that quietly stops being right.
+  const load = async (name) => (await fetch(`data/${name}.json${RUN}`)).json();
+  const [ancestries, subclasses, armors, weapons, cards] = await Promise.all(
+    ["ancestries", "subclasses", "armors", "weapons", "domain-cards"].map(load));
+
+  const known = new Set();
+  const featureKeys = (list, prefix) => {
+    for (const item of list) {
+      for (const f of item.features || []) {
+        known.add(`${item.id}:${f.name["en-US"]}`);
+        known.add(`${prefix}:${f.name["en-US"]}`);
+      }
+    }
+  };
+  featureKeys(ancestries, "ancestry");
+  featureKeys(armors, "armor");
+  featureKeys(weapons, "weapon");
+  for (const s of subclasses) for (const tier of ["foundation", "specialization", "mastery"]) {
+    if (s[tier]) known.add(`${s.id}:${tier}`);
+  }
+  for (const c of cards) known.add(c.id);
+
+  const missing = Object.keys(EFFECTS).filter((k) => !known.has(k));
+  check(`all ${Object.keys(EFFECTS).length} effect keys resolve`, missing.length === 0,
+    missing.length ? `not found in data/:\n${missing.join("\n")}` : undefined);
+}
 
 // ---------- report ----------
 
