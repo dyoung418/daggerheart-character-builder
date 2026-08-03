@@ -522,6 +522,7 @@ function renderDerivedStep(panel) {
 // --- Step 5: Equipment ---
 function renderEquipmentStep(panel) {
   const e = character.equipment;
+  const spellcastTrait = selectedSubclass()?.spellcastTrait ?? null;
 
   const modeRow = document.createElement("div");
   modeRow.className = "field-row";
@@ -545,14 +546,14 @@ function renderEquipmentStep(panel) {
   const h3a = document.createElement("h3");
   h3a.textContent = "Primary weapon (Tier 1)";
   panel.appendChild(h3a);
-  panel.appendChild(weaponSelect(primaries, e.primaryWeaponId, (id) => { e.primaryWeaponId = id; onChange(); }));
+  panel.appendChild(weaponSelect(primaries, e.primaryWeaponId, (id) => { e.primaryWeaponId = id; onChange(); }, spellcastTrait));
 
   if (e.weaponMode === "one-handed") {
     const secondaries = db.weapons.filter((w) => w.tier === 1 && w.type === "SECONDARY");
     const h3b = document.createElement("h3");
     h3b.textContent = "Secondary weapon (Tier 1)";
     panel.appendChild(h3b);
-    panel.appendChild(weaponSelect(secondaries, e.secondaryWeaponId, (id) => { e.secondaryWeaponId = id; onChange(); }));
+    panel.appendChild(weaponSelect(secondaries, e.secondaryWeaponId, (id) => { e.secondaryWeaponId = id; onChange(); }, spellcastTrait));
   }
 
   const h3c = document.createElement("h3");
@@ -590,14 +591,16 @@ function renderEquipmentStep(panel) {
   panel.appendChild(fixed);
 }
 
-function weaponSelect(weapons, selectedId, onSelect) {
+function weaponSelect(weapons, selectedId, onSelect, spellcastTrait) {
   const list = document.createElement("div");
   list.className = "option-list";
   for (const w of weapons) {
     const dmg = `${w.damage.dice} ${w.damage.type === "PHYSICAL" ? "phy" : "mag"}`;
+    const matchesSpellcast = !!spellcastTrait && w.trait === spellcastTrait;
     const row = document.createElement("label");
-    row.className = "option-row";
-    row.innerHTML = `<input type="radio" name="weapon-${escapeHtml(w.type)}-${escapeHtml(w.burden)}" value="${escapeHtml(w.id)}" ${selectedId === w.id ? "checked" : ""}/> <strong>${escapeHtml(w.name["en-US"])}</strong> — ${escapeHtml(w.trait)} · ${escapeHtml(w.range)} · ${escapeHtml(dmg)}`;
+    row.className = "option-row" + (matchesSpellcast ? " trait-match" : "");
+    const badge = matchesSpellcast ? ` ${spellcastBadge()}` : "";
+    row.innerHTML = `<input type="radio" name="weapon-${escapeHtml(w.type)}-${escapeHtml(w.burden)}" value="${escapeHtml(w.id)}" ${selectedId === w.id ? "checked" : ""}/> <strong>${escapeHtml(w.name["en-US"])}</strong> — ${escapeHtml(w.trait)} · ${escapeHtml(w.range)} · ${escapeHtml(dmg)}${badge}`;
     row.querySelector("input").addEventListener("change", () => onSelect(w.id));
     list.appendChild(row);
   }
