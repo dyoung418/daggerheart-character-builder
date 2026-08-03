@@ -12,8 +12,10 @@ import {
   optionCost,
   remainingSlots,
   slotsInTier,
+  slotsPerPick,
   tierForLevel,
 } from "./shared/advancement.js";
+import { recomputeCharacter } from "./shared/history.js";
 import { escapeHtml } from "./shared/escape.js";
 
 const CHAR_STORAGE_KEY = "dh-characters-v1";
@@ -28,7 +30,7 @@ let character = null;
 // One entry per slot marked on the sheet, so the same option can be taken twice in a
 // level ("options with multiple slots can be chosen more than once"). Each entry records
 // WHICH tier's slot it marks, because that caps the extra domain card's level.
-let picks = []; // { key, slotTier, traits: [], experienceIdx: [], cardId: null }
+let picks = []; // { key, slotTier, traits: [], experienceIds: [], cardId: null }
 let mandatoryCardId = null;
 let exchange = null; // optional { outCardId, inCardId }: the swap allowed on every level up
 
@@ -70,9 +72,6 @@ function selectedClass() { return db.classes.find((c) => c.id === character.clas
 function findDomainCard(id) { return db.domainCards.find((c) => c.id === id); }
 
 // ---------- pick bookkeeping ----------
-
-// Proficiency is the one option that marks both of its tier's slots at once.
-function slotsPerPick(key) { return key === "proficiency" ? 2 : 1; }
 
 function picksFor(key, slotTier) {
   return picks.filter((p) => p.key === key && (slotTier === undefined || p.slotTier === slotTier));
@@ -134,7 +133,21 @@ function markBlockedReason(key, tier, newLevel) {
 }
 
 function addPick(key, slotTier) {
-  picks.push({ key, slotTier, traits: [], experienceIdx: [], cardId: null });
+  picks.push({ key, slotTier, traits: [], experienceIds: [], cardId: null });
+}
+
+// The Experience granted by the tier achievement exists before advancements are chosen, so
+// it can be boosted at the very level that grants it. It only becomes real on confirm.
+function pendingExperienceId(newLevel) {
+  return `exp_lv${newLevel}`;
+}
+
+function experiencesForPicking(newLevel) {
+  const list = character.experiences.map((exp) => ({ ...exp }));
+  if (isLevelAchievement(newLevel)) {
+    list.push({ id: pendingExperienceId(newLevel), name: "", modifier: 2, pending: true });
+  }
+  return list;
 }
 
 function removeLastPick(key, slotTier) {
@@ -296,7 +309,7 @@ function renderSubPickers(main, cls, newLevel) {
     const total = picksFor(pick.key).length;
     const ordinal = total > 1 ? ` (${ORDINALS[counters[pick.key] - 1]})` : "";
     if (pick.key === "traits") renderTraitSubPicker(main, pick, index, ordinal, newLevel);
-    if (pick.key === "experience") renderExperienceSubPicker(main, pick, index, ordinal);
+    if (pick.key === "experience") renderExperienceSubPicker(main, pick, ordinal, newLevel);
     if (pick.key === "domainCard") renderExtraCardPicker(main, pick, index, ordinal, cls, newLevel);
     if (pick.key === "subclass") renderSubclassPreview(main);
   });
@@ -333,23 +346,24 @@ function renderTraitSubPicker(main, pick, index, ordinal, newLevel) {
   main.appendChild(grid);
 }
 
-function renderExperienceSubPicker(main, pick, index, ordinal) {
+function renderExperienceSubPicker(main, pick, ordinal, newLevel) {
   subHeading(main, `Experiences${ordinal}: pick 2 to give +1 to.`);
   const list = document.createElement("div");
   list.className = "option-list";
-  character.experiences.forEach((exp, i) => {
-    const isPicked = pick.experienceIdx.includes(i);
-    const disabled = !isPicked && pick.experienceIdx.length >= 2;
+  for (const exp of experiencesForPicking(newLevel)) {
+    const isPicked = pick.experienceIds.includes(exp.id);
+    const disabled = !isPicked && pick.experienceIds.length >= 2;
+    const name = exp.pending ? "(the new Experience from this level)" : (exp.name || "(unnamed)");
     const row = document.createElement("label");
     row.className = "option-row";
-    row.innerHTML = `<input type="checkbox" ${isPicked ? "checked" : ""} ${disabled ? "disabled" : ""}/> ${escapeHtml(exp.name || "(unnamed)")} <span class="exp-mod">+${escapeHtml(exp.modifier)}</span>`;
+    row.innerHTML = `<input type="checkbox" ${isPicked ? "checked" : ""} ${disabled ? "disabled" : ""}/> ${escapeHtml(name)} <span class="exp-mod">+${escapeHtml(exp.modifier)}</span>`;
     row.querySelector("input").addEventListener("change", (e) => {
-      if (e.target.checked) pick.experienceIdx.push(i);
-      else pick.experienceIdx = pick.experienceIdx.filter((idx) => idx !== i);
+      if (e.target.checked) pick.experienceIds.push(exp.id);
+      else pick.experienceIds = pick.experienceIds.filter((id) => id !== exp.id);
       render();
     });
     list.appendChild(row);
-  });
+  }
   main.appendChild(list);
 }
 
@@ -480,7 +494,7 @@ function stepValidation(newLevel) {
 
   for (const pick of picks) {
     if (pick.key === "traits" && pick.traits.length !== 2) return false;
-    if (pick.key === "experience" && new Set(pick.experienceIdx).size !== 2) return false;
+    if (pick.key === "experience" && new Set(pick.experienceIds).size !== 2) return false;
     if (pick.key === "domainCard" && !pick.cardId) return false;
   }
   // Taking the trait option twice needs four DIFFERENT unmarked traits.
@@ -510,57 +524,42 @@ function renderConfirmBar(main, newLevel) {
   main.appendChild(bar);
 }
 
+// Records the choices, then derives every stat from them. Nothing is incremented in place:
+// the entry is the truth, and recomputeCharacter turns it into the numbers on the sheet.
 function applyLevelUp(newLevel) {
+  // The Experience the tier achievement grants has to exist before the picks that boost it
+  // can name it, so it's created here with the id the picker was already using.
   if (isLevelAchievement(newLevel)) {
-    character.experiences.push({ name: "", modifier: 2 });
-    character.proficiency += 1;
-    if (newLevel >= 5) {
-      for (const k of Object.keys(character.traitMarks)) character.traitMarks[k] = false;
-    }
+    character.experiences.push({
+      id: pendingExperienceId(newLevel),
+      name: "",
+      baseModifier: 2,
+      modifier: 2,
+      sinceLevel: newLevel,
+    });
   }
 
-  const extraCardIds = [];
-  for (const pick of picks) {
-    const slots = character.advancementSlotsUsed[pick.key];
-    slots[pick.slotTier] = (slots[pick.slotTier] || 0) + slotsPerPick(pick.key);
+  character.levelUps.push({
+    level: newLevel,
+    picks: picks.map((p) => {
+      const entry = { key: p.key, slotTier: p.slotTier };
+      if (p.key === "traits") entry.traits = [...p.traits];
+      if (p.key === "experience") entry.experienceIds = [...p.experienceIds];
+      if (p.key === "domainCard") entry.cardId = p.cardId;
+      return entry;
+    }),
+    mandatoryCardId,
+    exchange: exchange?.outCardId && exchange.inCardId ? { ...exchange } : null,
+  });
 
-    if (pick.key === "traits") {
-      for (const k of pick.traits) {
-        character.traits[k] = (character.traits[k] || 0) + 1;
-        character.traitMarks[k] = true;
-      }
-    }
-    if (pick.key === "hitPoint") character.hitPointSlotsBonus += 1;
-    if (pick.key === "stress") character.stressSlotsBonus += 1;
-    if (pick.key === "evasion") character.evasionBonus += 1;
-    if (pick.key === "experience") {
-      for (const idx of pick.experienceIdx) character.experiences[idx].modifier += 1;
-    }
-    if (pick.key === "subclass" && character.subclassTier !== "mastery") {
-      character.subclassTier = nextSubclassTier(character.subclassTier);
-    }
-    if (pick.key === "proficiency") character.proficiency += 1;
-    if (pick.key === "domainCard" && pick.cardId) extraCardIds.push(pick.cardId);
-  }
-
-  if (mandatoryCardId) character.domainCardIds.push(mandatoryCardId);
-  for (const id of extraCardIds) character.domainCardIds.push(id);
-
+  // An exchange can swap out one of the creation cards, and that list is an input to the
+  // replay rather than a product of it, so it has to be updated directly.
   if (exchange?.outCardId && exchange.inCardId) {
-    const at = character.domainCardIds.indexOf(exchange.outCardId);
-    if (at >= 0) character.domainCardIds[at] = exchange.inCardId;
-    character.domainVaultIds = character.domainVaultIds.filter((id) => id !== exchange.outCardId);
     character.creationDomainCardIds = character.creationDomainCardIds.map((id) => (id === exchange.outCardId ? exchange.inCardId : id));
   }
 
-  // if this pushes the active count above 5, the oldest extras automatically go to the
-  // vault: the user can then reorganize loadout/vault from the character sheet.
-  const active = character.domainCardIds.filter((id) => !character.domainVaultIds.includes(id));
-  while (active.length > 5) {
-    character.domainVaultIds.push(active.shift());
-  }
-
   character.level = newLevel;
+  recomputeCharacter(character);
   character.updatedAt = new Date().toISOString();
   persistCharacter();
 

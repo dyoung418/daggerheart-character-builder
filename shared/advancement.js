@@ -64,6 +64,11 @@ export function slotsInTier(key, tier) {
   return TIER_SLOT_TABLE[key]?.[tier] || 0;
 }
 
+// Proficiency is the one option that marks both of its tier's slots at once.
+export function slotsPerPick(key) {
+  return key === "proficiency" ? 2 : 1;
+}
+
 export function totalSlotsForOption(key, tier) {
   let total = 0;
   for (let t = 2; t <= tier; t++) total += slotsInTier(key, t);
@@ -141,6 +146,30 @@ function hasPerTierSlots(value) {
   return !!value && typeof value.traits === "object" && value.traits !== null;
 }
 
+let experienceSeq = 0;
+function newExperienceId() {
+  return `exp_${Date.now().toString(36)}${(experienceSeq++).toString(36)}`;
+}
+
+// Every character carries a BASELINE — its stats at some level — and the level up choices
+// made since, replayed on top. A character built here baselines at level 1 on its creation
+// stats; one that already existed baselines at whatever level it had reached, on the stats
+// it already had. Same mechanism either way, so nothing needs a "before/after" special case
+// and no stat is ever recomputed from choices that were never recorded.
+function captureBaseline(ch) {
+  return {
+    traits: { ...ch.traits },
+    traitMarks: { ...ch.traitMarks },
+    proficiency: ch.proficiency,
+    hitPointSlotsBonus: ch.hitPointSlotsBonus,
+    stressSlotsBonus: ch.stressSlotsBonus,
+    evasionBonus: ch.evasionBonus,
+    subclassTier: ch.subclassTier,
+    slotsUsed: JSON.parse(JSON.stringify(ch.advancementSlotsUsed)),
+    domainCardIds: [...(ch.domainCardIds || [])],
+  };
+}
+
 // Characters saved before levels were introduced don't have these fields: this adds
 // them without touching the rest, so they stay valid as "level 1" the moment they're opened.
 export function ensureLevelFields(ch) {
@@ -156,6 +185,19 @@ export function ensureLevelFields(ch) {
   // The 2 cards picked during character creation, kept apart from the ones gained on level
   // up so the creation wizard can edit them without touching the rest of the collection.
   if (!ch.creationDomainCardIds) ch.creationDomainCardIds = (ch.domainCardIds || []).slice(0, 2);
+
+  if (!Array.isArray(ch.levelUps)) ch.levelUps = [];
+  if (ch.baselineLevel === undefined) ch.baselineLevel = ch.level;
+  if (!ch.baseline) ch.baseline = captureBaseline(ch);
+
+  // Experiences need stable ids: the level 2/5/8 achievements append new ones, which shifts
+  // every index after them. sinceLevel records when each became available, so a level up
+  // can't be edited to raise an Experience the character didn't have yet.
+  for (const exp of ch.experiences || []) {
+    if (!exp.id) exp.id = newExperienceId();
+    if (exp.baseModifier === undefined) exp.baseModifier = exp.modifier ?? 2;
+    if (exp.sinceLevel === undefined) exp.sinceLevel = ch.baselineLevel;
+  }
   return ch;
 }
 

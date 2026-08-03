@@ -6,6 +6,7 @@ import {
   ancestryCardArtPath,
 } from "./shared/card-render.js";
 import { blankSlotsUsed, ensureLevelFields } from "./shared/advancement.js";
+import { recomputeCharacter } from "./shared/history.js";
 import { escapeHtml } from "./shared/escape.js";
 
 const CHAR_STORAGE_KEY = "dh-characters-v1";
@@ -91,7 +92,10 @@ function blankCharacter(id) {
     traits: { agility: null, strength: null, finesse: null, instinct: null, presence: null, knowledge: null },
     equipment: { weaponMode: "two-handed", primaryWeaponId: null, secondaryWeaponId: null, armorId: null, potionChoice: null },
     background: { description: "", answers: "" },
-    experiences: [{ name: "", modifier: 2 }, { name: "", modifier: 2 }],
+    experiences: [
+      { id: "exp_start1", name: "", modifier: 2, baseModifier: 2, sinceLevel: 1 },
+      { id: "exp_start2", name: "", modifier: 2, baseModifier: 2, sinceLevel: 1 },
+    ],
     domainCardIds: [],
     creationDomainCardIds: [],
     connectionsNotes: "",
@@ -119,7 +123,9 @@ function initCharacter() {
     }
   }
   const newId = "char_" + Math.random().toString(36).slice(2, 10);
-  character = blankCharacter(newId);
+  // Through the same normalisation as a character loaded from storage, so a brand new one
+  // has the baseline and level history fields the rest of the app expects.
+  character = ensureLevelFields(blankCharacter(newId));
   const list = loadAllCharacters();
   list.push(character);
   saveAllCharacters(list);
@@ -159,7 +165,10 @@ function isStepValid(stepKey) {
     case "background":
       return true;
     case "experiences":
-      return character.experiences.every((exp) => exp.name.trim().length > 0);
+      // Only the starting pair is part of character creation. The ones granted at levels
+      // 2/5/8 arrive unnamed, and requiring a name for those made the wizard impossible to
+      // finish for any character that had levelled up.
+      return creationExperiences().every((exp) => exp.name.trim().length > 0);
     case "domainCards":
       return character.creationDomainCardIds.length === 2;
     case "connections":
@@ -408,17 +417,43 @@ function renderHeritageStep(panel) {
 }
 
 // --- Step 3: Traits ---
+// Edits the STARTING values. On a character that has levelled up these are no longer the
+// numbers on the sheet, so the increases gained since are shown alongside and reapplied by
+// the replay — before, this step overwrote them and the level up bonuses were lost.
 function renderTraitsStep(panel) {
+  const levelled = character.baselineLevel <= 1 && character.level > 1;
+
+  // A character whose history predates recording can't have its starting values recovered,
+  // so editing them would silently move its current traits by the difference.
+  if (character.baselineLevel > 1) {
+    const warn = document.createElement("p");
+    warn.className = "hint";
+    warn.textContent = `This character reached level ${character.baselineLevel} before level up choices were recorded, ` +
+      `so its starting traits can't be separated from the increases gained since and aren't editable here. ` +
+      `These are its current traits.`;
+    panel.appendChild(warn);
+    const box = document.createElement("div");
+    box.className = "derived-box";
+    for (const k of TRAIT_KEYS) {
+      const v = character.traits[k];
+      box.innerHTML += `<div><span>${escapeHtml(TRAIT_LABELS[k])}</span><strong>${v === null ? "—" : (v > 0 ? "+" + v : v)}</strong></div>`;
+    }
+    panel.appendChild(box);
+    return;
+  }
+
   const info = document.createElement("p");
   info.className = "hint";
-  info.textContent = "Distribute these 6 values across the 6 traits, one each: +2, +1, +1, 0, 0, -1.";
+  info.textContent = "Distribute these 6 values across the 6 traits, one each: +2, +1, +1, 0, 0, -1." +
+    (levelled ? " These are the starting values: increases gained on level up are added on top." : "");
   panel.appendChild(info);
 
+  const base = character.baseline.traits;
   const usedCount = {};
   for (const v of TRAIT_ARRAY) usedCount[v] = (usedCount[v] || 0) + 1;
   for (const k of TRAIT_KEYS) {
-    const v = character.traits[k];
-    if (v !== null) usedCount[v] -= 1;
+    const v = base[k];
+    if (v !== null && v !== undefined) usedCount[v] -= 1;
   }
 
   const grid = document.createElement("div");
@@ -426,7 +461,7 @@ function renderTraitsStep(panel) {
   for (const k of TRAIT_KEYS) {
     const row = document.createElement("div");
     row.className = "trait-row";
-    const current = character.traits[k];
+    const current = base[k];
     const options = TRAIT_ARRAY.filter((v, i, arr) => arr.indexOf(v) === i); // distinct values: 2,1,0,-1
     let optionsHtml = `<option value="">—</option>`;
     for (const v of options) {
@@ -435,7 +470,9 @@ function renderTraitsStep(panel) {
         optionsHtml += `<option value="${v}" ${current === v ? "selected" : ""}>${v > 0 ? "+" + v : v}</option>`;
       }
     }
-    row.innerHTML = `<label>${TRAIT_LABELS[k]}</label><select data-trait="${k}">${optionsHtml}</select>`;
+    const gained = (character.traits[k] ?? 0) - (current ?? 0);
+    const nowLabel = levelled && gained > 0 ? `<span class="hint">→ ${character.traits[k] > 0 ? "+" : ""}${character.traits[k]} now</span>` : "";
+    row.innerHTML = `<label>${TRAIT_LABELS[k]}</label><select data-trait="${k}">${optionsHtml}</select>${nowLabel}`;
     grid.appendChild(row);
   }
   panel.appendChild(grid);
@@ -444,7 +481,9 @@ function renderTraitsStep(panel) {
     sel.addEventListener("change", (e) => {
       const key = e.target.dataset.trait;
       const val = e.target.value === "" ? null : Number(e.target.value);
+      character.baseline.traits[key] = val;
       character.traits[key] = val;
+      if (val !== null) recomputeCharacter(character);
       onChange();
     });
   });
@@ -570,6 +609,19 @@ function renderBackgroundStep(panel) {
   panel.querySelector("#bg-answers").addEventListener("input", (e) => { b.answers = e.target.value; persistCurrentCharacter(); });
 }
 
+// The 2 Experiences chosen at character creation, as opposed to the ones granted by the
+// tier achievements at levels 2, 5 and 8. On a character whose level ups predate recording
+// they all carry the same sinceLevel, so fall back to the first two — the same assumption
+// used for its starting domain cards, and they're appended in order either way.
+function creationExperiences() {
+  const fromCreation = character.experiences.filter((exp) => exp.sinceLevel <= 1);
+  return fromCreation.length >= 2 ? fromCreation : character.experiences.slice(0, 2);
+}
+
+function isFromLevelUp(exp, index) {
+  return character.baselineLevel > 1 ? index >= 2 : exp.sinceLevel > 1;
+}
+
 // --- Step 7: Experience ---
 function renderExperiencesStep(panel) {
   const info = document.createElement("p");
@@ -578,9 +630,13 @@ function renderExperiencesStep(panel) {
   panel.appendChild(info);
 
   character.experiences.forEach((exp, i) => {
+    const fromLevelUp = isFromLevelUp(exp, i);
     const row = document.createElement("div");
     row.className = "field-row";
-    row.innerHTML = `<label>Experience ${i + 1} <input type="text" value="${escapeHtml(exp.name)}" placeholder="e.g. Assassin of the Sapphire Syndicate" /></label> <span class="exp-mod">+2</span>`;
+    const label = fromLevelUp
+      ? (exp.sinceLevel > 1 ? `Gained at level ${exp.sinceLevel}` : "Gained on level up")
+      : `Experience ${i + 1}`;
+    row.innerHTML = `<label>${escapeHtml(label)} <input type="text" value="${escapeHtml(exp.name)}" placeholder="e.g. Assassin of the Sapphire Syndicate" /></label> <span class="exp-mod">+${escapeHtml(exp.modifier)}</span>`;
     row.querySelector("input").addEventListener("input", (e) => {
       character.experiences[i].name = e.target.value;
       onTextChange();
@@ -622,12 +678,16 @@ function renderDomainCardsStep(panel) {
 }
 
 // The 2 starting cards are only part of the collection once a character has levelled up,
-// so editing them has to leave the cards gained since then alone.
+// so editing them has to leave the cards gained since then alone. The replay rebuilds the
+// collection from these plus the level up record.
 function setCreationCards(ids) {
-  const acquired = character.domainCardIds.filter((id) => !character.creationDomainCardIds.includes(id));
   character.creationDomainCardIds = ids;
-  character.domainCardIds = [...ids, ...acquired];
-  character.domainVaultIds = character.domainVaultIds.filter((id) => character.domainCardIds.includes(id));
+  // Above level 1 the baseline holds the whole collection as it stood then, and the first
+  // two entries are the starting cards; the replay rebuilds everything from there.
+  if (character.baselineLevel > 1) {
+    character.baseline.domainCardIds = [...ids, ...character.baseline.domainCardIds.slice(2)];
+  }
+  recomputeCharacter(character);
 }
 
 // --- Step 9: Connections ---
