@@ -15,7 +15,13 @@ import {
   slotsPerPick,
   tierForLevel,
 } from "./shared/advancement.js";
-import { recomputeCharacter } from "./shared/history.js";
+import {
+  contextForLevel,
+  experiencesAtLevel,
+  recomputeCharacter,
+  unresolvedProblems,
+  validateEntry,
+} from "./shared/history.js";
 import { escapeHtml } from "./shared/escape.js";
 
 const CHAR_STORAGE_KEY = "dh-characters-v1";
@@ -33,6 +39,15 @@ let character = null;
 let picks = []; // { key, slotTier, traits: [], experienceIds: [], cardId: null }
 let mandatoryCardId = null;
 let exchange = null; // optional { outCardId, inCardId }: the swap allowed on every level up
+
+// With ?level=N the screen edits a level already taken instead of gaining a new one: same
+// pickers, but everything is evaluated against the character as it stood at that level.
+let editLevel = null;
+let context = null; // replayed state the level being worked on is chosen against
+let pendingSave = null; // consequences awaiting confirmation before an edit is written
+
+const isEditing = () => editLevel !== null;
+const workingLevel = () => (isEditing() ? editLevel : character.level + 1);
 
 async function loadJson(name) {
   const res = await fetch(`data/${name}.json`);
@@ -82,23 +97,19 @@ function budgetSpent() {
 }
 
 function slotsTakenInTier(key, tier) {
-  const already = character.advancementSlotsUsed?.[key]?.[tier] || 0;
+  const already = context.slotsUsed?.[key]?.[tier] || 0;
   return already + picksFor(key, tier).length * slotsPerPick(key);
 }
 
 function totalRemainingAcrossAllOptions(newLevel) {
   return availableOptionKeys(newLevel)
-    .reduce((sum, key) => sum + remainingSlots(character.advancementSlotsUsed, key, newLevel), 0);
+    .reduce((sum, key) => sum + remainingSlots(context.slotsUsed, key, newLevel), 0);
 }
 
-// The tier achievements at levels 5 and 8 clear trait marks BEFORE advancements are
-// chosen, so traits raised in the previous tier can be raised again on those level ups.
-function marksClearedThisLevel(newLevel) {
-  return isLevelAchievement(newLevel) && newLevel >= 5;
-}
-
-function traitMarkedBefore(key, newLevel) {
-  return marksClearedThisLevel(newLevel) ? false : !!character.traitMarks[key];
+// The context already has this level's tier achievement applied, so marks cleared at 5 and
+// 8 are simply absent from it and those traits can be raised again.
+function traitMarkedBefore(key) {
+  return !!context.traitMarks[key];
 }
 
 function traitsPickedThisLevel() {
@@ -106,18 +117,18 @@ function traitsPickedThisLevel() {
 }
 
 function subclassTierAfterPicks() {
-  let tier = character.subclassTier;
+  let tier = context.subclassTier;
   for (let i = 0; i < picksFor("subclass").length; i++) tier = nextSubclassTier(tier);
   return tier;
 }
 
 function hitPointsAfterPicks() {
   const cls = selectedClass();
-  return (cls ? cls.startingHitPoints : 0) + character.hitPointSlotsBonus + picksFor("hitPoint").length;
+  return (cls ? cls.startingHitPoints : 0) + context.hitPointSlotsBonus + picksFor("hitPoint").length;
 }
 
 function stressAfterPicks() {
-  return BASE_STRESS_SLOTS + character.stressSlotsBonus + picksFor("stress").length;
+  return BASE_STRESS_SLOTS + context.stressSlotsBonus + picksFor("stress").length;
 }
 
 // Why a given slot can't be marked right now (null when it can).
@@ -143,9 +154,9 @@ function pendingExperienceId(newLevel) {
 }
 
 function experiencesForPicking(newLevel) {
-  const list = character.experiences.map((exp) => ({ ...exp }));
-  if (isLevelAchievement(newLevel)) {
-    list.push({ id: pendingExperienceId(newLevel), name: "", modifier: 2, pending: true });
+  const list = experiencesAtLevel(character, newLevel, context.expBonus);
+  if (isLevelAchievement(newLevel) && !list.some((e) => e.sinceLevel === newLevel)) {
+    list.push({ id: pendingExperienceId(newLevel), name: "", modifier: 2, sinceLevel: newLevel, pending: true });
   }
   return list;
 }
@@ -170,18 +181,32 @@ function render() {
     return;
   }
   const cls = selectedClass();
-  const newLevel = character.level + 1;
+  const newLevel = workingLevel();
+  context = contextForLevel(character, newLevel);
 
-  if (character.level >= 10) {
+  if (!isEditing() && character.level >= 10) {
     main.innerHTML = `<p class="hint">${escapeHtml(character.name || "This character")} is already at the maximum level (10).</p>
       <a class="btn-ghost" href="characters.html">← Back to list</a>`;
     return;
   }
 
   const title = document.createElement("h3");
-  title.textContent = `${character.name || "(unnamed)"} — level ${character.level} → ${newLevel}`;
+  title.textContent = isEditing()
+    ? `${character.name || "(unnamed)"} — editing level ${newLevel}`
+    : `${character.name || "(unnamed)"} — level ${character.level} → ${newLevel}`;
   title.style.marginTop = "0";
   main.appendChild(title);
+
+  if (isEditing()) {
+    const note = document.createElement("p");
+    note.className = "hint";
+    note.textContent = "You're changing choices already made. Everything below is shown as it stood at this level. " +
+      "Later levels can be affected — you'll be told which before anything is saved.";
+    main.appendChild(note);
+
+    const problems = validateEntry(character, currentEntry(newLevel), db);
+    if (problems.length > 0) renderProblemBox(main, "This level currently doesn't add up:", problems);
+  }
 
   if (isLevelAchievement(newLevel)) {
     const box = document.createElement("p");
@@ -270,7 +295,7 @@ function tierGroupCell(key, tier, newLevel) {
     return cell;
   }
 
-  const alreadyUsed = character.advancementSlotsUsed?.[key]?.[tier] || 0;
+  const alreadyUsed = context.slotsUsed?.[key]?.[tier] || 0;
   const markingNow = picksFor(key, tier).length * slotsPerPick(key);
   const blocked = markBlockedReason(key, tier, newLevel);
 
@@ -327,7 +352,7 @@ function renderTraitSubPicker(main, pick, index, ordinal, newLevel) {
   const grid = document.createElement("div");
   grid.className = "traits-grid";
   for (const key of Object.keys(TRAIT_LABELS)) {
-    const markedBefore = traitMarkedBefore(key, newLevel);
+    const markedBefore = traitMarkedBefore(key);
     const takenByAnotherPick = picks.some((p) => p !== pick && p.traits.includes(key));
     const isPicked = pick.traits.includes(key);
     const disabled = markedBefore || takenByAnotherPick || (!isPicked && pick.traits.length >= 2);
@@ -368,7 +393,7 @@ function renderExperienceSubPicker(main, pick, ordinal, newLevel) {
 }
 
 function renderSubclassPreview(main) {
-  const nextTier = nextSubclassTier(character.subclassTier);
+  const nextTier = nextSubclassTier(context.subclassTier);
   subHeading(main, `You'll take the ${nextTier} card for your subclass.`);
   const sub = db.subclasses.find((s) => s.id === character.subclassId);
   const preview = document.createElement("div");
@@ -396,7 +421,7 @@ function eligibleDomainCards(cls, maxLevel, excludeIds) {
 
 // Every card already owned, plus every card being taken elsewhere on this screen.
 function claimedCardIds(except) {
-  const claimed = [...character.domainCardIds];
+  const claimed = [...context.cardIds];
   if (mandatoryCardId && except !== "mandatory") claimed.push(mandatoryCardId);
   for (const p of picksFor("domainCard")) {
     if (p.cardId && p !== except) claimed.push(p.cardId);
@@ -441,7 +466,7 @@ function renderMandatoryCardStep(main, cls, newLevel) {
 // Optional swap allowed on every level up: "you can also exchange one domain card you've
 // previously acquired for a different domain card of the same level or lower".
 function renderExchangeSection(main, cls) {
-  if (character.domainCardIds.length === 0) return;
+  if (context.cardIds.length === 0) return;
 
   const details = document.createElement("details");
   details.className = "exchange-section";
@@ -457,7 +482,7 @@ function renderExchangeSection(main, cls) {
 
   const row = document.createElement("div");
   row.className = "field-row";
-  const options = character.domainCardIds.map((id) => {
+  const options = context.cardIds.map((id) => {
     const c = findDomainCard(id);
     if (!c) return "";
     const label = `${c.name["en-US"]} (level ${c.level})`;
@@ -506,22 +531,142 @@ function stepValidation(newLevel) {
   return true;
 }
 
+function renderProblemBox(main, heading, problems) {
+  const box = document.createElement("div");
+  box.className = "problem-box";
+  box.innerHTML = `<strong>${escapeHtml(heading)}</strong>` +
+    problems.map((p) => `<div>└ ${escapeHtml(p)}</div>`).join("");
+  main.appendChild(box);
+}
+
+// The picks on screen, in the shape they're stored in.
+function currentEntry(level) {
+  return {
+    level,
+    picks: picks.map((p) => {
+      const entry = { key: p.key, slotTier: p.slotTier };
+      if (p.key === "traits") entry.traits = [...p.traits];
+      if (p.key === "experience") entry.experienceIds = [...p.experienceIds];
+      if (p.key === "domainCard") entry.cardId = p.cardId;
+      return entry;
+    }),
+    mandatoryCardId,
+    exchange: exchange?.outCardId && exchange.inCardId ? { ...exchange } : null,
+  };
+}
+
 function renderConfirmBar(main, newLevel) {
+  if (pendingSave) {
+    renderSavePreview(main, newLevel);
+    return;
+  }
+
   const bar = document.createElement("div");
   bar.className = "wizard-actions";
   const back = document.createElement("a");
   back.className = "btn-ghost";
-  back.href = "characters.html";
+  back.href = isEditing() ? `characters.html?open=${character.id}&history=1` : "characters.html";
   back.textContent = "← Cancel";
   bar.appendChild(back);
 
   const confirm = document.createElement("button");
   confirm.className = "btn-primary";
-  confirm.textContent = `Confirm level ${newLevel}`;
+  confirm.textContent = isEditing() ? `Save level ${newLevel}` : `Confirm level ${newLevel}`;
   confirm.disabled = !stepValidation(newLevel);
-  confirm.addEventListener("click", () => applyLevelUp(newLevel));
+  confirm.addEventListener("click", () => (isEditing() ? reviewLevelEdit(newLevel) : applyLevelUp(newLevel)));
   bar.appendChild(confirm);
   main.appendChild(bar);
+}
+
+// What the edit would break, shown before anything is written — the cheapest moment to
+// change your mind, since afterwards it takes another edit (or the undo) to get back.
+function renderSavePreview(main, newLevel) {
+  const box = document.createElement("div");
+  box.className = "problem-box";
+  const { consequences } = pendingSave;
+  if (consequences.length === 0) {
+    box.innerHTML = `<strong>Save level ${escapeHtml(newLevel)}? No other level is affected.</strong>`;
+  } else {
+    box.innerHTML = `<strong>Saving level ${escapeHtml(newLevel)} makes ${escapeHtml(consequences.length)} later level${consequences.length === 1 ? "" : "s"} stop adding up:</strong>` +
+      consequences.map((c) => `<div>└ L${escapeHtml(c.level)} — ${escapeHtml(c.errors[0])}</div>`).join("") +
+      `<div class="hint">You can fix them from the character sheet, or keep them as they are.</div>`;
+  }
+  main.appendChild(box);
+
+  const bar = document.createElement("div");
+  bar.className = "wizard-actions";
+  bar.appendChild(actionButton("← Back", "btn-ghost", () => { pendingSave = null; render(); }));
+  bar.appendChild(actionButton(consequences.length ? "Save anyway" : `Save level ${newLevel}`, "btn-primary", () => commitLevelEdit(newLevel)));
+  main.appendChild(bar);
+}
+
+function actionButton(label, className, onClick) {
+  const b = document.createElement("button");
+  b.className = className;
+  b.textContent = label;
+  b.addEventListener("click", onClick);
+  return b;
+}
+
+// Try the edit on a copy first, so the consequences can be reported without touching the
+// stored character.
+function reviewLevelEdit(newLevel) {
+  const trial = JSON.parse(JSON.stringify(character));
+  writeEntry(trial, newLevel);
+  const before = new Set(unresolvedProblems(character, db).map((p) => p.level));
+  const consequences = unresolvedProblems(trial, db).filter((p) => p.level !== newLevel && !before.has(p.level));
+  pendingSave = { consequences };
+  render();
+}
+
+// Replaces the recorded choices for a level that's already been taken.
+function writeEntry(target, newLevel) {
+  const entry = currentEntry(newLevel);
+  const at = target.levelUps.findIndex((e) => e.level === newLevel);
+  const previous = at >= 0 ? target.levelUps[at] : null;
+
+  // The creation card list is an input to the replay rather than a product of it, so an
+  // exchange that swapped a starting card has to be undone before the new one is applied.
+  const oldExchange = previous?.exchange;
+  if (oldExchange?.outCardId && oldExchange.inCardId) {
+    target.creationDomainCardIds = target.creationDomainCardIds.map((id) => (id === oldExchange.inCardId ? oldExchange.outCardId : id));
+  }
+  if (entry.exchange) {
+    target.creationDomainCardIds = target.creationDomainCardIds.map((id) => (id === entry.exchange.outCardId ? entry.exchange.inCardId : id));
+  }
+
+  // Redeclaring a level withdraws any earlier "keep as is": it's being reconsidered.
+  if (at >= 0) target.levelUps[at] = entry; else target.levelUps.push(entry);
+  recomputeCharacter(target);
+  return target;
+}
+
+function commitLevelEdit(newLevel) {
+  saveUndoSnapshot();
+  writeEntry(character, newLevel);
+  character.updatedAt = new Date().toISOString();
+  persistCharacter();
+  location.href = `characters.html?open=${character.id}&history=1`;
+}
+
+// One undo slot, matching the character sheet's. Only the recorded truth is kept: the
+// derived stats come back from replaying it.
+function saveUndoSnapshot() {
+  try {
+    localStorage.setItem("dh-level-edit-undo-v1", JSON.stringify({
+      id: character.id,
+      at: new Date().toISOString(),
+      levelUps: JSON.parse(JSON.stringify(character.levelUps || [])),
+      experiences: JSON.parse(JSON.stringify(character.experiences || [])),
+      level: character.level,
+      baseline: JSON.parse(JSON.stringify(character.baseline)),
+      baselineLevel: character.baselineLevel,
+      creationDomainCardIds: [...(character.creationDomainCardIds || [])],
+      domainVaultIds: [...(character.domainVaultIds || [])],
+    }));
+  } catch {
+    // storage full or unavailable: undo is a convenience, never block the edit for it
+  }
 }
 
 // Records the choices, then derives every stat from them. Nothing is incremented in place:
@@ -570,12 +715,34 @@ function applyLevelUp(newLevel) {
   render();
 }
 
+// Puts a recorded level's choices back on screen so they can be changed.
+function loadPicksFrom(entry) {
+  picks = (entry.picks || []).map((p) => ({
+    key: p.key,
+    slotTier: p.slotTier,
+    traits: [...(p.traits || [])],
+    experienceIds: [...(p.experienceIds || [])],
+    cardId: p.cardId || null,
+  }));
+  mandatoryCardId = entry.mandatoryCardId || null;
+  exchange = entry.exchange ? { ...entry.exchange } : null;
+}
+
 async function init() {
   await loadAllData();
   const params = new URLSearchParams(location.search);
   const id = params.get("id");
   const found = loadAllCharacters().find((c) => c.id === id);
   character = found ? ensureLevelFields(found) : null;
+
+  const requested = Number(params.get("level"));
+  if (character && requested) {
+    const entry = (character.levelUps || []).find((e) => e.level === requested);
+    if (entry) {
+      editLevel = requested;
+      loadPicksFrom(entry);
+    }
+  }
   render();
 }
 

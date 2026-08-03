@@ -539,6 +539,33 @@ h1, h2, h3, .btn-primary, .btn-ghost, .btn-small, .top-nav a {
 .slot-legend { margin-top: 0; }
 .sub-pick-heading { margin-bottom: 0.35rem; }
 
+.problem-box { margin: 1rem 0; padding: 0.6rem 0.8rem; background: rgba(178, 59, 59, 0.12); border: 1px solid var(--c-valor); border-radius: 6px; font-size: 0.82rem; }
+.problem-box div { color: var(--text-dim); margin-top: 0.25rem; }
+
+/* ---------- Storico dei livelli ---------- */
+
+.warn-banner { margin: 0 0 0.75rem; padding: 0.55rem 0.8rem; background: rgba(178, 59, 59, 0.12); border: 1px solid var(--c-valor); border-radius: 6px; font-size: 0.82rem; }
+.disabled-link { opacity: 0.4; pointer-events: none; }
+
+.level-history { margin: 0.75rem 0; padding: 0.6rem 0.8rem; background: var(--panel-alt); border: 1px solid var(--border); border-radius: 6px; }
+.level-history summary { cursor: pointer; font-family: var(--font-display); font-size: 0.9rem; letter-spacing: 0.02em; }
+.history-grid { margin-top: 0.8rem; }
+/* Nello storico le caselle non sono cliccabili: portano il livello in cui sono state segnate. */
+.history-grid .slot-box { cursor: default; }
+.slot-box.numbered { background: none; border-color: var(--accent); color: var(--accent-bright); font-size: 0.72rem; line-height: 1; text-align: center; }
+
+.level-list { display: flex; flex-direction: column; gap: 0.35rem; margin-top: 0.8rem; }
+.level-row { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; justify-content: space-between; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 0.5rem 0.7rem; font-size: 0.82rem; }
+.level-row.flagged { border-color: var(--c-valor); background: rgba(178, 59, 59, 0.08); }
+.level-row-main { flex: 1 1 20rem; }
+.level-row-main strong { font-family: var(--font-display); color: var(--accent); margin-right: 0.4rem; }
+.level-row-sub, .level-row-error { font-size: 0.76rem; color: var(--text-dim); margin-top: 0.2rem; }
+.level-row-error { color: var(--c-valor); }
+.level-accepted { font-size: 0.72rem; color: var(--green); margin-left: 0.4rem; }
+.level-row-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+.level-row-actions .btn-small { text-decoration: none; }
+.level-undo { margin-top: 0.6rem; }
+
 .exchange-section { margin: 1rem 0; padding: 0.6rem 0.8rem; background: var(--panel-alt); border: 1px solid var(--border); border-radius: 6px; }
 .exchange-section summary { cursor: pointer; font-family: var(--font-display); font-size: 0.85rem; letter-spacing: 0.02em; }
 .exchange-section select { background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 4px; padding: 0.3rem 0.4rem; }
