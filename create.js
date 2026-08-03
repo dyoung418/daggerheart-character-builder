@@ -5,7 +5,7 @@ import {
   communityCardArtPath,
   ancestryCardArtPath,
 } from "./shared/card-render.js";
-import { blankAdvancementState, ensureLevelFields } from "./shared/advancement.js";
+import { blankSlotsUsed, ensureLevelFields } from "./shared/advancement.js";
 import { escapeHtml } from "./shared/escape.js";
 
 const CHAR_STORAGE_KEY = "dh-characters-v1";
@@ -93,6 +93,7 @@ function blankCharacter(id) {
     background: { description: "", answers: "" },
     experiences: [{ name: "", modifier: 2 }, { name: "", modifier: 2 }],
     domainCardIds: [],
+    creationDomainCardIds: [],
     connectionsNotes: "",
     level: 1,
     proficiency: 1,
@@ -101,7 +102,7 @@ function blankCharacter(id) {
     stressSlotsBonus: 0,
     evasionBonus: 0,
     subclassTier: "foundation",
-    advancementSlotsUsed: blankAdvancementState(),
+    advancementSlotsUsed: blankSlotsUsed(),
     domainVaultIds: [],
     updatedAt: null,
   };
@@ -160,7 +161,7 @@ function isStepValid(stepKey) {
     case "experiences":
       return character.experiences.every((exp) => exp.name.trim().length > 0);
     case "domainCards":
-      return character.domainCardIds.length === 2;
+      return character.creationDomainCardIds.length === 2;
     case "connections":
       return true;
     default:
@@ -605,19 +606,28 @@ function renderDomainCardsStep(panel) {
   grid.className = "tile-grid";
   for (const c of available) {
     const card = { id: c.id, name: c.name["en-US"], art: domainCardArtPath(c.id), level: c.level, type: c.type, features: c.features };
-    const selected = character.domainCardIds.includes(c.id);
+    const selected = character.creationDomainCardIds.includes(c.id);
     const tile = cardTile(card, selected, () => {
       if (selected) {
-        character.domainCardIds = character.domainCardIds.filter((id) => id !== c.id);
-      } else if (character.domainCardIds.length < 2) {
-        character.domainCardIds.push(c.id);
+        setCreationCards(character.creationDomainCardIds.filter((id) => id !== c.id));
+      } else if (character.creationDomainCardIds.length < 2) {
+        setCreationCards([...character.creationDomainCardIds, c.id]);
       }
       onChange();
     });
-    if (!selected && character.domainCardIds.length >= 2) tile.classList.add("disabled");
+    if (!selected && character.creationDomainCardIds.length >= 2) tile.classList.add("disabled");
     grid.appendChild(tile);
   }
   panel.appendChild(grid);
+}
+
+// The 2 starting cards are only part of the collection once a character has levelled up,
+// so editing them has to leave the cards gained since then alone.
+function setCreationCards(ids) {
+  const acquired = character.domainCardIds.filter((id) => !character.creationDomainCardIds.includes(id));
+  character.creationDomainCardIds = ids;
+  character.domainCardIds = [...ids, ...acquired];
+  character.domainVaultIds = character.domainVaultIds.filter((id) => character.domainCardIds.includes(id));
 }
 
 // --- Step 9: Connections ---

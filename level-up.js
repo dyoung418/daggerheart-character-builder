@@ -1,30 +1,36 @@
 import { renderCardArt, domainCardArtPath, subclassCardArtPath } from "./shared/card-render.js";
 import {
   ADVANCEMENT_LABELS,
+  MAX_HIT_POINT_SLOTS,
+  MAX_STRESS_SLOTS,
+  SLOT_TIERS,
   availableOptionKeys,
-  domainCardLevelCap,
   ensureLevelFields,
+  extraCardLevelCap,
   isLevelAchievement,
   nextSubclassTier,
   optionCost,
   remainingSlots,
+  slotsInTier,
+  tierForLevel,
 } from "./shared/advancement.js";
 import { escapeHtml } from "./shared/escape.js";
 
 const CHAR_STORAGE_KEY = "dh-characters-v1";
 const TRAIT_LABELS = { agility: "Agility", strength: "Strength", finesse: "Finesse", instinct: "Instinct", presence: "Presence", knowledge: "Knowledge" };
+const BASE_STRESS_SLOTS = 6;
+const ORDINALS = ["first", "second", "third"];
 
 const db = {};
 let character = null;
 
-// UI state for the current level up (not persisted until confirmed)
-let picked = new Set(); // keys of the options selected for this level up
-let pickedTraits = []; // up to 2 trait keys, only relevant if "traits" is among the picked options
-let pickedExperienceIdx = []; // up to 2 indices in character.experiences, relevant if "experience" is picked
+// UI state for the current level up (not persisted until confirmed).
+// One entry per slot marked on the sheet, so the same option can be taken twice in a
+// level ("options with multiple slots can be chosen more than once"). Each entry records
+// WHICH tier's slot it marks, because that caps the extra domain card's level.
+let picks = []; // { key, slotTier, traits: [], experienceIdx: [], cardId: null }
 let mandatoryCardId = null;
-let bonusCardId = null;
-
-function titleCase(str) { return str.charAt(0) + str.slice(1).toLowerCase(); }
+let exchange = null; // optional { outCardId, inCardId }: the swap allowed on every level up
 
 async function loadJson(name) {
   const res = await fetch(`data/${name}.json`);
@@ -61,20 +67,86 @@ function persistCharacter() {
 }
 
 function selectedClass() { return db.classes.find((c) => c.id === character.classId); }
+function findDomainCard(id) { return db.domainCards.find((c) => c.id === id); }
+
+// ---------- pick bookkeeping ----------
+
+// Proficiency is the one option that marks both of its tier's slots at once.
+function slotsPerPick(key) { return key === "proficiency" ? 2 : 1; }
+
+function picksFor(key, slotTier) {
+  return picks.filter((p) => p.key === key && (slotTier === undefined || p.slotTier === slotTier));
+}
 
 function budgetSpent() {
-  let spent = 0;
-  for (const key of picked) spent += optionCost(key);
-  return spent;
+  return picks.reduce((sum, p) => sum + optionCost(p.key), 0);
+}
+
+function slotsTakenInTier(key, tier) {
+  const already = character.advancementSlotsUsed?.[key]?.[tier] || 0;
+  return already + picksFor(key, tier).length * slotsPerPick(key);
 }
 
 function totalRemainingAcrossAllOptions(newLevel) {
-  const tempLevel = character.level;
-  character.level = newLevel;
-  const total = availableOptionKeys(character).reduce((sum, key) => sum + remainingSlots(character, key), 0);
-  character.level = tempLevel;
-  return total;
+  return availableOptionKeys(newLevel)
+    .reduce((sum, key) => sum + remainingSlots(character.advancementSlotsUsed, key, newLevel), 0);
 }
+
+// The tier achievements at levels 5 and 8 clear trait marks BEFORE advancements are
+// chosen, so traits raised in the previous tier can be raised again on those level ups.
+function marksClearedThisLevel(newLevel) {
+  return isLevelAchievement(newLevel) && newLevel >= 5;
+}
+
+function traitMarkedBefore(key, newLevel) {
+  return marksClearedThisLevel(newLevel) ? false : !!character.traitMarks[key];
+}
+
+function traitsPickedThisLevel() {
+  return picksFor("traits").flatMap((p) => p.traits);
+}
+
+function subclassTierAfterPicks() {
+  let tier = character.subclassTier;
+  for (let i = 0; i < picksFor("subclass").length; i++) tier = nextSubclassTier(tier);
+  return tier;
+}
+
+function hitPointsAfterPicks() {
+  const cls = selectedClass();
+  return (cls ? cls.startingHitPoints : 0) + character.hitPointSlotsBonus + picksFor("hitPoint").length;
+}
+
+function stressAfterPicks() {
+  return BASE_STRESS_SLOTS + character.stressSlotsBonus + picksFor("stress").length;
+}
+
+// Why a given slot can't be marked right now (null when it can).
+function markBlockedReason(key, tier, newLevel) {
+  if (picksFor("proficiency").length > 0) return "Proficiency uses both picks for this level.";
+  if (key === "proficiency" && picks.length > 0) return "Proficiency needs both picks: clear the other one first.";
+  if (budgetSpent() + optionCost(key) > 2) return "No choice points left this level.";
+  if (slotsTakenInTier(key, tier) + slotsPerPick(key) > slotsInTier(key, tier)) return "No slots left in this tier.";
+  if (key === "subclass" && subclassTierAfterPicks() === "mastery") return "Subclass is already at Mastery.";
+  if (key === "hitPoint" && hitPointsAfterPicks() >= MAX_HIT_POINT_SLOTS) return `Hit Points are at the maximum of ${MAX_HIT_POINT_SLOTS}.`;
+  if (key === "stress" && stressAfterPicks() >= MAX_STRESS_SLOTS) return `Stress is at the maximum of ${MAX_STRESS_SLOTS}.`;
+  return null;
+}
+
+function addPick(key, slotTier) {
+  picks.push({ key, slotTier, traits: [], experienceIdx: [], cardId: null });
+}
+
+function removeLastPick(key, slotTier) {
+  for (let i = picks.length - 1; i >= 0; i--) {
+    if (picks[i].key === key && picks[i].slotTier === slotTier) {
+      picks.splice(i, 1);
+      return;
+    }
+  }
+}
+
+// ---------- render ----------
 
 function render() {
   const main = document.getElementById("level-up-main");
@@ -106,80 +178,154 @@ function render() {
     main.appendChild(box);
   }
 
-  renderAdvancementPicker(main, newLevel);
+  renderAdvancementGrid(main, newLevel);
+  renderSubPickers(main, cls, newLevel);
   renderMandatoryCardStep(main, cls, newLevel);
-  if (picked.has("domainCard")) renderBonusCardStep(main, cls, newLevel);
+  renderExchangeSection(main, cls);
 
   renderConfirmBar(main, newLevel);
 }
 
-function renderAdvancementPicker(main, newLevel) {
+function renderAdvancementGrid(main, newLevel) {
   const h = document.createElement("h3");
-  h.textContent = "Pick 2 advancements";
+  h.textContent = "Mark 2 advancement slots";
   main.appendChild(h);
 
   const spent = budgetSpent();
   const info = document.createElement("p");
   info.className = "hint";
-  info.textContent = `Choice points used: ${spent}/2. Proficiency uses both points on its own.`;
+  info.textContent = `Choice points used: ${spent}/2. You can mark any unmarked slot from your tier or below, ` +
+    `including two in the same row. Proficiency marks both of its slots and uses the whole level.`;
   main.appendChild(info);
 
-  const tempLevel = character.level;
-  character.level = newLevel;
-  const keys = availableOptionKeys(character);
-  const list = document.createElement("div");
-  list.className = "option-list";
-  for (const key of keys) {
-    const remaining = remainingSlots(character, key);
-    const cost = optionCost(key);
-    const isPicked = picked.has(key);
-    const proficiencyPickedElsewhere = picked.has("proficiency") && key !== "proficiency";
-    const notEnoughBudget = !isPicked && (spent + cost > 2);
-    const notEnoughSlots = !isPicked && remaining < (key === "proficiency" ? 2 : 1);
-    const disabled = remaining <= 0 || notEnoughBudget || notEnoughSlots || proficiencyPickedElsewhere;
+  const maxTier = tierForLevel(newLevel);
+  const tiers = SLOT_TIERS.filter((t) => t <= maxTier);
 
-    const row = document.createElement("label");
-    row.className = "option-row";
-    row.innerHTML = `<input type="checkbox" ${isPicked ? "checked" : ""} ${disabled && !isPicked ? "disabled" : ""}/>
-      <strong>${escapeHtml(ADVANCEMENT_LABELS[key])}</strong> <span class="hint">(slots left: ${escapeHtml(remaining)})</span>`;
-    row.querySelector("input").addEventListener("change", (e) => {
-      if (e.target.checked) {
-        picked.add(key);
-        if (key === "proficiency") { picked = new Set(["proficiency"]); }
-      } else {
-        picked.delete(key);
-        if (key === "traits") pickedTraits = [];
-        if (key === "experience") pickedExperienceIdx = [];
-      }
-      render();
-    });
-    list.appendChild(row);
+  const grid = document.createElement("div");
+  grid.className = "advancement-grid";
+
+  const head = document.createElement("div");
+  head.className = "adv-row adv-head";
+  head.appendChild(labelCell(""));
+  for (const tier of tiers) {
+    const cell = document.createElement("span");
+    cell.className = "adv-tier-group";
+    cell.textContent = `Tier ${tier}`;
+    head.appendChild(cell);
   }
-  character.level = tempLevel;
-  main.appendChild(list);
+  grid.appendChild(head);
 
-  if (picked.has("traits")) renderTraitSubPicker(main);
-  if (picked.has("experience")) renderExperienceSubPicker(main);
-  if (picked.has("subclass")) renderSubclassPreview(main);
+  for (const key of availableOptionKeys(newLevel)) {
+    const row = document.createElement("div");
+    row.className = "adv-row";
+    row.appendChild(labelCell(rowLabel(key, tiers)));
+    for (const tier of tiers) {
+      row.appendChild(tierGroupCell(key, tier, newLevel));
+    }
+    grid.appendChild(row);
+  }
+  main.appendChild(grid);
+
+  const legend = document.createElement("p");
+  legend.className = "hint slot-legend";
+  legend.textContent = "■ spent at an earlier level · ☒ marking now · □ available";
+  main.appendChild(legend);
 }
 
-function renderTraitSubPicker(main) {
+function labelCell(text) {
+  const cell = document.createElement("span");
+  cell.className = "adv-label";
+  cell.textContent = text;
+  return cell;
+}
+
+// The extra domain card's cap differs per tier, so it goes in the row label the way the
+// character sheet prints it on the option itself.
+function rowLabel(key, tiers) {
+  if (key !== "domainCard") return ADVANCEMENT_LABELS[key];
+  const caps = tiers.map((tier) => `≤${extraCardLevelCap(10, tier)}`).join(" / ");
+  return `Extra domain card (${caps})`;
+}
+
+function tierGroupCell(key, tier, newLevel) {
+  const cell = document.createElement("span");
+  cell.className = "adv-tier-group";
+  const total = slotsInTier(key, tier);
+  if (total === 0) {
+    cell.textContent = "—";
+    cell.classList.add("adv-tier-empty");
+    return cell;
+  }
+
+  const alreadyUsed = character.advancementSlotsUsed?.[key]?.[tier] || 0;
+  const markingNow = picksFor(key, tier).length * slotsPerPick(key);
+  const blocked = markBlockedReason(key, tier, newLevel);
+
+  for (let i = 0; i < total; i++) {
+    const box = document.createElement("button");
+    box.className = "slot-box";
+    box.type = "button";
+    if (i < alreadyUsed) {
+      box.classList.add("filled");
+      box.disabled = true;
+      box.title = "Marked at an earlier level";
+    } else if (i < alreadyUsed + markingNow) {
+      box.classList.add("marking");
+      box.title = "Marking now — click to undo";
+      box.addEventListener("click", () => { removeLastPick(key, tier); render(); });
+    } else if (blocked) {
+      box.classList.add("blocked");
+      box.disabled = true;
+      box.title = blocked;
+    } else {
+      box.classList.add("open");
+      box.title = `Mark this tier ${tier} slot`;
+      box.addEventListener("click", () => { addPick(key, tier); render(); });
+    }
+    cell.appendChild(box);
+  }
+  return cell;
+}
+
+// ---------- per-pick sub-choices ----------
+
+function renderSubPickers(main, cls, newLevel) {
+  const counters = {};
+  picks.forEach((pick, index) => {
+    counters[pick.key] = (counters[pick.key] || 0) + 1;
+    const total = picksFor(pick.key).length;
+    const ordinal = total > 1 ? ` (${ORDINALS[counters[pick.key] - 1]})` : "";
+    if (pick.key === "traits") renderTraitSubPicker(main, pick, index, ordinal, newLevel);
+    if (pick.key === "experience") renderExperienceSubPicker(main, pick, index, ordinal);
+    if (pick.key === "domainCard") renderExtraCardPicker(main, pick, index, ordinal, cls, newLevel);
+    if (pick.key === "subclass") renderSubclassPreview(main);
+  });
+}
+
+function subHeading(main, text) {
   const h = document.createElement("p");
-  h.className = "hint";
-  h.textContent = "Pick 2 traits not yet marked this tier:";
+  h.className = "hint sub-pick-heading";
+  h.textContent = text;
   main.appendChild(h);
+}
+
+function renderTraitSubPicker(main, pick, index, ordinal, newLevel) {
+  subHeading(main, `Traits${ordinal}: pick 2 unmarked traits to raise by +1.`);
   const grid = document.createElement("div");
   grid.className = "traits-grid";
   for (const key of Object.keys(TRAIT_LABELS)) {
-    const marked = character.traitMarks[key];
-    const isPicked = pickedTraits.includes(key);
+    const markedBefore = traitMarkedBefore(key, newLevel);
+    const takenByAnotherPick = picks.some((p) => p !== pick && p.traits.includes(key));
+    const isPicked = pick.traits.includes(key);
+    const disabled = markedBefore || takenByAnotherPick || (!isPicked && pick.traits.length >= 2);
+    const note = markedBefore ? " (already marked)" : takenByAnotherPick ? " (taken above)" : "";
+
     const row = document.createElement("label");
     row.className = "option-row";
-    const disabled = marked || (!isPicked && pickedTraits.length >= 2);
-    row.innerHTML = `<input type="checkbox" ${isPicked ? "checked" : ""} ${disabled ? "disabled" : ""}/> ${escapeHtml(TRAIT_LABELS[key])}${marked ? " (already marked)" : ""}`;
+    row.innerHTML = `<input type="checkbox" ${isPicked ? "checked" : ""} ${disabled ? "disabled" : ""}/> ${escapeHtml(TRAIT_LABELS[key])}${note}`;
     row.querySelector("input").addEventListener("change", (e) => {
-      if (e.target.checked) pickedTraits.push(key);
-      else pickedTraits = pickedTraits.filter((k) => k !== key);
+      if (e.target.checked) pick.traits.push(key);
+      else pick.traits = pick.traits.filter((k) => k !== key);
       render();
     });
     grid.appendChild(row);
@@ -187,22 +333,19 @@ function renderTraitSubPicker(main) {
   main.appendChild(grid);
 }
 
-function renderExperienceSubPicker(main) {
-  const h = document.createElement("p");
-  h.className = "hint";
-  h.textContent = "Pick 2 Experiences to give +1 to:";
-  main.appendChild(h);
+function renderExperienceSubPicker(main, pick, index, ordinal) {
+  subHeading(main, `Experiences${ordinal}: pick 2 to give +1 to.`);
   const list = document.createElement("div");
   list.className = "option-list";
   character.experiences.forEach((exp, i) => {
-    const isPicked = pickedExperienceIdx.includes(i);
-    const disabled = !isPicked && pickedExperienceIdx.length >= 2;
+    const isPicked = pick.experienceIdx.includes(i);
+    const disabled = !isPicked && pick.experienceIdx.length >= 2;
     const row = document.createElement("label");
     row.className = "option-row";
     row.innerHTML = `<input type="checkbox" ${isPicked ? "checked" : ""} ${disabled ? "disabled" : ""}/> ${escapeHtml(exp.name || "(unnamed)")} <span class="exp-mod">+${escapeHtml(exp.modifier)}</span>`;
     row.querySelector("input").addEventListener("change", (e) => {
-      if (e.target.checked) pickedExperienceIdx.push(i);
-      else pickedExperienceIdx = pickedExperienceIdx.filter((idx) => idx !== i);
+      if (e.target.checked) pick.experienceIdx.push(i);
+      else pick.experienceIdx = pick.experienceIdx.filter((idx) => idx !== i);
       render();
     });
     list.appendChild(row);
@@ -212,25 +355,24 @@ function renderExperienceSubPicker(main) {
 
 function renderSubclassPreview(main) {
   const nextTier = nextSubclassTier(character.subclassTier);
-  const p = document.createElement("p");
-  p.className = "hint";
-  p.textContent = character.subclassTier === "mastery"
-    ? "Subclass already at Mastery: there's no further tier to take."
-    : `You'll take the ${nextTier} card for your subclass.`;
-  main.appendChild(p);
-  if (character.subclassTier !== "mastery") {
-    const sub = db.subclasses.find((s) => s.id === character.subclassId);
-    const preview = document.createElement("div");
-    preview.className = "tile-grid";
-    const tile = document.createElement("div");
-    tile.className = "card-tile";
-    tile.appendChild(renderCardArt({
-      id: character.subclassId, name: nextTier, art: subclassCardArtPath(character.subclassId, nextTier),
-      type: "Subclass", features: sub?.[nextTier]?.features,
-    }));
-    preview.appendChild(tile);
-    main.appendChild(preview);
-  }
+  subHeading(main, `You'll take the ${nextTier} card for your subclass.`);
+  const sub = db.subclasses.find((s) => s.id === character.subclassId);
+  const preview = document.createElement("div");
+  preview.className = "tile-grid";
+  const tile = document.createElement("div");
+  tile.className = "card-tile";
+  tile.appendChild(renderCardArt({
+    id: character.subclassId, name: nextTier, art: subclassCardArtPath(character.subclassId, nextTier),
+    type: "Subclass", features: sub?.[nextTier]?.features,
+  }));
+  preview.appendChild(tile);
+  main.appendChild(preview);
+}
+
+// ---------- domain cards ----------
+
+function cardModel(c) {
+  return { id: c.id, name: c.name["en-US"], art: domainCardArtPath(c.id), level: c.level, type: c.type, features: c.features };
 }
 
 function eligibleDomainCards(cls, maxLevel, excludeIds) {
@@ -238,64 +380,115 @@ function eligibleDomainCards(cls, maxLevel, excludeIds) {
   return db.domainCards.filter((c) => c.level <= maxLevel && cls.domains.includes(c.domain) && !excludeIds.includes(c.id));
 }
 
-function renderMandatoryCardStep(main, cls, newLevel) {
-  const h = document.createElement("h3");
-  h.textContent = "New domain card (guaranteed every level)";
-  main.appendChild(h);
-  const excluded = [...character.domainCardIds, ...(bonusCardId ? [bonusCardId] : [])];
-  const cards = eligibleDomainCards(cls, newLevel, excluded);
+// Every card already owned, plus every card being taken elsewhere on this screen.
+function claimedCardIds(except) {
+  const claimed = [...character.domainCardIds];
+  if (mandatoryCardId && except !== "mandatory") claimed.push(mandatoryCardId);
+  for (const p of picksFor("domainCard")) {
+    if (p.cardId && p !== except) claimed.push(p.cardId);
+  }
+  if (exchange?.inCardId && except !== "exchange") claimed.push(exchange.inCardId);
+  return claimed;
+}
+
+function renderCardGrid(main, cards, selectedId, onSelect) {
   const grid = document.createElement("div");
   grid.className = "tile-grid";
   for (const c of cards) {
-    const card = { id: c.id, name: c.name["en-US"], art: domainCardArtPath(c.id), level: c.level, type: c.type, features: c.features };
-    const selected = mandatoryCardId === c.id;
+    const card = cardModel(c);
     const tile = document.createElement("div");
-    tile.className = "card-tile" + (selected ? " selected" : "");
+    tile.className = "card-tile" + (selectedId === c.id ? " selected" : "");
     tile.appendChild(renderCardArt(card));
     const label = document.createElement("div");
     label.className = "card-tile-label";
     label.textContent = card.name;
     tile.appendChild(label);
-    tile.addEventListener("click", () => { mandatoryCardId = c.id; render(); });
+    tile.addEventListener("click", () => { onSelect(c.id); render(); });
     grid.appendChild(tile);
   }
   main.appendChild(grid);
 }
 
-function renderBonusCardStep(main, cls, newLevel) {
-  const cap = domainCardLevelCap(newLevel);
-  const h = document.createElement("h3");
-  h.textContent = `Bonus domain card (level ≤ ${cap})`;
-  main.appendChild(h);
-  const excluded = [...character.domainCardIds, ...(mandatoryCardId ? [mandatoryCardId] : [])];
-  const cards = eligibleDomainCards(cls, cap, excluded);
-  const grid = document.createElement("div");
-  grid.className = "tile-grid";
-  for (const c of cards) {
-    const card = { id: c.id, name: c.name["en-US"], art: domainCardArtPath(c.id), level: c.level, type: c.type, features: c.features };
-    const selected = bonusCardId === c.id;
-    const tile = document.createElement("div");
-    tile.className = "card-tile" + (selected ? " selected" : "");
-    tile.appendChild(renderCardArt(card));
-    const label = document.createElement("div");
-    label.className = "card-tile-label";
-    label.textContent = card.name;
-    tile.addEventListener("click", () => { bonusCardId = c.id; render(); });
-    tile.appendChild(label);
-    grid.appendChild(tile);
-  }
-  main.appendChild(grid);
+function renderExtraCardPicker(main, pick, index, ordinal, cls, newLevel) {
+  const cap = extraCardLevelCap(newLevel, pick.slotTier);
+  subHeading(main, `Extra domain card${ordinal}: level ≤ ${cap} (tier ${pick.slotTier} slot, capped at ${extraCardLevelCap(10, pick.slotTier)}; your level is ${newLevel}).`);
+  const cards = eligibleDomainCards(cls, cap, claimedCardIds(pick));
+  renderCardGrid(main, cards, pick.cardId, (id) => { pick.cardId = id; });
 }
+
+function renderMandatoryCardStep(main, cls, newLevel) {
+  const h = document.createElement("h3");
+  h.textContent = "New domain card (guaranteed every level)";
+  main.appendChild(h);
+  const cards = eligibleDomainCards(cls, newLevel, claimedCardIds("mandatory"));
+  renderCardGrid(main, cards, mandatoryCardId, (id) => { mandatoryCardId = id; });
+}
+
+// Optional swap allowed on every level up: "you can also exchange one domain card you've
+// previously acquired for a different domain card of the same level or lower".
+function renderExchangeSection(main, cls) {
+  if (character.domainCardIds.length === 0) return;
+
+  const details = document.createElement("details");
+  details.className = "exchange-section";
+  details.open = !!exchange;
+  const summary = document.createElement("summary");
+  summary.textContent = "Exchange a card you already have (optional)";
+  details.appendChild(summary);
+
+  const hint = document.createElement("p");
+  hint.className = "hint";
+  hint.textContent = "On a level up you may swap one card you've already acquired for a different one of the same level or lower.";
+  details.appendChild(hint);
+
+  const row = document.createElement("div");
+  row.className = "field-row";
+  const options = character.domainCardIds.map((id) => {
+    const c = findDomainCard(id);
+    if (!c) return "";
+    const label = `${c.name["en-US"]} (level ${c.level})`;
+    return `<option value="${escapeHtml(id)}" ${exchange?.outCardId === id ? "selected" : ""}>${escapeHtml(label)}</option>`;
+  }).join("");
+  row.innerHTML = `<label>Give up <select><option value="">— none —</option>${options}</select></label>`;
+  row.querySelector("select").addEventListener("change", (e) => {
+    exchange = e.target.value ? { outCardId: e.target.value, inCardId: null } : null;
+    render();
+  });
+  details.appendChild(row);
+
+  if (exchange?.outCardId) {
+    const out = findDomainCard(exchange.outCardId);
+    const cap = out ? out.level : 1;
+    const pickHint = document.createElement("p");
+    pickHint.className = "hint";
+    pickHint.textContent = `Take instead (level ≤ ${cap}):`;
+    details.appendChild(pickHint);
+    const cards = eligibleDomainCards(cls, cap, claimedCardIds("exchange"));
+    renderCardGrid(details, cards, exchange.inCardId, (id) => { exchange.inCardId = id; });
+  }
+
+  main.appendChild(details);
+}
+
+// ---------- confirm ----------
 
 function stepValidation(newLevel) {
   const spent = budgetSpent();
   const totalRemaining = totalRemainingAcrossAllOptions(newLevel);
   const budgetOk = spent === 2 || (totalRemaining < 2 && spent === totalRemaining);
   if (!budgetOk) return false;
-  if (picked.has("traits") && pickedTraits.length !== 2) return false;
-  if (picked.has("experience") && pickedExperienceIdx.length !== 2) return false;
+
+  for (const pick of picks) {
+    if (pick.key === "traits" && pick.traits.length !== 2) return false;
+    if (pick.key === "experience" && new Set(pick.experienceIdx).size !== 2) return false;
+    if (pick.key === "domainCard" && !pick.cardId) return false;
+  }
+  // Taking the trait option twice needs four DIFFERENT unmarked traits.
+  const allTraits = traitsPickedThisLevel();
+  if (new Set(allTraits).size !== allTraits.length) return false;
+
   if (!mandatoryCardId) return false;
-  if (picked.has("domainCard") && !bonusCardId) return false;
+  if (exchange && !exchange.inCardId) return false;
   return true;
 }
 
@@ -326,28 +519,40 @@ function applyLevelUp(newLevel) {
     }
   }
 
-  for (const key of picked) {
-    character.advancementSlotsUsed[key] = (character.advancementSlotsUsed[key] || 0) + (key === "proficiency" ? 2 : 1);
-  }
-  if (picked.has("traits")) {
-    for (const k of pickedTraits) {
-      character.traits[k] = (character.traits[k] || 0) + 1;
-      character.traitMarks[k] = true;
+  const extraCardIds = [];
+  for (const pick of picks) {
+    const slots = character.advancementSlotsUsed[pick.key];
+    slots[pick.slotTier] = (slots[pick.slotTier] || 0) + slotsPerPick(pick.key);
+
+    if (pick.key === "traits") {
+      for (const k of pick.traits) {
+        character.traits[k] = (character.traits[k] || 0) + 1;
+        character.traitMarks[k] = true;
+      }
     }
+    if (pick.key === "hitPoint") character.hitPointSlotsBonus += 1;
+    if (pick.key === "stress") character.stressSlotsBonus += 1;
+    if (pick.key === "evasion") character.evasionBonus += 1;
+    if (pick.key === "experience") {
+      for (const idx of pick.experienceIdx) character.experiences[idx].modifier += 1;
+    }
+    if (pick.key === "subclass" && character.subclassTier !== "mastery") {
+      character.subclassTier = nextSubclassTier(character.subclassTier);
+    }
+    if (pick.key === "proficiency") character.proficiency += 1;
+    if (pick.key === "domainCard" && pick.cardId) extraCardIds.push(pick.cardId);
   }
-  if (picked.has("hitPoint")) character.hitPointSlotsBonus += 1;
-  if (picked.has("stress")) character.stressSlotsBonus += 1;
-  if (picked.has("evasion")) character.evasionBonus += 1;
-  if (picked.has("experience")) {
-    for (const idx of pickedExperienceIdx) character.experiences[idx].modifier += 1;
-  }
-  if (picked.has("subclass") && character.subclassTier !== "mastery") {
-    character.subclassTier = nextSubclassTier(character.subclassTier);
-  }
-  if (picked.has("proficiency")) character.proficiency += 1;
 
   if (mandatoryCardId) character.domainCardIds.push(mandatoryCardId);
-  if (bonusCardId) character.domainCardIds.push(bonusCardId);
+  for (const id of extraCardIds) character.domainCardIds.push(id);
+
+  if (exchange?.outCardId && exchange.inCardId) {
+    const at = character.domainCardIds.indexOf(exchange.outCardId);
+    if (at >= 0) character.domainCardIds[at] = exchange.inCardId;
+    character.domainVaultIds = character.domainVaultIds.filter((id) => id !== exchange.outCardId);
+    character.creationDomainCardIds = character.creationDomainCardIds.map((id) => (id === exchange.outCardId ? exchange.inCardId : id));
+  }
+
   // if this pushes the active count above 5, the oldest extras automatically go to the
   // vault: the user can then reorganize loadout/vault from the character sheet.
   const active = character.domainCardIds.filter((id) => !character.domainVaultIds.includes(id));
@@ -359,11 +564,9 @@ function applyLevelUp(newLevel) {
   character.updatedAt = new Date().toISOString();
   persistCharacter();
 
-  picked = new Set();
-  pickedTraits = [];
-  pickedExperienceIdx = [];
+  picks = [];
   mandatoryCardId = null;
-  bonusCardId = null;
+  exchange = null;
 
   render();
 }
