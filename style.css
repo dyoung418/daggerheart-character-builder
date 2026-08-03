@@ -622,3 +622,79 @@ h1, h2, h3, .btn-primary, .btn-ghost, .btn-small, .top-nav a {
   cursor: pointer;
 }
 .lightbox-close:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ---------- Derivazione di una statistica ---------- */
+/* Il "?" accanto all'etichetta apre la spiegazione del numero: senza, un totale modificato
+   da equipaggiamento o sottoclasse non è verificabile da chi legge la scheda. */
+.stat-why {
+  margin-left: 0.35rem;
+  width: 1.05rem;
+  height: 1.05rem;
+  padding: 0;
+  border: 1px solid var(--border-warm);
+  border-radius: 50%;
+  background: var(--panel);
+  color: var(--text-dim);
+  font-size: 0.62rem;
+  line-height: 1;
+  cursor: pointer;
+  vertical-align: middle;
+  transition: border-color 0.12s ease, color 0.12s ease;
+}
+.stat-why:hover { border-color: var(--accent); color: var(--accent); }
+
+.popover-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 9, 14, 0.82);
+  z-index: 1000;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+.popover-overlay.open { display: flex; }
+.popover-panel {
+  position: relative;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-top: 2px solid var(--accent);
+  border-radius: 10px;
+  padding: 1rem 1.1rem;
+  min-width: min(20rem, 90vw);
+  max-width: min(28rem, 90vw);
+  max-height: 80vh;
+  overflow-y: auto;
+}
+.popover-title {
+  margin: 0 0 0.6rem;
+  font-family: var(--font-display);
+  color: var(--accent-bright);
+  font-size: 0.95rem;
+  letter-spacing: 0.02em;
+}
+.popover-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.3rem 0;
+  font-size: 0.82rem;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--border);
+}
+.popover-row strong { color: var(--text); font-family: var(--font-display); }
+.popover-row.popover-total { border-bottom: none; color: var(--text); }
+.popover-row.popover-total strong { color: var(--accent-bright); }
+.popover-note { margin: 0.6rem 0 0; font-size: 0.78rem; color: var(--text-dim); }
+.popover-close {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.6rem;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.popover-close:hover { color: var(--accent); }

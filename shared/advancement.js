@@ -60,6 +60,13 @@ export function extraCardLevelCap(level, slotTier) {
 export const MAX_HIT_POINT_SLOTS = 12;
 export const MAX_STRESS_SLOTS = 12;
 
+// Every character starts with 6 Stress slots regardless of class, unlike Hit Points and
+// Evasion which come from classes.json.
+export const BASE_STRESS_SLOTS = 6;
+
+// "A PC's Armor Score can't exceed 12." (SRD, Armor)
+export const MAX_ARMOR_SCORE = 12;
+
 export function slotsInTier(key, tier) {
   return TIER_SLOT_TABLE[key]?.[tier] || 0;
 }

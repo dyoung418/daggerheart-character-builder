@@ -10,7 +10,6 @@ import {
   SLOT_TIERS,
   activeDomainCardIds,
   availableOptionKeys,
-  damageThresholds,
   ensureLevelFields,
   extraCardLevelCap,
   slotsInTier,
@@ -24,7 +23,11 @@ import {
   unresolvedProblems,
   validateLevelUps,
 } from "./shared/history.js";
+import { derivedStats } from "./shared/derived-stats.js";
+import { statLine } from "./shared/stat-line.js";
 import { escapeHtml } from "./shared/escape.js";
+
+const signed = (n) => (n > 0 ? `+${n}` : String(n));
 
 const CHAR_STORAGE_KEY = "dh-characters-v1";
 const UNDO_STORAGE_KEY = "dh-level-edit-undo-v1";
@@ -152,13 +155,6 @@ function renderList() {
     }
     container.appendChild(row);
   }
-}
-
-function statLine(label, value) {
-  const div = document.createElement("div");
-  div.className = "stat-line";
-  div.innerHTML = `<span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong>`;
-  return div;
 }
 
 function cardBlock(card, caption) {
@@ -516,26 +512,48 @@ function renderDetail() {
   `;
   container.appendChild(summary);
 
+  const stats = derivedStats(ch, db);
+
   const statsBox = document.createElement("div");
   statsBox.className = "derived-box";
   for (const [key, label] of Object.entries(TRAIT_LABELS)) {
-    const v = ch.traits[key];
-    statsBox.appendChild(statLine(label, v === null ? "—" : (v > 0 ? "+" + v : v)));
+    const t = stats.traits[key];
+    statsBox.appendChild(statLine(label, t.total === null ? "—" : signed(t.total), t));
   }
   container.appendChild(statsBox);
 
-  const armorForThresholds = findArmor(ch.equipment.armorId);
   const statsBox2 = document.createElement("div");
   statsBox2.className = "derived-box";
   statsBox2.appendChild(statLine("Level", ch.level));
-  statsBox2.appendChild(statLine("Proficiency", ch.proficiency));
-  statsBox2.appendChild(statLine("Evasion", cls ? cls.startingEvasion + ch.evasionBonus : "—"));
-  statsBox2.appendChild(statLine("Hit Points", cls ? cls.startingHitPoints + ch.hitPointSlotsBonus : "—"));
-  statsBox2.appendChild(statLine("Stress", 6 + ch.stressSlotsBonus));
+  statsBox2.appendChild(statLine("Proficiency", stats.proficiency.total, stats.proficiency));
+  statsBox2.appendChild(statLine("Evasion", stats.evasion ? stats.evasion.total : "—", stats.evasion));
+  statsBox2.appendChild(statLine("Hit Points", stats.hitPoints ? stats.hitPoints.total : "—", stats.hitPoints));
+  statsBox2.appendChild(statLine("Stress", stats.stress.total, stats.stress));
   statsBox2.appendChild(statLine("Hope", "2 / 6"));
-  if (armorForThresholds) {
-    const th = damageThresholds(armorForThresholds.baseMajorThreshold, armorForThresholds.baseSevereThreshold, ch.level);
-    statsBox2.appendChild(statLine("Damage thresholds", `${th.major} / ${th.severe}`));
+  if (stats.armorScore) {
+    statsBox2.appendChild(statLine("Armor Score", stats.armorScore.total, stats.armorScore));
+  }
+  if (stats.majorThreshold && stats.severeThreshold) {
+    statsBox2.appendChild(statLine(
+      "Damage thresholds",
+      `${stats.majorThreshold.total} / ${stats.severeThreshold.total}`,
+      {
+        total: `${stats.majorThreshold.total} / ${stats.severeThreshold.total}`,
+        parts: [
+          ...stats.majorThreshold.parts.map((p) => ({ label: `Major — ${p.label}`, value: p.value })),
+          ...stats.severeThreshold.parts.map((p) => ({ label: `Severe — ${p.label}`, value: p.value })),
+        ],
+      },
+    ));
+  }
+  if (stats.primaryAttack) {
+    statsBox2.appendChild(statLine("Primary attack", signed(stats.primaryAttack.total), stats.primaryAttack));
+  }
+  if (stats.secondaryAttack) {
+    statsBox2.appendChild(statLine("Secondary attack", signed(stats.secondaryAttack.total), stats.secondaryAttack));
+  }
+  if (stats.spellcast) {
+    statsBox2.appendChild(statLine("Spellcast", stats.spellcast.display, stats.spellcast));
   }
   container.appendChild(statsBox2);
 
@@ -633,7 +651,8 @@ const CSV_COLUMNS = [
   "Ancestry", "Community",
   "Agility", "Strength", "Finesse", "Instinct", "Presence", "Knowledge",
   "Evasion", "Hit Points", "Stress", "Hope",
-  "Major Threshold", "Severe Threshold",
+  "Major Threshold", "Severe Threshold", "Armor Score",
+  "Primary Attack", "Secondary Attack", "Spellcast Trait",
   "Primary weapon", "Secondary weapon", "Armor", "Potion",
   "Experience", "Domain Cards (loadout)", "Domain Cards (vault)",
   "Background", "Appearance", "Connections",
@@ -665,8 +684,7 @@ function csvRowForCharacter(ch) {
   const sub = findSubclass(ch.subclassId);
   const com = findCommunity(ch.heritage.communityId);
   const ancestries = ch.heritage.ancestryIds.map((id) => findAncestry(id)?.name["en-US"]).filter(Boolean).join(" + ");
-  const armor = findArmor(ch.equipment.armorId);
-  const th = armor ? damageThresholds(armor.baseMajorThreshold, armor.baseSevereThreshold, ch.level) : null;
+  const stats = derivedStats(ch, db);
   const activeIds = activeDomainCardIds(ch);
   const loadoutNames = activeIds.map((id) => findDomainCard(id)?.name["en-US"]).filter(Boolean).join("; ");
   const vaultNames = ch.domainVaultIds.map((id) => findDomainCard(id)?.name["en-US"]).filter(Boolean).join("; ");
@@ -677,11 +695,15 @@ function csvRowForCharacter(ch) {
     cls ? titleCase(cls.name) : "", sub ? sub.name["en-US"] : "", ch.subclassTier,
     ancestries, com ? com.name["en-US"] : "",
     ch.traits.agility, ch.traits.strength, ch.traits.finesse, ch.traits.instinct, ch.traits.presence, ch.traits.knowledge,
-    cls ? cls.startingEvasion + ch.evasionBonus : "", cls ? cls.startingHitPoints + ch.hitPointSlotsBonus : "", 6 + ch.stressSlotsBonus, "2/6",
-    th ? th.major : "", th ? th.severe : "",
+    stats.evasion ? stats.evasion.total : "", stats.hitPoints ? stats.hitPoints.total : "", stats.stress.total, "2/6",
+    stats.majorThreshold ? stats.majorThreshold.total : "", stats.severeThreshold ? stats.severeThreshold.total : "",
+    stats.armorScore ? stats.armorScore.total : "",
+    stats.primaryAttack ? signed(stats.primaryAttack.total) : "",
+    stats.secondaryAttack ? signed(stats.secondaryAttack.total) : "",
+    stats.spellcast ? stats.spellcast.display : "",
     findWeapon(ch.equipment.primaryWeaponId)?.name["en-US"] || "",
     findWeapon(ch.equipment.secondaryWeaponId)?.name["en-US"] || "",
-    armor ? armor.name["en-US"] : "",
+    findArmor(ch.equipment.armorId)?.name["en-US"] || "",
     findConsumable(ch.equipment.potionChoice)?.name["en-US"] || "",
     expText, loadoutNames, vaultNames,
     ch.background.description, ch.background.answers, ch.connectionsNotes,
