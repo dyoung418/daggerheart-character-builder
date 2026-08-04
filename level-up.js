@@ -24,7 +24,7 @@ import {
   unresolvedProblems,
   validateEntry,
 } from "./shared/history.js";
-import { effectBonuses, hitPointTotal, stressTotal } from "./shared/derived-stats.js";
+import { effectBonuses, effectExperienceBonuses, hitPointTotal, stressTotal } from "./shared/derived-stats.js";
 import { blankAnswer, choiceFor } from "./shared/effects.js";
 import { renderEffectChoice } from "./shared/effect-choice.js";
 import { escapeHtml } from "./shared/escape.js";
@@ -171,7 +171,13 @@ function pendingExperienceId(newLevel) {
 }
 
 function experiencesForPicking(newLevel) {
-  const list = experiencesAtLevel(character, newLevel, context.expBonus);
+  // experiencesAtLevel replays the +1s taken as advancements, which is only half the story:
+  // a permanent bonus from effects.js (Clank's Purposeful Design) never went through the
+  // replay, so without this the picker offers an Experience at a lower number than the sheet
+  // shows for it.
+  const effectBonus = effectExperienceBonuses(character, db);
+  const list = experiencesAtLevel(character, newLevel, context.expBonus)
+    .map((exp) => ({ ...exp, modifier: exp.modifier + (effectBonus[exp.id] || 0) }));
   if (isLevelAchievement(newLevel) && !list.some((e) => e.sinceLevel === newLevel)) {
     list.push({ id: pendingExperienceId(newLevel), name: "", modifier: 2, sinceLevel: newLevel, pending: true });
   }
