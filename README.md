@@ -7,9 +7,9 @@ Built out of a personal need: converting a tabletop party from D&D 5e to Daggerh
 ## What it does
 
 - **Card browser** (`index.html`) — filter the 189 domain cards by domain, type, and level; build a 5-card loadout plus a vault, saved locally.
-- **Character creator** (`create.html`) — a 9-step wizard following the Core Rulebook's character creation steps exactly (class → subclass, ancestry/community, traits, derived stats, equipment, background, experience, domain cards, connections), with the same hard validation the book describes (fixed trait array, mixed-ancestry rule, weapon burden, etc.).
-- **Character list & sheet** (`characters.html`) — save multiple characters locally, view a read-only sheet, export a CSV summary for your GM. The sheet shows every subclass card the character has earned (Foundation, then Specialization and Mastery as they're taken), because an upgrade *adds* a card rather than replacing the one below it — the earlier cards' features are still in play. Every derived stat — Evasion, Hit Points, Stress, damage thresholds, Armor Score, your attack modifier per equipped weapon, and which trait your Spellcast Rolls use — has a **?** next to it that shows exactly what the number is built from, so a total you didn't expect can be checked rather than guessed at. A collapsible **Level history** shows which level marked each advancement slot and lets you go back and change any past level up decision, remove the most recent level, or undo the last edit. If changing an early level makes a later one stop adding up, you're told before saving and the affected levels are flagged until you fix them — or keep them as they are, for houserules.
-- **Level up** (`level-up.html`) — levels 1–10 following the official advancement rules (tiers, level achievements at 2/5/8, the generic per-tier advancement options with their slot limits). Advancements are marked on a grid laid out like the one printed on the character sheet, so you can spend both of a level's picks on the same option when it still has free slots, and it's clear which tier's slot you're using — that matters for the extra domain card, whose level is capped both by your level and by the tier of the slot you mark. Hit Point and Stress slots stop at 12, and the optional card exchange allowed on every level up is available too. Multiclassing is intentionally not implemented — it's rare in play and would add a lot of complexity for little benefit in a tool this size.
+- **Character creator** (`create.html`) — a 9-step wizard following the Core Rulebook's character creation steps exactly (class → subclass, ancestry/community, traits, derived stats, equipment, background, experience, domain cards, connections), with the same validations the book describes (fixed trait array, mixed-ancestry rule, weapon burden, etc.).
+- **Character list & sheet** (`characters.html`) — save multiple characters locally, view a read-only sheet, export a CSV summary for your GM. The sheet shows every subclass card you've earned, since an upgrade adds a card rather than replacing the one below it. Every stat that a card can modify has a **?** next to it that shows the modifications that have been applied. The numbers include what your ancestry, subclass, equipment and domain card loadout do to them.
+- **Level up** (`level-up.html`) — levels 1–10 following the official advancement rules (tiers, level achievements at 2/5/8, the generic per-tier advancement options with their slot limits). Advancements are marked on a grid laid out like the one printed on the character sheet. A collapsible **Level history** on the character sheet shows which level marked each advancement slot and lets you go back and change any past level up decision. Multiclassing is intentionally not implemented — it's rare in play and would add a lot of complexity for little benefit in a tool this size.
 
 Everything is static HTML/CSS/vanilla JS (ES modules), no build step, no backend. All data lives in `localStorage` in your own browser — nothing is sent anywhere.
 
@@ -23,11 +23,7 @@ then open `http://localhost:8080`. Any static file server works.
 
 ## Tests
 
-Open `tests.html` in the browser — that's all. It checks the advancement rules, the level
-history replay and the derived stats in `shared/advancement.js`, `shared/history.js` and
-`shared/derived-stats.js` against hand-written fixtures, using the same ES modules the app loads. No dependencies, no build step, nothing to
-install, and nothing the app itself loads. Delete the three `tests.*` files and the app is
-completely unaffected.
+Open `tests/index.html` in the browser — that's all. It checks the advancement rules, the level history replay, the derived stats and the effects catalogue in `shared/advancement.js`, `shared/history.js`, `shared/derived-stats.js` and `shared/effects.js` against hand-written fixtures. No dependencies, no build step, nothing to install, and nothing the app itself loads. If you delete the `tests/` directory, the app is completely unaffected.
 
 ## Security notes
 
@@ -35,22 +31,6 @@ The app has no backend and no accounts: every character lives in the `localStora
 of the browser that created it. There is no server-side data to breach, and hosting
 it does **not** give the group a shared character store — each player sees only their
 own browser's characters.
-
-Free text the user types (character name, pronouns, Experience names, background and
-appearance notes, connections) is rendered through `innerHTML` templates in several
-places, so it is escaped with `shared/escape.js` before interpolation. If you add new
-markup built from template literals, run user text through `escapeHtml()` — or use
-`textContent`, as most of the rendering code already does.
-
-The CSV export is meant to be handed to the GM, i.e. it crosses to someone else's
-machine. Spreadsheet apps evaluate a cell whose text begins with `=`, `+`, `-` or `@`
-as a formula even when the field is quoted, so `csvField()` prefixes those with an
-apostrophe (plain numbers are exempt, to keep negative trait values numeric).
-
-Each page ships a restrictive `Content-Security-Policy` meta tag. Notably
-`script-src 'self'` means no inline script runs, which defuses injected event
-handlers like `<img onerror=...>` even if an escaping bug slips through. Keep it that
-way: avoid inline `<script>`, inline `on*` handlers, and `style="..."` attributes.
 
 ### If you expose it beyond localhost
 

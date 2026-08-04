@@ -9,6 +9,8 @@ import { blankSlotsUsed, ensureLevelFields } from "./shared/advancement.js";
 import { recomputeCharacter } from "./shared/history.js";
 import { derivedStats } from "./shared/derived-stats.js";
 import { statLine } from "./shared/stat-line.js";
+import { EFFECTS, blankAnswer, collectEffects } from "./shared/effects.js";
+import { renderEffectChoice } from "./shared/effect-choice.js";
 import { escapeHtml } from "./shared/escape.js";
 
 const CHAR_STORAGE_KEY = "dh-characters-v1";
@@ -177,7 +179,7 @@ function isStepValid(stepKey) {
       // finish for any character that had levelled up.
       return creationExperiences().every((exp) => exp.name.trim().length > 0);
     case "domainCards":
-      return character.creationDomainCardIds.length === 2;
+      return character.creationDomainCardIds.length === creationCardCount();
     case "connections":
       return true;
     default:
@@ -578,7 +580,7 @@ function renderEquipmentStep(panel) {
   for (const a of armors) {
     const row = document.createElement("label");
     row.className = "option-row";
-    row.innerHTML = `<input type="radio" name="armor" value="${escapeHtml(a.id)}" ${e.armorId === a.id ? "checked" : ""}/> <strong>${escapeHtml(a.name["en-US"])}</strong> — thresholds ${escapeHtml(a.baseMajorThreshold)}/${escapeHtml(a.baseSevereThreshold)}, score ${escapeHtml(a.baseScore)}`;
+    row.innerHTML = `<input type="radio" name="armor" value="${escapeHtml(a.id)}" ${e.armorId === a.id ? "checked" : ""}/> <strong>${escapeHtml(a.name["en-US"])}</strong> — thresholds ${escapeHtml(a.baseMajorThreshold)}/${escapeHtml(a.baseSevereThreshold)}, score ${escapeHtml(a.baseScore)}${featureLine(a)}`;
     row.querySelector("input").addEventListener("change", () => { e.armorId = a.id; onChange(); });
     armorList.appendChild(row);
   }
@@ -612,12 +614,25 @@ function weaponSelect(weapons, selectedId, onSelect, spellcastTrait) {
     const matchesSpellcast = !!spellcastTrait && w.trait === spellcastTrait;
     const row = document.createElement("label");
     row.className = "option-row" + (matchesSpellcast ? " trait-match" : "");
+    // The badge stays on the name line; featureLine() wraps to its own line below it.
     const badge = matchesSpellcast ? ` ${spellcastBadge()}` : "";
-    row.innerHTML = `<input type="radio" name="weapon-${escapeHtml(w.type)}-${escapeHtml(w.burden)}" value="${escapeHtml(w.id)}" ${selectedId === w.id ? "checked" : ""}/> <strong>${escapeHtml(w.name["en-US"])}</strong> — ${escapeHtml(w.trait)} · ${escapeHtml(w.range)} · ${escapeHtml(dmg)}${badge}`;
+    row.innerHTML = `<input type="radio" name="weapon-${escapeHtml(w.type)}-${escapeHtml(w.burden)}" value="${escapeHtml(w.id)}" ${selectedId === w.id ? "checked" : ""}/> <strong>${escapeHtml(w.name["en-US"])}</strong> — ${escapeHtml(w.trait)} · ${escapeHtml(w.range)} · ${escapeHtml(dmg)}${badge}${featureLine(w)}`;
     row.querySelector("input").addEventListener("change", () => onSelect(w.id));
     list.appendChild(row);
   }
   return list;
+}
+
+// Weapons and armor carry named features, several of which change a stat ("Flexible: +1 to
+// Evasion"). Without them the list reads as though the only difference between two pieces of
+// armor is its thresholds, which is how a player ends up surprised by their own Evasion.
+function featureLine(item) {
+  const features = (item.features || []).map((f) => {
+    const name = f.name?.["en-US"] || "";
+    const text = featureText(f);
+    return `<em>${escapeHtml(name)}</em>${text ? `: ${escapeHtml(text)}` : ""}`;
+  });
+  return features.length ? `<span class="option-feature">${features.join(" · ")}</span>` : "";
 }
 
 // --- Step 6: Background ---
@@ -669,6 +684,28 @@ function renderExperiencesStep(panel) {
     });
     panel.appendChild(row);
   });
+
+  renderExperienceChoices(panel);
+}
+
+// An ancestry feature that says "choose" gets asked here rather than on the heritage step:
+// Clank's Purposeful Design picks one of your Experiences, and those don't exist until now.
+//
+// Nothing here knows which feature that is. Anything in effects.js sourced from an ancestry
+// and carrying a `choice` lands on this step, in whatever shape it asks for. Answering is
+// optional — leaving it blank just means the bonus isn't counted.
+function renderExperienceChoices(panel) {
+  for (const entry of collectEffects(character, db)) {
+    if (entry.source !== "ancestry" || !entry.effect.choice) continue;
+    const answer = (character.effectChoices[entry.key] ||= blankAnswer());
+    renderEffectChoice(panel, {
+      key: entry.key,
+      choice: entry.effect.choice,
+      answer,
+      experiences: character.experiences,
+      onChange,
+    });
+  }
 }
 
 // --- Step 8: Domain Cards ---
@@ -678,9 +715,11 @@ function renderDomainCardsStep(panel) {
     panel.innerHTML = `<p class="hint">Go back to Step 1 to pick a class: the available domain cards depend on it.</p>`;
     return;
   }
+  const count = creationCardCount();
   const info = document.createElement("p");
   info.className = "hint";
-  info.textContent = `Pick exactly 2 level 1 cards from ${titleCase(cls.name)}'s domains (${cls.domains.map(titleCase).join(" / ")}), in any combination.`;
+  info.textContent = `Pick exactly ${count} level 1 cards from ${titleCase(cls.name)}'s domains (${cls.domains.map(titleCase).join(" / ")}), in any combination.` +
+    (count > 2 ? " Your subclass grants one more than the usual 2." : "");
   panel.appendChild(info);
 
   const available = db.domainCards.filter((c) => c.level === 1 && cls.domains.includes(c.domain));
@@ -692,15 +731,23 @@ function renderDomainCardsStep(panel) {
     const tile = cardTile(card, selected, () => {
       if (selected) {
         setCreationCards(character.creationDomainCardIds.filter((id) => id !== c.id));
-      } else if (character.creationDomainCardIds.length < 2) {
+      } else if (character.creationDomainCardIds.length < count) {
         setCreationCards([...character.creationDomainCardIds, c.id]);
       }
       onChange();
     });
-    if (!selected && character.creationDomainCardIds.length >= 2) tile.classList.add("disabled");
+    if (!selected && character.creationDomainCardIds.length >= count) tile.classList.add("disabled");
     grid.appendChild(tile);
   }
   panel.appendChild(grid);
+}
+
+// Usually 2. The School of Knowledge's Foundation card — "Take an additional domain card of
+// your level or lower" — makes it 3. Only the Foundation tier counts here: that's the card the
+// character holds at creation, and the Specialization and Mastery ones arrive with the subclass
+// upgrades at level up.
+function creationCardCount() {
+  return 2 + (EFFECTS[`${character.subclassId}:foundation`]?.extraDomainCards || 0);
 }
 
 // The 2 starting cards are only part of the collection once a character has levelled up,
@@ -711,7 +758,7 @@ function setCreationCards(ids) {
   // Above level 1 the baseline holds the whole collection as it stood then, and the first
   // two entries are the starting cards; the replay rebuilds everything from there.
   if (character.baselineLevel > 1) {
-    character.baseline.domainCardIds = [...ids, ...character.baseline.domainCardIds.slice(2)];
+    character.baseline.domainCardIds = [...ids, ...character.baseline.domainCardIds.slice(creationCardCount())];
   }
   recomputeCharacter(character);
 }

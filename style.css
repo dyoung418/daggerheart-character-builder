@@ -488,9 +488,13 @@ h1, h2, h3, .btn-primary, .btn-ghost, .btn-small, .top-nav a {
 .derived-box strong, .stat-line strong { font-size: 1.2rem; font-family: var(--font-display); color: var(--accent-bright); }
 
 .option-list { display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 0.75rem; }
-.option-row { display: flex; align-items: center; gap: 0.5rem; background: var(--panel-alt); border: 1px solid var(--border); border-radius: 6px; padding: 0.5rem 0.7rem; font-size: 0.82rem; cursor: pointer; transition: border-color 0.12s ease; }
+.option-row { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem; background: var(--panel-alt); border: 1px solid var(--border); border-radius: 6px; padding: 0.5rem 0.7rem; font-size: 0.82rem; cursor: pointer; transition: border-color 0.12s ease; }
 .option-row:hover { border-color: var(--border-warm); }
 .option-row input { margin: 0; }
+/* Weapon and armor features, on their own line under the name: several of them change a stat,
+   so hiding them makes the resulting Evasion look like a bug. */
+.option-feature { flex-basis: 100%; color: var(--text-dim); font-size: 0.76rem; line-height: 1.4; }
+.option-feature em { color: var(--accent); font-style: normal; font-weight: 700; }
 
 .exp-mod { color: var(--accent); font-weight: 700; }
 

@@ -17,13 +17,16 @@ import {
   tierForLevel,
 } from "./shared/advancement.js";
 import {
+  characterAtLevel,
   contextForLevel,
   experiencesAtLevel,
   recomputeCharacter,
   unresolvedProblems,
   validateEntry,
 } from "./shared/history.js";
-import { hitPointTotal, stressTotal } from "./shared/derived-stats.js";
+import { effectBonuses, hitPointTotal, stressTotal } from "./shared/derived-stats.js";
+import { blankAnswer, choiceFor } from "./shared/effects.js";
+import { renderEffectChoice } from "./shared/effect-choice.js";
 import { escapeHtml } from "./shared/escape.js";
 
 const CHAR_STORAGE_KEY = "dh-characters-v1";
@@ -39,6 +42,10 @@ let character = null;
 // WHICH tier's slot it marks, because that caps the extra domain card's level.
 let picks = []; // { key, slotTier, traits: [], experienceIds: [], cardId: null }
 let mandatoryCardId = null;
+// Cards handed over by a feature gained at this level, one slot per card granted.
+let grantedCardIds = [];
+// Answers to the "choose two of the following" cards taken on this screen, keyed by card id.
+let pendingChoices = {};
 let exchange = null; // optional { outCardId, inCardId }: the swap allowed on every level up
 
 // With ?level=N the screen edits a level already taken instead of gaining a new one: same
@@ -56,12 +63,15 @@ async function loadJson(name) {
 }
 
 async function loadAllData() {
-  const [classes, subclasses, domainCards] = await Promise.all([
-    loadJson("classes"), loadJson("subclasses"), loadJson("domain-cards"),
+  // Ancestries are here for the Hit Point and Stress slots a Giant or a Human is born with:
+  // those count towards the cap of 12, so the slot gating can't be right without them.
+  const [classes, subclasses, domainCards, ancestries] = await Promise.all([
+    loadJson("classes"), loadJson("subclasses"), loadJson("domain-cards"), loadJson("ancestries"),
   ]);
   db.classes = classes;
   db.subclasses = subclasses;
   db.domainCards = domainCards;
+  db.ancestries = ancestries;
 }
 
 function loadAllCharacters() {
@@ -123,12 +133,19 @@ function subclassTierAfterPicks() {
   return tier;
 }
 
+// Slots an ancestry, subclass or card grants count towards the maximum of 12, so a Giant runs
+// out of Hit Point advancements one sooner. Asked of the character as it stood at this level,
+// not as it stands now, so editing an old level doesn't count a card taken later.
+function grantedSlots() {
+  return effectBonuses(characterAtLevel(character, context), db);
+}
+
 function hitPointsAfterPicks() {
-  return hitPointTotal(selectedClass(), context.hitPointSlotsBonus + picksFor("hitPoint").length);
+  return hitPointTotal(selectedClass(), context.hitPointSlotsBonus + picksFor("hitPoint").length, grantedSlots().hitPointSlots);
 }
 
 function stressAfterPicks() {
-  return stressTotal(context.stressSlotsBonus + picksFor("stress").length);
+  return stressTotal(context.stressSlotsBonus + picksFor("stress").length, grantedSlots().stressSlots);
 }
 
 // Why a given slot can't be marked right now (null when it can).
@@ -219,7 +236,9 @@ function render() {
   renderAdvancementGrid(main, newLevel);
   renderSubPickers(main, cls, newLevel);
   renderMandatoryCardStep(main, cls, newLevel);
+  renderGrantedCardStep(main, cls, newLevel);
   renderExchangeSection(main, cls);
+  renderCardChoices(main, newLevel);
 
   renderConfirmBar(main, newLevel);
 }
@@ -430,6 +449,9 @@ function claimedCardIds(except) {
   for (const p of picksFor("domainCard")) {
     if (p.cardId && p !== except) claimed.push(p.cardId);
   }
+  grantedCardIds.forEach((id, i) => {
+    if (id && except !== `granted${i}`) claimed.push(id);
+  });
   if (exchange?.inCardId && except !== "exchange") claimed.push(exchange.inCardId);
   return claimed;
 }
@@ -465,6 +487,41 @@ function renderMandatoryCardStep(main, cls, newLevel) {
   main.appendChild(h);
   const cards = eligibleDomainCards(cls, newLevel, claimedCardIds("mandatory"));
   renderCardGrid(main, cards, mandatoryCardId, (id) => { mandatoryCardId = id; });
+}
+
+// Some features hand you a domain card outright, on top of the guaranteed one and any you buy
+// with an advancement slot — the School of Knowledge's cards say "Take an additional domain
+// card of your level or lower" at every tier.
+//
+// How many is worked out by asking effects.js what the character grants before this level's
+// picks and what they'd grant after, and taking the difference. So a feature that starts
+// granting cards partway through a career is picked up by being catalogued, with no code here
+// naming it. Unlike the advancement option, this isn't a slot, so only your level caps it.
+function grantedCardCount() {
+  const at = characterAtLevel(character, context);
+  const before = effectBonuses(at, db).extraDomainCards;
+  const after = effectBonuses({ ...at, subclassTier: subclassTierAfterPicks() }, db).extraDomainCards;
+  return Math.max(0, after - before);
+}
+
+function renderGrantedCardStep(main, cls, newLevel) {
+  const count = grantedCardCount();
+  // Resized with explicit nulls rather than by setting .length: a hole left by the latter is
+  // skipped by .some(), which would let the confirm button light up with the card unchosen.
+  while (grantedCardIds.length < count) grantedCardIds.push(null);
+  grantedCardIds.length = count;
+  if (count === 0) return;
+
+  const h = document.createElement("h3");
+  h.textContent = count === 1 ? "Extra domain card from your subclass" : "Extra domain cards from your subclass";
+  main.appendChild(h);
+
+  for (let i = 0; i < count; i++) {
+    const ordinal = count > 1 ? ` (${ORDINALS[i]})` : "";
+    subHeading(main, `Granted card${ordinal}: any card of level ${newLevel} or lower from your domains.`);
+    const cards = eligibleDomainCards(cls, newLevel, claimedCardIds(`granted${i}`));
+    renderCardGrid(main, cards, grantedCardIds[i] || null, (id) => { grantedCardIds[i] = id; });
+  }
 }
 
 // Optional swap allowed on every level up: "you can also exchange one domain card you've
@@ -513,6 +570,51 @@ function renderExchangeSection(main, cls) {
   main.appendChild(details);
 }
 
+// ---------- choices a card asks you to make ----------
+//
+// A couple of cards say "permanently gain two of the following" rather than granting something
+// outright. The answer belongs to the character, not to the level up, so it's written straight
+// to character.effectChoices on confirm — but it's asked here, where the card is taken, which
+// is the only moment the player is thinking about it.
+
+function cardsBeingTaken() {
+  const ids = [mandatoryCardId, ...picksFor("domainCard").map((p) => p.cardId), ...grantedCardIds, exchange?.inCardId];
+  return ids.filter(Boolean);
+}
+
+function renderCardChoices(main, newLevel) {
+  const pending = cardsBeingTaken()
+    .map((id) => ({ id, choice: choiceFor(id) }))
+    .filter((x) => x.choice);
+  if (pending.length === 0) return;
+
+  const h = document.createElement("h3");
+  h.textContent = "Choices from the cards you're taking";
+  main.appendChild(h);
+
+  for (const { id, choice } of pending) {
+    // Re-opening a level that already took the card shows the answer that was given.
+    pendingChoices[id] ||= blankAnswer(character.effectChoices?.[id]);
+    renderEffectChoice(main, {
+      key: id,
+      choice,
+      answer: pendingChoices[id],
+      experiences: experiencesForPicking(newLevel),
+      onChange: render,
+    });
+  }
+}
+
+// Answers collected on this screen, written to the character on confirm. Left unanswered they
+// simply grant nothing and the sheet nudges about it — an unanswered choice never blocks a
+// level up, the same way it never blocks saving a character. The Experience this level grants
+// keeps the id the picker used (pendingExperienceId), so nothing needs remapping here.
+function commitCardChoices() {
+  for (const id of cardsBeingTaken()) {
+    if (pendingChoices[id]) character.effectChoices[id] = pendingChoices[id];
+  }
+}
+
 // ---------- confirm ----------
 
 function stepValidation(newLevel) {
@@ -531,6 +633,8 @@ function stepValidation(newLevel) {
   if (new Set(allTraits).size !== allTraits.length) return false;
 
   if (!mandatoryCardId) return false;
+  if (grantedCardIds.length !== grantedCardCount()) return false;
+  if (grantedCardIds.some((id) => !id)) return false;
   if (exchange && !exchange.inCardId) return false;
   return true;
 }
@@ -555,6 +659,7 @@ function currentEntry(level) {
       return entry;
     }),
     mandatoryCardId,
+    grantedCardIds: grantedCardIds.filter(Boolean),
     exchange: exchange?.outCardId && exchange.inCardId ? { ...exchange } : null,
   };
 }
@@ -648,6 +753,7 @@ function writeEntry(target, newLevel) {
 function commitLevelEdit(newLevel) {
   saveUndoSnapshot();
   writeEntry(character, newLevel);
+  commitCardChoices();
   character.updatedAt = new Date().toISOString();
   persistCharacter();
   location.href = `characters.html?open=${character.id}&history=1`;
@@ -698,6 +804,7 @@ function applyLevelUp(newLevel) {
       return entry;
     }),
     mandatoryCardId,
+    grantedCardIds: grantedCardIds.filter(Boolean),
     exchange: exchange?.outCardId && exchange.inCardId ? { ...exchange } : null,
   });
 
@@ -707,6 +814,8 @@ function applyLevelUp(newLevel) {
     character.creationDomainCardIds = character.creationDomainCardIds.map((id) => (id === exchange.outCardId ? exchange.inCardId : id));
   }
 
+  commitCardChoices();
+
   character.level = newLevel;
   recomputeCharacter(character);
   character.updatedAt = new Date().toISOString();
@@ -714,7 +823,9 @@ function applyLevelUp(newLevel) {
 
   picks = [];
   mandatoryCardId = null;
+  grantedCardIds = [];
   exchange = null;
+  pendingChoices = {};
 
   render();
 }
@@ -729,7 +840,9 @@ function loadPicksFrom(entry) {
     cardId: p.cardId || null,
   }));
   mandatoryCardId = entry.mandatoryCardId || null;
+  grantedCardIds = [...(entry.grantedCardIds || [])];
   exchange = entry.exchange ? { ...entry.exchange } : null;
+  pendingChoices = {};
 }
 
 async function init() {

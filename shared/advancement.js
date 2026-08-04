@@ -189,8 +189,17 @@ export function ensureLevelFields(ch) {
   if (!ch.subclassTier) ch.subclassTier = "foundation";
   if (!hasPerTierSlots(ch.advancementSlotsUsed)) ch.advancementSlotsUsed = splitFlatSlotTotals(ch.advancementSlotsUsed);
   if (!ch.domainVaultIds) ch.domainVaultIds = [];
-  // The 2 cards picked during character creation, kept apart from the ones gained on level
-  // up so the creation wizard can edit them without touching the rest of the collection.
+  // Answers to the few features that say "choose": Clank's Purposeful Design, Vitality, Master
+  // of the Craft. Keyed by the shared/effects.js key that asked. Missing answers are shown as a
+  // nudge on the sheet, never enforced — characters saved before this existed must stay editable.
+  if (!ch.effectChoices) ch.effectChoices = {};
+  // The cards picked during character creation, kept apart from the ones gained on level up so
+  // the creation wizard can edit them without touching the rest of the collection.
+  //
+  // The 2 is a guess, made once, for characters saved before this field existed: it's the usual
+  // number, but a School of Knowledge wizard starts with 3. This function has no data files to
+  // consult, so it can't do better — re-picking the starting cards in the wizard corrects it,
+  // and everything written since records the real list.
   if (!ch.creationDomainCardIds) ch.creationDomainCardIds = (ch.domainCardIds || []).slice(0, 2);
 
   if (!Array.isArray(ch.levelUps)) ch.levelUps = [];
