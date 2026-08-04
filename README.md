@@ -20,8 +20,8 @@ Stalwart raises your damage thresholds at every tier, Gambeson Armor gives +1 Ev
 Halberd costs you a point of Finesse. The SRD states all of this as prose, and `data/` is a
 straight re-export of it (see [Data source](#data-source)), so the prose→numbers mapping lives
 in `shared/effects.js` instead — one hand-maintained file, each entry commented with the
-sentence it encodes. A data refresh can't overwrite it, and `tests.html` checks that every id it
-names still exists upstream.
+sentence it encodes. A data refresh can't overwrite it, and the test suite checks that every id
+it names still exists upstream.
 
 A bonus is counted when it's true **right now** given only what the app stores — your permanent
 choices, what's in your loadout, how you're equipped — and needs no action during play:
@@ -88,13 +88,14 @@ then open `http://localhost:8080`. Any static file server works.
 
 ## Tests
 
-Open `tests.html` in the browser — that's all. It checks the advancement rules, the level
+Open `tests/index.html` in the browser — that's all. It checks the advancement rules, the level
 history replay, the derived stats and the effects catalogue in `shared/advancement.js`,
 `shared/history.js`, `shared/derived-stats.js` and `shared/effects.js` against hand-written
 fixtures, using the same ES modules the app loads. One group is the exception and reads `data/`
 for real: it asserts that every id `effects.js` names still exists, since an upstream rename
 would otherwise drop a bonus silently. No dependencies, no build step, nothing to install, and
-nothing the app itself loads. Delete the `tests.*` files and the app is completely unaffected.
+nothing the app itself loads. Delete the `tests/` directory and the app is completely
+unaffected.
 
 Every file the suite touches — including the suite itself — is fetched with a per-run token, so
 after an edit a plain reload is enough. That matters more than it sounds: a cached copy doesn't

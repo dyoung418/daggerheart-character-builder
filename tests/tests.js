@@ -10,7 +10,7 @@
 // disk. Without it the browser will happily re-run the whole suite against a cached copy of a
 // module you just edited and report green, which is worse than not running it at all.
 //
-// The token is the one tests-boot.js put on this file's own URL, so the whole run — this file
+// The token is the one boot.js put on this file's own URL, so the whole run — this file
 // included — is busted by a single value. Opened without one (importing tests.js directly),
 // it falls back to a fresh token so the modules under test are still read from disk.
 const RUN = new URL(import.meta.url).search || `?run=${Date.now()}`;
@@ -37,7 +37,7 @@ const {
   tierForLevel,
   totalSlotsForOption,
   usedSlotsForOption,
-} = await import(`./shared/advancement.js${RUN}`);
+} = await import(`../shared/advancement.js${RUN}`);
 const {
   experiencesAtLevel,
   recomputeCharacter,
@@ -45,20 +45,20 @@ const {
   unresolvedProblems,
   validateEntry,
   validateLevelUps,
-} = await import(`./shared/history.js${RUN}`);
+} = await import(`../shared/history.js${RUN}`);
 const {
   derivedStats,
   effectBonuses,
   evasionTotal,
   hitPointTotal,
   stressTotal,
-} = await import(`./shared/derived-stats.js${RUN}`);
+} = await import(`../shared/derived-stats.js${RUN}`);
 const {
   EFFECTS,
   blankAnswer,
   isAnswered,
   unresolvedChoices,
-} = await import(`./shared/effects.js${RUN}`);
+} = await import(`../shared/effects.js${RUN}`);
 
 // ---------- tiny runner ----------
 
@@ -139,13 +139,13 @@ function buildTo(levelUps, level) {
 // every result below is untrustworthy — so say so rather than report a confident green.
 group("The modules under test are the ones on disk");
 {
-  // tests-boot.js is what puts the token on this file's URL. Without it the browser can serve
-  // a cached tests.js, and the suite reports green against a file you've already changed.
+  // boot.js is what puts the token on this file's URL. Without it the browser can serve a
+  // cached tests.js, and the suite reports green against a file you've already changed.
   check(
-    "this file was loaded through tests-boot.js, so it isn't a cached copy either",
+    "this file was loaded through boot.js, so it isn't a cached copy either",
     new URL(import.meta.url).searchParams.has("run"),
-    "tests.js was loaded directly, without a cache-busting token. tests.html should point at\n" +
-    "tests-boot.js. Hard-reload (Ctrl+Shift+R) before trusting anything below.",
+    "tests.js was loaded directly, without a cache-busting token. tests/index.html should\n" +
+    "point at boot.js. Hard-reload (Ctrl+Shift+R) before trusting anything below.",
   );
 }
 {
@@ -839,7 +839,7 @@ group("Every id in effects.js still exists in data/");
 {
   // The one group that reads data/ for real. An upstream refresh that renames an id would
   // otherwise drop an effect silently: no error, just a number that quietly stops being right.
-  const load = async (name) => (await fetch(`data/${name}.json${RUN}`)).json();
+  const load = async (name) => (await fetch(`../data/${name}.json${RUN}`)).json();
   const [ancestries, subclasses, armors, weapons, cards] = await Promise.all(
     ["ancestries", "subclasses", "armors", "weapons", "domain-cards"].map(load));
 
