@@ -589,6 +589,10 @@ function renderDetail() {
       toggleBtn.className = "btn-small";
       toggleBtn.textContent = inVault ? "→ Loadout" : "→ Vault";
       toggleBtn.disabled = inVault && activeIds.length >= 5;
+      // renderAll() rather than swapping this one tile: what's in the loadout is an input to
+      // the stats above (a *-Touched card's bonus switches on at four cards from its domain,
+      // Untouchable's Evasion goes away the moment it's vaulted), so the whole sheet has to
+      // be re-derived, not just this button's label.
       toggleBtn.addEventListener("click", () => {
         if (inVault) ch.domainVaultIds = ch.domainVaultIds.filter((id) => id !== cardId);
         else ch.domainVaultIds.push(cardId);

@@ -39,6 +39,37 @@
 // Values are numbers, or functions of a context object:
 //   { level, proficiency, traits, armor, domainCounts, character }
 // `traits` holds effective trait totals. `when` is an optional predicate on the same context.
+//
+// ADDING A CARD
+// -------------
+// When new cards come out, a stat change should be one entry here and nothing else. A new
+// shield with the existing `Protective` wording needs not even that — it's already covered by
+// the feature-name key.
+//
+// Nothing outside this file names a card, a subclass or an ancestry. The pages work entirely
+// from what an entry declares:
+//
+//   - WHICH STAT IT MOVES     any key in EFFECT_STAT_KEYS below.
+//   - WHERE IT COMES FROM     collectEffects() tags every effect ancestry / subclass / armor /
+//                             weapon / domainCard, and that tag is what decides where a
+//                             `choice` gets asked: ancestry choices in the creation wizard,
+//                             card choices on the level up screen.
+//   - WHAT SHAPE OF CHOICE    shared/effect-choice.js renders "pick N of these benefits" and
+//                             "pick N of your Experiences" for both screens.
+//   - HOW MANY CARDS IT       the level up screen diffs extraDomainCards before this level's
+//     GRANTS                  picks against after, so anything that starts granting cards
+//                             partway through a career is picked up by being catalogued.
+//
+// New code is needed only for a genuinely new KIND of thing: a stat the app doesn't compute
+// yet, or a choice that isn't one of the two shapes above.
+//
+// One card is deliberately absent. Bare Bones replaces your base Armor Score and damage
+// thresholds when you choose NOT to equip armor, and the wizard requires armor, so it would be
+// the only user of an effect kind that overrides a base rather than adding to it. When
+// equipping and unequipping lands, it unlocks three things at once: Bare Bones, the
+// base-override kind it needs, and the plain unarmored rule (Armor Score 0, Major threshold =
+// your level, Severe = twice your level) for characters who don't have it. That last one is
+// already implemented in derived-stats.js, waiting for something to reach it.
 
 import { SUBCLASS_TIER_ORDER } from "./advancement.js";
 
