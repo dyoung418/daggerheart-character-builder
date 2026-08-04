@@ -53,13 +53,27 @@ function featuresHtml(features) {
   return (features || [])
     .map((f) => {
       const name = f.name?.["en-US"] || "";
-      const desc = (f.description || []).map((d) => d.paragraph?.["en-US"] || "").join(" ");
       return `
         <div class="fallback-feature">
           ${name ? `<span class="fallback-feature-name">${escapeHtml(name)}</span>` : ""}
-          <p class="fallback-feature-desc">${escapeHtml(desc)}</p>
+          ${descriptionHtml(f.description)}
         </div>
       `;
+    })
+    .join("");
+}
+
+// A description is a sequence of items, most of them paragraphs but some of them bulleted
+// lists (e.g. the elements a Warden of the Elements can Channel). Each item keeps its own
+// element, so paragraphs don't run together and list items don't vanish.
+function descriptionHtml(description) {
+  return (description || [])
+    .map((d) => {
+      if (d.paragraph) return `<p class="fallback-feature-desc">${escapeHtml(d.paragraph["en-US"] || "")}</p>`;
+      if (Array.isArray(d.list)) {
+        return `<ul class="fallback-feature-list">${d.list.map((item) => `<li>${escapeHtml(item?.["en-US"] || "")}</li>`).join("")}</ul>`;
+      }
+      return "";
     })
     .join("");
 }

@@ -14,6 +14,8 @@ const RUN = `?run=${Date.now()}`;
 const {
   MAX_HIT_POINT_SLOTS,
   MAX_STRESS_SLOTS,
+  SUBCLASS_TIER_LABELS,
+  SUBCLASS_TIER_ORDER,
   TIER_CARD_CAP,
   availableOptionKeys,
   blankSlotsUsed,
@@ -25,6 +27,7 @@ const {
   remainingSlots,
   slotsInTier,
   slotsPerPick,
+  subclassTiersUpTo,
   tierForLevel,
   totalSlotsForOption,
   usedSlotsForOption,
@@ -158,6 +161,20 @@ eq("achievements at 2, 5 and 8 only", [2, 3, 4, 5, 6, 7, 8, 9].map(isLevelAchiev
   [true, false, false, true, false, false, true, false]);
 eq("subclass ladder stops at mastery", ["foundation", "specialization", "mastery"].map(nextSubclassTier),
   ["specialization", "mastery", "mastery"]);
+
+group("A subclass upgrade adds a card, it doesn't replace the one below");
+eq("foundation only, at the start", subclassTiersUpTo("foundation"), ["foundation"]);
+eq("specialization keeps the foundation card", subclassTiersUpTo("specialization"), ["foundation", "specialization"]);
+eq("mastery keeps both of the earlier cards", subclassTiersUpTo("mastery"), ["foundation", "specialization", "mastery"]);
+eq("an unset tier falls back to foundation, like ensureLevelFields", subclassTiersUpTo(undefined), ["foundation"]);
+eq("so does a tier name we don't recognise", subclassTiersUpTo("legendary"), ["foundation"]);
+eq("the ladder and the labels agree on which tiers exist",
+  SUBCLASS_TIER_ORDER.map((t) => SUBCLASS_TIER_LABELS[t]), ["Foundation", "Specialization", "Mastery"]);
+// The sheet renders these in array order, so the order here is the left-to-right order of the
+// cards. It comes from the constant ladder, never from the character, so it can't drift.
+eq("always foundation → specialization → mastery, whatever tier you're at",
+  ["mastery", "foundation", "specialization"].map((t) => subclassTiersUpTo(t).join(" → ")),
+  ["foundation → specialization → mastery", "foundation", "foundation → specialization"]);
 
 group("Extra domain card: capped by your level AND by the slot's tier");
 eq("tier caps as printed on the sheet", TIER_CARD_CAP, { 2: 4, 3: 7, 4: 10 });
