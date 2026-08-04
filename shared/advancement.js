@@ -220,3 +220,17 @@ export function nextSubclassTier(current) {
   const idx = SUBCLASS_TIER_ORDER.indexOf(current);
   return SUBCLASS_TIER_ORDER[Math.min(idx + 1, SUBCLASS_TIER_ORDER.length - 1)];
 }
+
+export const SUBCLASS_TIER_LABELS = {
+  foundation: "Foundation",
+  specialization: "Specialization",
+  mastery: "Mastery",
+};
+
+// A subclass tier implies every tier below it: upgrading *adds* a card rather than replacing
+// the previous one, so a character at Specialization still has their Foundation features.
+// An unrecognised tier falls back to foundation, like ensureLevelFields does.
+export function subclassTiersUpTo(tier) {
+  const idx = SUBCLASS_TIER_ORDER.indexOf(tier);
+  return SUBCLASS_TIER_ORDER.slice(0, idx < 0 ? 1 : idx + 1);
+}

@@ -246,6 +246,17 @@ h1, h2, h3, .btn-primary, .btn-ghost, .btn-small, .top-nav a {
   margin-bottom: 0.2rem;
 }
 .fallback-feature-desc { margin: 0; font-size: 0.82rem; line-height: 1.55; color: var(--text-dim); }
+/* Una descrizione può avere più paragrafi e liste puntate (es. gli elementi del Warden of
+   the Elements): ogni voce ha il suo elemento, quindi serve lo stacco fra l'una e l'altra. */
+.fallback-feature-desc + .fallback-feature-desc { margin-top: 0.4rem; }
+.fallback-feature-list {
+  margin: 0.3rem 0 0;
+  padding-left: 1.1rem;
+  font-size: 0.82rem;
+  line-height: 1.55;
+  color: var(--text-dim);
+}
+.fallback-feature-list li { margin-bottom: 0.15rem; }
 
 .card-meta {
   padding: 0.5rem 0.75rem;
@@ -415,6 +426,13 @@ h1, h2, h3, .btn-primary, .btn-ghost, .btn-small, .top-nav a {
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   gap: 0.75rem;
   margin: 0.5rem 0 1rem;
+}
+/* Senza arte le tessere non mostrano un'immagine ma un blocco di testo, e 140px sono troppo
+   pochi per leggerlo: una colonna più larga (come quella del browser delle carte) evita le
+   righe di due o tre parole. Vale per tutta la griglia appena una tessera perde l'arte, così
+   le colonne restano allineate. */
+.tile-grid:has(.art-missing) {
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
 }
 
 .card-tile { cursor: pointer; border: 2px solid transparent; border-radius: 8px; overflow: hidden; background: var(--panel-alt); transition: border-color 0.12s ease, transform 0.12s ease; }
