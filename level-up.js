@@ -23,11 +23,11 @@ import {
   unresolvedProblems,
   validateEntry,
 } from "./shared/history.js";
+import { hitPointTotal, stressTotal } from "./shared/derived-stats.js";
 import { escapeHtml } from "./shared/escape.js";
 
 const CHAR_STORAGE_KEY = "dh-characters-v1";
 const TRAIT_LABELS = { agility: "Agility", strength: "Strength", finesse: "Finesse", instinct: "Instinct", presence: "Presence", knowledge: "Knowledge" };
-const BASE_STRESS_SLOTS = 6;
 const ORDINALS = ["first", "second", "third"];
 
 const db = {};
@@ -124,12 +124,11 @@ function subclassTierAfterPicks() {
 }
 
 function hitPointsAfterPicks() {
-  const cls = selectedClass();
-  return (cls ? cls.startingHitPoints : 0) + context.hitPointSlotsBonus + picksFor("hitPoint").length;
+  return hitPointTotal(selectedClass(), context.hitPointSlotsBonus + picksFor("hitPoint").length);
 }
 
 function stressAfterPicks() {
-  return BASE_STRESS_SLOTS + context.stressSlotsBonus + picksFor("stress").length;
+  return stressTotal(context.stressSlotsBonus + picksFor("stress").length);
 }
 
 // Why a given slot can't be marked right now (null when it can).

@@ -8,7 +8,7 @@ Built out of a personal need: converting a tabletop party from D&D 5e to Daggerh
 
 - **Card browser** (`index.html`) — filter the 189 domain cards by domain, type, and level; build a 5-card loadout plus a vault, saved locally.
 - **Character creator** (`create.html`) — a 9-step wizard following the Core Rulebook's character creation steps exactly (class → subclass, ancestry/community, traits, derived stats, equipment, background, experience, domain cards, connections), with the same hard validation the book describes (fixed trait array, mixed-ancestry rule, weapon burden, etc.).
-- **Character list & sheet** (`characters.html`) — save multiple characters locally, view a read-only sheet, export a CSV summary for your GM. The sheet shows every subclass card the character has earned (Foundation, then Specialization and Mastery as they're taken), because an upgrade *adds* a card rather than replacing the one below it — the earlier cards' features are still in play. A collapsible **Level history** shows which level marked each advancement slot and lets you go back and change any past level up decision, remove the most recent level, or undo the last edit. If changing an early level makes a later one stop adding up, you're told before saving and the affected levels are flagged until you fix them — or keep them as they are, for houserules.
+- **Character list & sheet** (`characters.html`) — save multiple characters locally, view a read-only sheet, export a CSV summary for your GM. The sheet shows every subclass card the character has earned (Foundation, then Specialization and Mastery as they're taken), because an upgrade *adds* a card rather than replacing the one below it — the earlier cards' features are still in play. Every derived stat — Evasion, Hit Points, Stress, damage thresholds, Armor Score, your attack modifier per equipped weapon, and which trait your Spellcast Rolls use — has a **?** next to it that shows exactly what the number is built from, so a total you didn't expect can be checked rather than guessed at. A collapsible **Level history** shows which level marked each advancement slot and lets you go back and change any past level up decision, remove the most recent level, or undo the last edit. If changing an early level makes a later one stop adding up, you're told before saving and the affected levels are flagged until you fix them — or keep them as they are, for houserules.
 - **Level up** (`level-up.html`) — levels 1–10 following the official advancement rules (tiers, level achievements at 2/5/8, the generic per-tier advancement options with their slot limits). Advancements are marked on a grid laid out like the one printed on the character sheet, so you can spend both of a level's picks on the same option when it still has free slots, and it's clear which tier's slot you're using — that matters for the extra domain card, whose level is capped both by your level and by the tier of the slot you mark. Hit Point and Stress slots stop at 12, and the optional card exchange allowed on every level up is available too. Multiclassing is intentionally not implemented — it's rare in play and would add a lot of complexity for little benefit in a tool this size.
 
 Everything is static HTML/CSS/vanilla JS (ES modules), no build step, no backend. All data lives in `localStorage` in your own browser — nothing is sent anywhere.
@@ -23,9 +23,9 @@ then open `http://localhost:8080`. Any static file server works.
 
 ## Tests
 
-Open `tests.html` in the browser — that's all. It checks the advancement rules and the level
-history replay in `shared/advancement.js` and `shared/history.js` against hand-written
-fixtures, using the same ES modules the app loads. No dependencies, no build step, nothing to
+Open `tests.html` in the browser — that's all. It checks the advancement rules, the level
+history replay and the derived stats in `shared/advancement.js`, `shared/history.js` and
+`shared/derived-stats.js` against hand-written fixtures, using the same ES modules the app loads. No dependencies, no build step, nothing to
 install, and nothing the app itself loads. Delete the three `tests.*` files and the app is
 completely unaffected.
 

@@ -7,6 +7,8 @@ import {
 } from "./shared/card-render.js";
 import { blankSlotsUsed, ensureLevelFields } from "./shared/advancement.js";
 import { recomputeCharacter } from "./shared/history.js";
+import { derivedStats } from "./shared/derived-stats.js";
+import { statLine } from "./shared/stat-line.js";
 import { escapeHtml } from "./shared/escape.js";
 
 const CHAR_STORAGE_KEY = "dh-characters-v1";
@@ -502,20 +504,31 @@ function renderTraitsStep(panel) {
 // --- Step 4: Derived info ---
 function renderDerivedStep(panel) {
   const cls = selectedClass();
+  const stats = derivedStats(character, db);
   const box = document.createElement("div");
   box.className = "derived-box";
-  box.innerHTML = `
-    <div><span>Evasion</span><strong>${cls ? cls.startingEvasion : "—"}</strong></div>
-    <div><span>Hit Points</span><strong>${cls ? cls.startingHitPoints : "—"}</strong></div>
-    <div><span>Stress</span><strong>6</strong></div>
-    <div><span>Hope</span><strong>2 / 6</strong></div>
-  `;
+  box.appendChild(statLine("Evasion", stats.evasion ? stats.evasion.total : "—", stats.evasion));
+  box.appendChild(statLine("Hit Points", stats.hitPoints ? stats.hitPoints.total : "—", stats.hitPoints));
+  box.appendChild(statLine("Stress", stats.stress.total, stats.stress));
+  box.appendChild(statLine("Hope", "2 / 6"));
+  if (stats.spellcast) box.appendChild(statLine("Spellcast", stats.spellcast.display, stats.spellcast));
+  // Armor Score and damage thresholds come from equipment, which is the next step. Showing
+  // them here as "—" is more honest than omitting them: they belong to this list, they just
+  // aren't known yet.
+  box.appendChild(statLine("Armor Score", character.equipment.armorId ? stats.armorScore.total : "—", character.equipment.armorId ? stats.armorScore : null));
   panel.appendChild(box);
+
   if (!cls) {
     const warn = document.createElement("p");
     warn.className = "hint";
     warn.textContent = "Go back to Step 1 to pick a class: Evasion and Hit Points come from there.";
     panel.appendChild(warn);
+  }
+  if (!character.equipment.armorId) {
+    const note = document.createElement("p");
+    note.className = "hint";
+    note.textContent = "Armor Score and damage thresholds are set by the armor you pick in the next step.";
+    panel.appendChild(note);
   }
 }
 

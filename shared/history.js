@@ -21,6 +21,7 @@ import {
   tierForLevel,
   totalSlotsForOption,
 } from "./advancement.js";
+import { hitPointTotal, stressTotal } from "./derived-stats.js";
 
 const TRAIT_KEYS = ["agility", "strength", "finesse", "instinct", "presence", "knowledge"];
 
@@ -244,9 +245,9 @@ export function validateEntry(ch, entry, db) {
   }
 
   const cls_ = cls;
-  const hp = (cls_?.startingHitPoints || 0) + state.hitPointSlotsBonus + picks.filter((p) => p.key === "hitPoint").length;
+  const hp = hitPointTotal(cls_, state.hitPointSlotsBonus + picks.filter((p) => p.key === "hitPoint").length);
   if (cls_ && hp > MAX_HIT_POINT_SLOTS) errors.push(`This would take Hit Points past the maximum of ${MAX_HIT_POINT_SLOTS}.`);
-  const stress = 6 + state.stressSlotsBonus + picks.filter((p) => p.key === "stress").length;
+  const stress = stressTotal(state.stressSlotsBonus + picks.filter((p) => p.key === "stress").length);
   if (stress > MAX_STRESS_SLOTS) errors.push(`This would take Stress past the maximum of ${MAX_STRESS_SLOTS}.`);
 
   for (const _ of picks.filter((p) => p.key === "subclass")) {

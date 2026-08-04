@@ -12,6 +12,8 @@
 const RUN = `?run=${Date.now()}`;
 
 const {
+  BASE_STRESS_SLOTS,
+  MAX_ARMOR_SCORE,
   MAX_HIT_POINT_SLOTS,
   MAX_STRESS_SLOTS,
   SUBCLASS_TIER_LABELS,
@@ -40,6 +42,12 @@ const {
   validateEntry,
   validateLevelUps,
 } = await import(`./shared/history.js${RUN}`);
+const {
+  derivedStats,
+  evasionTotal,
+  hitPointTotal,
+  stressTotal,
+} = await import(`./shared/derived-stats.js${RUN}`);
 
 // ---------- tiny runner ----------
 
@@ -513,6 +521,99 @@ group("The Hit Point cap, as a validation");
     validateEntry(ch, entry(6, [{ key: "hitPoint", slotTier: 4 }, { key: "hitPoint", slotTier: 4 }], "c5"), DB),
     "past the maximum of 12");
 }
+
+// ---------- derived stats ----------
+
+// The db a page hands to derivedStats: only what these checks need, in the shape data/ uses.
+const STAT_DB = {
+  classes: [{ id: "cls", name: "GUARDIAN", domains: ["VALOR", "BLADE"], startingHitPoints: 7, startingEvasion: 9 }],
+  subclasses: [
+    { id: "sub", spellcastTrait: "KNOWLEDGE" },
+    { id: "nocast" }, // Guardian and Warrior subclasses have no Spellcast trait
+  ],
+  armors: [
+    { id: "gambeson", name: { "en-US": "Gambeson" }, baseScore: 3, baseMajorThreshold: 5, baseSevereThreshold: 11 },
+    { id: "absurd", name: { "en-US": "Absurd Plate" }, baseScore: 40, baseMajorThreshold: 5, baseSevereThreshold: 11 },
+  ],
+  weapons: [
+    { id: "staff", name: { "en-US": "Greatstaff" }, trait: "KNOWLEDGE", burden: "TWO_HANDED" },
+    { id: "dagger", name: { "en-US": "Dagger" }, trait: "FINESSE", burden: "ONE_HANDED" },
+  ],
+};
+
+function statChar(over = {}) {
+  const ch = newCharacter();
+  ch.equipment = { weaponMode: "two-handed", primaryWeaponId: null, secondaryWeaponId: null, armorId: null, potionChoice: null };
+  return Object.assign(ch, over);
+}
+
+group("Derived stats are worked out in one place");
+{
+  const ch = statChar({ equipment: { weaponMode: "two-handed", primaryWeaponId: "staff", armorId: "gambeson" } });
+  const s = derivedStats(ch, STAT_DB);
+  eq("Evasion is the class value", s.evasion.total, 9);
+  eq("Hit Points are the class value", s.hitPoints.total, 7);
+  eq("Stress starts at 6 for every class", s.stress.total, 6);
+  eq("a stat with no modifiers has one part", s.evasion.parts.length, 1);
+  eq("the parts add up to the total", s.hitPoints.parts.reduce((n, p) => n + p.value, 0), s.hitPoints.total);
+}
+{
+  const ch = statChar({ hitPointSlotsBonus: 3, stressSlotsBonus: 2, evasionBonus: 1 });
+  const s = derivedStats(ch, STAT_DB);
+  eq("advancements are added on top", [s.evasion.total, s.hitPoints.total, s.stress.total], [10, 10, 8]);
+  eq("and are named separately in the breakdown", s.hitPoints.parts.length, 2);
+  eq("a zero bonus isn't listed at all", derivedStats(statChar(), STAT_DB).evasion.parts.length, 1);
+}
+
+group("Armor Score, thresholds, and the unarmored rule");
+{
+  const armored = derivedStats(statChar({ level: 3, equipment: { armorId: "gambeson" } }), STAT_DB);
+  eq("Armor Score comes from the armor", armored.armorScore.total, 3);
+  eq("thresholds are the armor's base plus your level", [armored.majorThreshold.total, armored.severeThreshold.total], [8, 14]);
+
+  // SRD: unarmored is Armor Score 0, Major = level, Severe = twice level. Unreachable in the
+  // wizard today (armor is required), so this is the only thing holding the rule honest.
+  const bare = derivedStats(statChar({ level: 3, equipment: { armorId: null } }), STAT_DB);
+  eq("unarmored Armor Score is 0", bare.armorScore.total, 0);
+  eq("unarmored thresholds are level and twice level", [bare.majorThreshold.total, bare.severeThreshold.total], [3, 6]);
+
+  const capped = derivedStats(statChar({ equipment: { armorId: "absurd" } }), STAT_DB);
+  eq("Armor Score can't exceed 12", capped.armorScore.total, MAX_ARMOR_SCORE);
+  check("and says so when it clamps", !!capped.armorScore.note);
+}
+
+group("Attack uses the weapon's trait, Spellcast names the subclass's");
+{
+  const twoHanded = derivedStats(statChar({
+    equipment: { weaponMode: "two-handed", primaryWeaponId: "staff", secondaryWeaponId: "dagger" },
+  }), STAT_DB);
+  // knowledge is -1 in the fixture, finesse is 0
+  eq("primary attack is the weapon's trait, not Proficiency", twoHanded.primaryAttack.total, -1);
+  check("a two-handed build has no secondary attack", twoHanded.secondaryAttack === null);
+
+  const oneHanded = derivedStats(statChar({
+    equipment: { weaponMode: "one-handed", primaryWeaponId: "staff", secondaryWeaponId: "dagger" },
+  }), STAT_DB);
+  eq("the off-hand weapon uses its own trait", oneHanded.secondaryAttack.total, 0);
+
+  eq("Spellcast shows the trait, not a number", derivedStats(statChar(), STAT_DB).spellcast.display, "Knowledge");
+  check("subclasses without one get no Spellcast box",
+    derivedStats(statChar({ subclassId: "nocast" }), STAT_DB).spellcast === null);
+}
+
+group("A page that didn't load every data file still gets what it asked for");
+{
+  // The level up screen loads classes, subclasses and domain cards only.
+  const partial = derivedStats(statChar({ equipment: { armorId: "gambeson" } }), { classes: STAT_DB.classes });
+  eq("class-based stats still work", partial.hitPoints.total, 7);
+  check("equipment-based ones come back null rather than throwing", partial.armorScore === null);
+  check("and so do the attacks", partial.primaryAttack === null);
+}
+
+group("The level up screen and the sheet share the same arithmetic");
+eq("hit points", hitPointTotal(STAT_DB.classes[0], 2), 9);
+eq("stress no longer hardcodes 6 in four places", stressTotal(0), BASE_STRESS_SLOTS);
+eq("evasion", evasionTotal(STAT_DB.classes[0], 1), 10);
 
 // ---------- report ----------
 
