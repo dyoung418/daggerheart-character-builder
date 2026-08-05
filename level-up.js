@@ -20,9 +20,9 @@ import {
   characterAtLevel,
   contextForLevel,
   experiencesAtLevel,
-  recomputeCharacter,
   unresolvedProblems,
   validateEntry,
+  writeLevelEntry,
 } from "./shared/history.js";
 import { effectBonuses, effectExperienceBonuses, hitPointTotal, stressTotal } from "./shared/derived-stats.js";
 import { blankAnswer, choiceFor } from "./shared/effects.js";
@@ -761,26 +761,11 @@ function reviewLevelEdit(newLevel) {
   render();
 }
 
-// Replaces the recorded choices for a level that's already been taken.
+// Replaces the recorded choices for a level that's already been taken. The entry replaces the
+// old one wholesale, so redeclaring a level withdraws any earlier "keep as is": it's being
+// reconsidered.
 function writeEntry(target, newLevel) {
-  const entry = currentEntry(newLevel);
-  const at = target.levelUps.findIndex((e) => e.level === newLevel);
-  const previous = at >= 0 ? target.levelUps[at] : null;
-
-  // The creation card list is an input to the replay rather than a product of it, so an
-  // exchange that swapped a starting card has to be undone before the new one is applied.
-  const oldExchange = previous?.exchange;
-  if (oldExchange?.outCardId && oldExchange.inCardId) {
-    target.creationDomainCardIds = target.creationDomainCardIds.map((id) => (id === oldExchange.inCardId ? oldExchange.outCardId : id));
-  }
-  if (entry.exchange) {
-    target.creationDomainCardIds = target.creationDomainCardIds.map((id) => (id === entry.exchange.outCardId ? entry.exchange.inCardId : id));
-  }
-
-  // Redeclaring a level withdraws any earlier "keep as is": it's being reconsidered.
-  if (at >= 0) target.levelUps[at] = entry; else target.levelUps.push(entry);
-  recomputeCharacter(target);
-  return target;
+  return writeLevelEntry(target, currentEntry(newLevel));
 }
 
 // A name isn't a recorded choice, so it never enters the level entry the replay reads. On an
@@ -837,30 +822,10 @@ function applyLevelUp(newLevel) {
     });
   }
 
-  character.levelUps.push({
-    level: newLevel,
-    picks: picks.map((p) => {
-      const entry = { key: p.key, slotTier: p.slotTier };
-      if (p.key === "traits") entry.traits = [...p.traits];
-      if (p.key === "experience") entry.experienceIds = [...p.experienceIds];
-      if (p.key === "domainCard") entry.cardId = p.cardId;
-      return entry;
-    }),
-    mandatoryCardId,
-    grantedCardIds: grantedCardIds.filter(Boolean),
-    exchange: exchange?.outCardId && exchange.inCardId ? { ...exchange } : null,
-  });
-
-  // An exchange can swap out one of the creation cards, and that list is an input to the
-  // replay rather than a product of it, so it has to be updated directly.
-  if (exchange?.outCardId && exchange.inCardId) {
-    character.creationDomainCardIds = character.creationDomainCardIds.map((id) => (id === exchange.outCardId ? exchange.inCardId : id));
-  }
-
   commitCardChoices();
 
   character.level = newLevel;
-  recomputeCharacter(character);
+  writeLevelEntry(character, currentEntry(newLevel));
   character.updatedAt = new Date().toISOString();
   persistCharacter();
 

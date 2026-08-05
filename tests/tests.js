@@ -45,6 +45,7 @@ const {
   unresolvedProblems,
   validateEntry,
   validateLevelUps,
+  writeLevelEntry,
 } = await import(`../shared/history.js${RUN}`);
 const {
   derivedStats,
@@ -92,6 +93,9 @@ const DB = {
   classes: [{ id: "cls", domains: ["VALOR", "BLADE"], startingHitPoints: 7, startingEvasion: 9 }],
   domainCards: [
     { id: "c1", level: 1, domain: "VALOR", name: { "en-US": "One" } },
+    // Two more level 1 cards, so a starting card has something legal to be exchanged for.
+    { id: "c1b", level: 1, domain: "BLADE", name: { "en-US": "One again" } },
+    { id: "c1c", level: 1, domain: "BLADE", name: { "en-US": "One once more" } },
     { id: "c2", level: 2, domain: "VALOR", name: { "en-US": "Two" } },
     { id: "c3", level: 3, domain: "BLADE", name: { "en-US": "Three" } },
     { id: "c4", level: 4, domain: "VALOR", name: { "en-US": "Four" } },
@@ -409,6 +413,96 @@ group("An exchange replays in place");
   check("the card taken is there", modern.domainCardIds.includes("off"));
 }
 
+// The exchange is the least-exercised part of a level up — it's optional, it's the only choice
+// that REMOVES something, and the card it takes away can be one the character started with,
+// which is the one card the replay doesn't own. These go through writeLevelEntry, the same
+// function the level up screen writes every entry with, rather than reaching into levelUps.
+
+group("Exchanging a card the character STARTED with");
+{
+  const twoPicks = [{ key: "evasion", slotTier: 2 }, { key: "stress", slotTier: 2 }];
+  const ch = newCharacter();
+  ch.level = 2;
+  writeLevelEntry(ch, entry(2, twoPicks, "c2", { outCardId: "c1", inCardId: "c1b" }));
+
+  eq("the collection has the swap applied", ch.domainCardIds, ["c1b", "c2"]);
+  eq("the starting cards still say what was started with", ch.creationDomainCardIds, ["c1"]);
+  // The bug this pins down: the swap used to be written into the starting cards as well, and
+  // the validation reads those as "what you owned before this level" — so a legal swap was
+  // reported as "the card being given up isn't in the collection at this level" on every load,
+  // and no edit could clear it, because re-saving the level wrote the same list back.
+  eq("and the level is not flagged", validateLevelUps(ch, DB), []);
+
+  writeLevelEntry(ch, entry(2, twoPicks, "c2", { outCardId: "c1", inCardId: "c1c" }));
+  eq("editing the level to swap for something else re-runs from the original card", ch.domainCardIds, ["c1c", "c2"]);
+  eq("still nothing flagged", validateLevelUps(ch, DB), []);
+
+  writeLevelEntry(ch, entry(2, twoPicks, "c2", null));
+  eq("dropping the swap altogether gives the starting card back", ch.domainCardIds, ["c1", "c2"]);
+  eq("and the starting cards never moved", ch.creationDomainCardIds, ["c1"]);
+}
+
+group("Exchanging a card gained on an earlier level");
+{
+  const ch = buildTo([
+    entry(2, [{ key: "evasion", slotTier: 2 }, { key: "stress", slotTier: 2 }], "c2"),
+    entry(3, [{ key: "hitPoint", slotTier: 2 }, { key: "stress", slotTier: 2 }], "c3", { outCardId: "c2", inCardId: "c1b" }),
+  ], 3);
+  eq("the card taken at level 2 is the one that leaves", ch.domainCardIds, ["c1", "c1b", "c3"]);
+  eq("nothing is flagged", validateLevelUps(ch, DB), []);
+
+  // Giving up a card the character no longer has by then IS an error, and has to stay one.
+  const errors = validateEntry(ch, entry(3, [{ key: "hitPoint", slotTier: 2 }, { key: "stress", slotTier: 2 }], "c3", { outCardId: "c7", inCardId: "c1b" }), DB);
+  has("a card that was never owned still can't be given up", errors, "isn't in the collection");
+}
+
+group("An exchange leaves the vault holding only cards still owned");
+{
+  const ch = buildTo([entry(2, [{ key: "evasion", slotTier: 2 }, { key: "stress", slotTier: 2 }], "c2")], 2);
+  ch.domainVaultIds = ["c1"];
+  recomputeCharacter(ch);
+  eq("the vaulted card is there to begin with", ch.domainVaultIds, ["c1"]);
+
+  writeLevelEntry(ch, entry(2, [{ key: "evasion", slotTier: 2 }, { key: "stress", slotTier: 2 }], "c2", { outCardId: "c1", inCardId: "c1b" }));
+  eq("swapping it away empties the vault rather than leaving a card nobody owns", ch.domainVaultIds, []);
+  eq("and the card taken is in the collection", ch.domainCardIds, ["c1b", "c2"]);
+}
+
+group("Repairing a character saved while exchanges were baked into the baseline");
+{
+  const twoPicks = [{ key: "evasion", slotTier: 2 }, { key: "stress", slotTier: 2 }];
+  const stale = newCharacter();
+  stale.level = 3;
+  stale.levelUps.push(entry(2, twoPicks, "c2", { outCardId: "c1", inCardId: "c1b" }));
+  stale.levelUps.push(entry(3, [{ key: "hitPoint", slotTier: 2 }, { key: "stress", slotTier: 2 }], "c3", { outCardId: "c1b", inCardId: "c1c" }));
+  // What the old code left on disk: the same card swapped twice, written into the starting
+  // cards both times, so the baseline ended up naming a card taken two levels later.
+  stale.creationDomainCardIds = ["c1c"];
+  delete stale.creationCardsUnbaked;
+
+  ensureLevelFields(stale);
+  recomputeCharacter(stale);
+  eq("the chain unwinds to the card actually started with", stale.creationDomainCardIds, ["c1"]);
+  eq("the collection is what it always was", stale.domainCardIds, ["c1c", "c2", "c3"]);
+  eq("and the flags clear with no edit from the player", validateLevelUps(stale, DB), []);
+
+  // Repairing a character whose baseline is already honest must not un-swap it a second time.
+  delete stale.creationCardsUnbaked;
+  ensureLevelFields(stale);
+  eq("running the repair again changes nothing", stale.creationDomainCardIds, ["c1"]);
+}
+
+group("Writing a level entry replaces that level rather than adding another");
+{
+  const ch = buildTo([entry(2, [{ key: "evasion", slotTier: 2 }, { key: "stress", slotTier: 2 }], "c2")], 2);
+  ch.levelUps[0].acceptedAsIs = true;
+
+  writeLevelEntry(ch, entry(2, [{ key: "hitPoint", slotTier: 2 }, { key: "stress", slotTier: 2 }], "c2"));
+  eq("the level appears once", ch.levelUps.map((e) => e.level), [2]);
+  eq("the new choices are the ones that count", [ch.evasionBonus, ch.hitPointSlotsBonus], [0, 1]);
+  check("and redeclaring a level withdraws 'keep as is'", !ch.levelUps[0].acceptedAsIs);
+}
+
 group("The same option marked twice in one level applies twice");
 {
   const ch = newCharacter();
@@ -655,6 +749,7 @@ const FX_DB = {
     { id: "sub", spellcastTrait: "KNOWLEDGE" },
   ],
   ancestries: [
+    { id: "core_ancestry_clank", name: { "en-US": "Clank" }, features: [{ name: { "en-US": "Purposeful Design" } }] },
     { id: "core_ancestry_giant", name: { "en-US": "Giant" }, features: [{ name: { "en-US": "Endurance" } }, { name: { "en-US": "Reach" } }] },
     { id: "core_ancestry_simiah", name: { "en-US": "Simiah" }, features: [{ name: { "en-US": "Natural Climber" } }, { name: { "en-US": "Nimble" } }] },
   ],

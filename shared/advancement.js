@@ -177,6 +177,31 @@ function captureBaseline(ch) {
   };
 }
 
+// A one-off repair, for characters saved while the level up screen wrote an exchange into the
+// starting cards as well as into the level entry. The collection came out right either way —
+// the replay applies the swap to whichever list it finds it in — but the baseline was left
+// claiming the character had started with a card they swapped in later, and validateEntry
+// reads the baseline as "what you owned before this level". So a legal swap of a STARTING card
+// reported "the card being given up isn't in the collection at this level" on every load, and
+// no edit could clear it: re-saving the level wrote the same baked list back.
+//
+// Newest level first, so a card swapped more than once unwinds in the reverse of the order it
+// was applied. Only a swap that looks baked is touched — the taken card sitting in the starting
+// list where the given-up card is absent — which makes this a no-op on repaired characters and
+// on every exchange written since.
+function unbakeExchanges(ch) {
+  if (ch.creationCardsUnbaked) return;
+  for (const entry of [...ch.levelUps].sort((a, b) => b.level - a.level)) {
+    const swap = entry.exchange;
+    if (!swap?.outCardId || !swap.inCardId) continue;
+    const at = ch.creationDomainCardIds.indexOf(swap.inCardId);
+    if (at >= 0 && !ch.creationDomainCardIds.includes(swap.outCardId)) {
+      ch.creationDomainCardIds[at] = swap.outCardId;
+    }
+  }
+  ch.creationCardsUnbaked = true;
+}
+
 // Characters saved before levels were introduced don't have these fields: this adds
 // them without touching the rest, so they stay valid as "level 1" the moment they're opened.
 export function ensureLevelFields(ch) {
@@ -205,6 +230,7 @@ export function ensureLevelFields(ch) {
   if (!Array.isArray(ch.levelUps)) ch.levelUps = [];
   if (ch.baselineLevel === undefined) ch.baselineLevel = ch.level;
   if (!ch.baseline) ch.baseline = captureBaseline(ch);
+  unbakeExchanges(ch);
 
   // Experiences need stable ids: the level 2/5/8 achievements append new ones, which shifts
   // every index after them. sinceLevel records when each became available, so a level up
