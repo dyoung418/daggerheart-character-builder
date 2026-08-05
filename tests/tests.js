@@ -23,6 +23,7 @@ const {
   SUBCLASS_TIER_LABELS,
   SUBCLASS_TIER_ORDER,
   TIER_CARD_CAP,
+  advancementCredits,
   availableOptionKeys,
   blankSlotsUsed,
   ensureLevelFields,
@@ -48,6 +49,7 @@ const {
   writeLevelEntry,
 } = await import(`../shared/history.js${RUN}`);
 const {
+  TRAIT_KEYS,
   derivedStats,
   effectBonuses,
   effectExperienceBonuses,
@@ -684,6 +686,55 @@ group("Derived stats are worked out in one place");
   eq("a zero bonus isn't listed at all", derivedStats(statChar(), STAT_DB).evasion.parts.length, 1);
 }
 
+group("A breakdown names the level that granted each point");
+{
+  // "Level up advancements +3" is true and useless: it can't be checked against anything the
+  // player remembers doing. The levels come from the recorded entries, so a breakdown can name
+  // them — and a character built above level 1 keeps the generic part for the levels that were
+  // never recorded, rather than having one invented for it.
+  const ch = statChar();
+  record(ch, 2, [{ key: "evasion", slotTier: 2 }, { key: "experience", slotTier: 2, experienceIds: ["e1", "e2"] }], "c2");
+  record(ch, 3, [{ key: "traits", slotTier: 2, traits: ["agility", "strength"] }, { key: "hitPoint", slotTier: 2 }], "c3");
+  const s = derivedStats(ch, STAT_DB);
+  const labels = (stat) => stat.parts.map((p) => p.label);
+
+  eq("Evasion", labels(s.evasion), ["Guardian (class)", "Level 2 advancement"]);
+  eq("Hit Points", labels(s.hitPoints), ["Guardian (class)", "Level 3 advancement"]);
+  eq("a trait separates what was assigned from what was earned", labels(s.traits.agility), ["Assigned at creation", "Level 3 advancement"]);
+  eq("a trait nothing has touched still explains itself", labels(s.traits.finesse), ["Assigned at creation"]);
+  // Proficiency comes from the tier achievement at 2, 5 and 8 as well as from the advancement
+  // option, and the breakdown has to tell the two apart.
+  eq("Proficiency", labels(s.proficiency), ["Base", "Level 2 achievement"]);
+  eq("the parts still add up to the total", s.proficiency.parts.reduce((n, p) => n + p.value, 0), s.proficiency.total);
+
+  const raised = s.experiences.find((e) => e.id === "e1");
+  eq("an Experience raised by an advancement says which level did it", labels(raised), ["Base", "Level 2 advancement"]);
+  // It used to report the modifier itself as a part, which left exactly one part — and the
+  // sheet only offers the "?" from two up, so nothing explained why the Experience wasn't +2.
+  check("so it has the two parts the sheet needs to offer its '?'", raised.parts.length > 1);
+  eq("an Experience nothing has raised keeps a single part", labels(s.experiences.find((e) => e.id === "exp_lv2")), ["Base"]);
+}
+
+group("Advancement credits reconcile with the replay");
+{
+  // The credits are attributed by a second walk over the recorded entries, so the risk is that
+  // it drifts from the replay that produces the numbers. Nothing here checks a label: it checks
+  // that every credit sums to exactly the bonus the replay arrived at.
+  const ch = newCharacter();
+  for (const step of SCRIPT) record(ch, step.level, step.picks, step.card, step.exchange);
+  const credits = advancementCredits(ch);
+  const sum = (list) => (list || []).reduce((n, c) => n + c.value, 0);
+
+  eq("hit point slots", sum(credits.hitPoint), ch.hitPointSlotsBonus - ch.baseline.hitPointSlotsBonus);
+  eq("stress slots", sum(credits.stress), ch.stressSlotsBonus - ch.baseline.stressSlotsBonus);
+  eq("evasion", sum(credits.evasion), ch.evasionBonus - ch.baseline.evasionBonus);
+  eq("proficiency, tier achievements included", sum(credits.proficiency), ch.proficiency - ch.baseline.proficiency);
+  eq("every trait", TRAIT_KEYS.map((k) => sum(credits.traits[k])),
+    TRAIT_KEYS.map((k) => ch.traits[k] - ch.baseline.traits[k]));
+  eq("every Experience", ch.experiences.map((e) => sum(credits.experiences[e.id])),
+    ch.experiences.map((e) => e.modifier - e.baseModifier));
+}
+
 group("Armor Score, thresholds, and the unarmored rule");
 {
   const armored = derivedStats(statChar({ level: 3, equipment: { armorId: "gambeson" } }), STAT_DB);
@@ -817,6 +868,25 @@ group("A permanent Experience bonus reaches the level up picker, not just the sh
   const asSheet = (id) => derivedStats(answered, FX_DB).experiences.find((e) => e.id === id).total;
   eq("the picker and the sheet agree on the boosted Experience", asPicker("e1"), asSheet("e1"));
   eq("and on the one that wasn't boosted", asPicker("e2"), asSheet("e2"));
+}
+
+group("An Experience breakdown names every source, and no subtotal");
+{
+  // The reported case: a Clank whose Purposeful Design bonus and a level 2 advancement both
+  // landed on the same Experience saw +4 explained as "Experience +3, Permanent bonus +1" —
+  // where the +3 was the very thing being asked about, and the feature that granted the other
+  // +1 went unnamed.
+  const clank = statChar({
+    ...heritage("core_ancestry_clank", "Purposeful Design"),
+    effectChoices: { "core_ancestry_clank:Purposeful Design": { optionId: "one", experienceIds: ["e1"] } },
+  });
+  record(clank, 2, [{ key: "experience", slotTier: 2, experienceIds: ["e1", "e2"] }, { key: "evasion", slotTier: 2 }], "c2");
+
+  const e1 = derivedStats(clank, FX_DB).experiences.find((e) => e.id === "e1");
+  eq("the total is unchanged", e1.total, 4);
+  eq("and every part of it is a real source",
+    e1.parts.map((p) => `${p.label} ${p.value}`),
+    ["Base 2", "Level 2 advancement 1", "Clank — Purposeful Design 1"]);
 }
 
 group("A subclass tier implies the tiers below it, and their bonuses stack");
