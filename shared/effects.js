@@ -75,6 +75,7 @@
 // both if a card ever needs to. Its values are functions of the same context.
 
 import { SUBCLASS_TIER_ORDER } from "./advancement.js";
+import { UNARMORED } from "./gear.js";
 
 // Requirement shared by the *-Touched cards: "When 4 or more of the domain cards in your
 // loadout are from the X domain". The card is itself an X card, so it counts toward its own 4.
@@ -376,7 +377,11 @@ export function collectEffects(ch, db) {
     }
   }
 
-  const armor = (db?.armors || []).find((a) => a.id === ch.equipment?.armorId);
+  // A character who chose to wear nothing has no armor features; the sentinel matches no id,
+  // and asking for it explicitly beats relying on the lookup to miss.
+  const armor = ch.equipment?.armorId === UNARMORED
+    ? undefined
+    : (db?.armors || []).find((a) => a.id === ch.equipment?.armorId);
   for (const name of featureNames(armor)) {
     add(lookup(`${armor.id}:${name}`, `armor:${name}`), "armor", `${displayName(armor, "Armor")} (${name})`);
   }

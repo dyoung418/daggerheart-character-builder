@@ -19,6 +19,7 @@ import {
   damageThresholds,
 } from "./advancement.js";
 import { EFFECT_STAT_KEYS, collectEffects, effectValue, loadoutDomainCounts } from "./effects.js";
+import { UNARMORED } from "./gear.js";
 
 export const TRAIT_KEYS = ["agility", "strength", "finesse", "instinct", "presence", "knowledge"];
 export const TRAIT_LABELS = {
@@ -61,6 +62,14 @@ function find(list, id) {
   return id ? (list || []).find((x) => x.id === id) || null : null;
 }
 
+// Deliberately unarmored resolves to no armor, the same as not having picked any — the
+// difference between the two matters to the wizard, not to the arithmetic. Asked explicitly
+// rather than left to find() missing, so the sentinel can't be mistaken for a typo'd id.
+function equippedArmor(ch, db) {
+  if (ch.equipment?.armorId === UNARMORED) return null;
+  return find(db?.armors, ch.equipment?.armorId);
+}
+
 function baseTraitTotals(ch) {
   const out = {};
   for (const key of TRAIT_KEYS) out[key] = ch.traits?.[key] ?? 0;
@@ -84,7 +93,7 @@ function resolveChoice(entry, ch) {
  */
 function gather(ch, db) {
   const domainCounts = loadoutDomainCounts(ch, db);
-  const armor = find(db?.armors, ch.equipment?.armorId);
+  const armor = equippedArmor(ch, db);
   const ctx = {
     character: ch,
     level: ch.level,
@@ -174,7 +183,7 @@ export function effectBonuses(ch, db) {
 export function derivedStats(ch, db) {
   const cls = find(db?.classes, ch.classId);
   const sub = find(db?.subclasses, ch.subclassId);
-  const armor = find(db?.armors, ch.equipment?.armorId);
+  const armor = equippedArmor(ch, db);
   const primaryWeapon = find(db?.weapons, ch.equipment?.primaryWeaponId);
   // Whether a secondary counts is whether one is equipped. This used to be gated on a stored
   // "weaponMode" string, which stopped being the truth the moment a Warrior — who ignores
