@@ -881,6 +881,12 @@ group("Fighting with nothing in your hands");
   eq("and carries no weapon features into the effects", 
     derivedStats(statChar({ equipment: { primaryWeaponId: UNARMED } }), FX_DB).evasion.total, 9);
 
+  // Same rule as a weapon: no attack line until the traits are assigned.
+  const noTraits = statChar({ equipment: { primaryWeaponId: UNARMED } });
+  noTraits.traits = { agility: null, strength: null, finesse: null, instinct: null, presence: null, knowledge: null };
+  check("unassigned traits mean no attack yet, just as with a weapon",
+    derivedStats(noTraits, FX_DB).primaryAttack === null);
+
   // A secondary is still a secondary when the other hand is empty.
   const withShield = derivedStats(statChar({
     equipment: { primaryWeaponId: UNARMED, secondaryWeaponId: "core_weapon_tower_shield" },

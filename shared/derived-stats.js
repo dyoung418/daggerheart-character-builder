@@ -356,10 +356,12 @@ function attackStat(weapon, traits, contributions, ctx, scope) {
 function unarmedAttackStat(traits, contributions, ctx) {
   const bonusParts = partsFor(contributions, "attack", ctx, "primary");
   const bonus = bonusParts.reduce((sum, p) => sum + p.value, 0);
-  const options = UNARMED_PROFILE.traits.map((t) => {
-    const key = t.toLowerCase();
-    return { key, label: TRAIT_LABELS[key], total: (traits[key]?.total ?? 0) + bonus };
-  });
+  const keys = UNARMED_PROFILE.traits.map((t) => t.toLowerCase());
+  // Same rule as a weapon's attack: until the traits are assigned there's no number to show.
+  if (keys.some((key) => !traits[key] || traits[key].total === null)) return null;
+  const options = keys.map((key) => ({
+    key, label: TRAIT_LABELS[key], total: traits[key].total + bonus,
+  }));
   const display = options.map((o) => `${o.label} ${signed(o.total)}`).join(" / ");
   return {
     weaponName: UNARMED_PROFILE.name["en-US"],
@@ -368,7 +370,7 @@ function unarmedAttackStat(traits, contributions, ctx) {
     // No total: these two aren't parts of a sum, they're alternatives, and the popover skips
     // the Total row for a stat that doesn't have one.
     parts: [
-      ...options.map((o) => ({ label: `${o.label} (unarmed)`, value: traits[o.key]?.total ?? 0 })),
+      ...options.map((o) => ({ label: `${o.label} (unarmed)`, value: traits[o.key].total })),
       ...bonusParts,
     ],
     note: "Unarmed attack rolls use Strength or Finesse, whichever the GM calls for.",
