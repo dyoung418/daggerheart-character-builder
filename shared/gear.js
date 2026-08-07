@@ -22,6 +22,12 @@ import { escapeHtml } from "./escape.js";
 // putting it in either of them would have the two importing each other.
 export const UNARMORED = "unarmored";
 
+// The same idea for weapons. There's a class on the way whose whole point is fighting with
+// nothing in your hands, and the SRD already gives unarmed attacks rules of their own, so
+// carrying no weapon has to be something a character can say rather than something they've
+// failed to fill in.
+export const UNARMED = "unarmed";
+
 // enumLabel would turn TWO_HANDED into "Two Handed"; the book hyphenates, and so does the
 // wizard's own prose.
 const BURDEN_LABELS = { ONE_HANDED: "One-handed", TWO_HANDED: "Two-handed" };
@@ -62,7 +68,9 @@ export function damageText(weapon) {
 // printed as "undefined".
 export function weaponStats(weapon) {
   return [
-    enumLabel(weapon?.trait),
+    // An unarmed profile offers a choice of two traits rather than naming one, because the SRD
+    // hands that pick to the GM per roll.
+    (weapon?.traits || []).map(enumLabel).join(" or ") || enumLabel(weapon?.trait),
     enumLabel(weapon?.range),
     damageText(weapon),
     burdenLabel(weapon),
