@@ -63,13 +63,16 @@
 // New code is needed only for a genuinely new KIND of thing: a stat the app doesn't compute
 // yet, or a choice that isn't one of the two shapes above.
 //
-// One card is deliberately absent. Bare Bones replaces your base Armor Score and damage
-// thresholds when you choose NOT to equip armor, and the wizard requires armor, so it would be
-// the only user of an effect kind that overrides a base rather than adding to it. When
-// equipping and unequipping lands, it unlocks three things at once: Bare Bones, the
-// base-override kind it needs, and the plain unarmored rule (Armor Score 0, Major threshold =
-// your level, Severe = twice your level) for characters who don't have it. That last one is
-// already implemented in derived-stats.js, waiting for something to reach it.
+// TWO KINDS OF EFFECT
+// -------------------
+// Most entries are ADDITIVE: a key from EFFECT_STAT_KEYS naming a number to add to whatever the
+// stat would otherwise be. A few are BASE OVERRIDES, declared under `base`, which stand in for
+// the value a stat starts from rather than adding to it — what a piece of equipment would have
+// contributed, when you have no such equipment. Additive effects then stack on top of the
+// override exactly as they would on top of armor, so a shield still works.
+//
+// `base` is a sibling of the additive keys, not a different kind of entry, so one entry can do
+// both if a card ever needs to. Its values are functions of the same context.
 
 import { SUBCLASS_TIER_ORDER } from "./advancement.js";
 
