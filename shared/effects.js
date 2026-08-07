@@ -74,7 +74,7 @@
 // `base` is a sibling of the additive keys, not a different kind of entry, so one entry can do
 // both if a card ever needs to. Its values are functions of the same context.
 
-import { SUBCLASS_TIER_ORDER } from "./advancement.js";
+import { SUBCLASS_TIER_ORDER, tierForLevel } from "./advancement.js";
 import { UNARMORED } from "./gear.js";
 
 // Requirement shared by the *-Touched cards: "When 4 or more of the domain cards in your
@@ -82,6 +82,14 @@ import { UNARMORED } from "./gear.js";
 const touched = (domain) => (c) => (c.domainCounts[domain] || 0) >= 4;
 
 const ONCE_PER_REST = "needs an action or a rest, so it isn't counted here";
+
+// Bare Bones' base thresholds, by tier, straight off the card.
+const BARE_BONES_THRESHOLDS = {
+  1: { major: 9, severe: 19 },
+  2: { major: 11, severe: 24 },
+  3: { major: 13, severe: 31 },
+  4: { major: 15, severe: 38 },
+};
 
 export const EFFECTS = {
   // ===================== Ancestries =====================
@@ -203,6 +211,22 @@ export const EFFECTS = {
   // The SRD's general rule: "if you need to round to a whole number, round up unless otherwise
   // specified", so Agility +1 gives +1, not 0.
   "core_domain_card_untouchable": { evasion: (c) => Math.ceil(c.traits.agility / 2) },
+
+  // Bare Bones — "When you choose not to equip armor, you have a base Armor Score of 3 + your
+  // Strength and use the following as your base damage thresholds: Tier 1: 9/19, Tier 2: 11/24,
+  // Tier 3: 13/31, Tier 4: 15/38."
+  //
+  // Base, not bonus: it stands in for the armor you're not wearing, so your level is added on
+  // top of those thresholds exactly as it would be on top of a breastplate's. Choosing not to
+  // equip armor is a configuration rather than an action, so it counts.
+  "core_domain_card_bare_bones": {
+    when: (c) => !c.armor,
+    base: {
+      armorScore: (c) => 3 + c.traits.strength,
+      majorThreshold: (c) => BARE_BONES_THRESHOLDS[tierForLevel(c.level)].major,
+      severeThreshold: (c) => BARE_BONES_THRESHOLDS[tierForLevel(c.level)].severe,
+    },
+  },
 
   // Fortified Armor — "While you are wearing armor, gain a +2 bonus to your damage thresholds."
   // Wearing armor is a configuration, not an action, so this counts.
