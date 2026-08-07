@@ -11,15 +11,19 @@ import { derivedStats } from "./shared/derived-stats.js";
 import { statLine } from "./shared/stat-line.js";
 import { EFFECTS, blankAnswer, collectEffects } from "./shared/effects.js";
 import { renderEffectChoice } from "./shared/effect-choice.js";
+import {
+  armorRowContent,
+  featureLine,
+  featureText,
+  matchesSpellcast,
+  spellcastBadge,
+  weaponRowContent,
+} from "./shared/gear.js";
 import { escapeHtml } from "./shared/escape.js";
 
 const CHAR_STORAGE_KEY = "dh-characters-v1";
 const TRAIT_KEYS = ["agility", "strength", "finesse", "instinct", "presence", "knowledge"];
 const TRAIT_LABELS = { agility: "Agility", strength: "Strength", finesse: "Finesse", instinct: "Instinct", presence: "Presence", knowledge: "Knowledge" };
-
-function spellcastBadge() {
-  return `<span class="badge-spellcast" title="Spellcasting trait">★ spellcasting</span>`;
-}
 
 const TRAIT_ARRAY = [2, 1, 1, 0, 0, -1];
 const MINOR_HEALTH_POTION_ID = "core_consumable_minor_health_potion";
@@ -43,10 +47,6 @@ let currentStep = 0;
 
 function titleCase(str) {
   return str.charAt(0) + str.slice(1).toLowerCase();
-}
-
-function featureText(feature) {
-  return (feature.description || []).map((d) => d.paragraph?.["en-US"] || "").join(" ");
 }
 
 async function loadJson(name) {
@@ -561,14 +561,14 @@ function renderEquipmentStep(panel) {
   const h3a = document.createElement("h3");
   h3a.textContent = "Primary weapon (Tier 1)";
   panel.appendChild(h3a);
-  panel.appendChild(weaponSelect(primaries, e.primaryWeaponId, (id) => { e.primaryWeaponId = id; onChange(); }, spellcastTrait));
+  panel.appendChild(weaponSelect(primaries, "weapon-primary", e.primaryWeaponId, (id) => { e.primaryWeaponId = id; onChange(); }, spellcastTrait));
 
   if (e.weaponMode === "one-handed") {
     const secondaries = db.weapons.filter((w) => w.tier === 1 && w.type === "SECONDARY");
     const h3b = document.createElement("h3");
     h3b.textContent = "Secondary weapon (Tier 1)";
     panel.appendChild(h3b);
-    panel.appendChild(weaponSelect(secondaries, e.secondaryWeaponId, (id) => { e.secondaryWeaponId = id; onChange(); }, spellcastTrait));
+    panel.appendChild(weaponSelect(secondaries, "weapon-secondary", e.secondaryWeaponId, (id) => { e.secondaryWeaponId = id; onChange(); }, spellcastTrait));
   }
 
   const h3c = document.createElement("h3");
@@ -580,7 +580,8 @@ function renderEquipmentStep(panel) {
   for (const a of armors) {
     const row = document.createElement("label");
     row.className = "option-row";
-    row.innerHTML = `<input type="radio" name="armor" value="${escapeHtml(a.id)}" ${e.armorId === a.id ? "checked" : ""}/> <strong>${escapeHtml(a.name["en-US"])}</strong> — thresholds ${escapeHtml(a.baseMajorThreshold)}/${escapeHtml(a.baseSevereThreshold)}, score ${escapeHtml(a.baseScore)}${featureLine(a)}`;
+    row.innerHTML = `<input type="radio" name="armor" value="${escapeHtml(a.id)}" ` +
+      `${e.armorId === a.id ? "checked" : ""}/> ${armorRowContent(a)}`;
     row.querySelector("input").addEventListener("change", () => { e.armorId = a.id; onChange(); });
     armorList.appendChild(row);
   }
@@ -606,33 +607,20 @@ function renderEquipmentStep(panel) {
   panel.appendChild(fixed);
 }
 
-function weaponSelect(weapons, selectedId, onSelect, spellcastTrait) {
+// One radio group name per list. It used to fold in the weapon's type and burden, which quietly
+// made the primary list two radio groups — harmless only because every pick re-renders the step.
+function weaponSelect(weapons, groupName, selectedId, onSelect, spellcastTrait) {
   const list = document.createElement("div");
   list.className = "option-list";
   for (const w of weapons) {
-    const dmg = `${w.damage.dice} ${w.damage.type === "PHYSICAL" ? "phy" : "mag"}`;
-    const matchesSpellcast = !!spellcastTrait && w.trait === spellcastTrait;
     const row = document.createElement("label");
-    row.className = "option-row" + (matchesSpellcast ? " trait-match" : "");
-    // The badge stays on the name line; featureLine() wraps to its own line below it.
-    const badge = matchesSpellcast ? ` ${spellcastBadge()}` : "";
-    row.innerHTML = `<input type="radio" name="weapon-${escapeHtml(w.type)}-${escapeHtml(w.burden)}" value="${escapeHtml(w.id)}" ${selectedId === w.id ? "checked" : ""}/> <strong>${escapeHtml(w.name["en-US"])}</strong> — ${escapeHtml(w.trait)} · ${escapeHtml(w.range)} · ${escapeHtml(dmg)}${badge}${featureLine(w)}`;
+    row.className = "option-row" + (matchesSpellcast(w, spellcastTrait) ? " trait-match" : "");
+    row.innerHTML = `<input type="radio" name="${escapeHtml(groupName)}" value="${escapeHtml(w.id)}" ` +
+      `${selectedId === w.id ? "checked" : ""}/> ${weaponRowContent(w, { spellcastTrait })}`;
     row.querySelector("input").addEventListener("change", () => onSelect(w.id));
     list.appendChild(row);
   }
   return list;
-}
-
-// Weapons and armor carry named features, several of which change a stat ("Flexible: +1 to
-// Evasion"). Without them the list reads as though the only difference between two pieces of
-// armor is its thresholds, which is how a player ends up surprised by their own Evasion.
-function featureLine(item) {
-  const features = (item.features || []).map((f) => {
-    const name = f.name?.["en-US"] || "";
-    const text = featureText(f);
-    return `<em>${escapeHtml(name)}</em>${text ? `: ${escapeHtml(text)}` : ""}`;
-  });
-  return features.length ? `<span class="option-feature">${features.join(" · ")}</span>` : "";
 }
 
 // --- Step 6: Background ---

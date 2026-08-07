@@ -62,6 +62,12 @@ const {
 const {
   deriveSheet,
 } = await import(`../shared/sheet-data.js${RUN}`);
+const {
+  damageText,
+  enumLabel,
+  groupByTier,
+  weaponStats,
+} = await import(`../shared/gear.js${RUN}`);
 
 // ---------- tiny runner ----------
 
@@ -632,6 +638,53 @@ group("A page that didn't load every data file still gets what it asked for");
   eq("class-based stats still work", partial.hitPoints.total, 7);
   check("equipment-based ones come back null rather than throwing", partial.armorScore === null);
   check("and so do the attacks", partial.primaryAttack === null);
+}
+
+group("A weapon reads as prose, not as the JSON it came from");
+{
+  const longsword = {
+    id: "core_weapon_longsword", name: { "en-US": "Longsword" }, type: "PRIMARY_PHYSICAL",
+    tier: 1, trait: "AGILITY", range: "MELEE",
+    damage: { dice: "D10", modifier: 3, type: "PHYSICAL" }, burden: "TWO_HANDED",
+  };
+  eq("the SCREAMING_SNAKE values are read out in English", enumLabel("VERY_CLOSE"), "Very Close");
+  // The picker used to print "D10 phy" for this: the +3 was simply dropped, on 20 of the 32
+  // weapons a starting character can pick between.
+  eq("the damage modifier is part of the damage", damageText(longsword), "d10+3 phy");
+  eq("a weapon with no modifier just names the die",
+    damageText({ damage: { dice: "D8", type: "MAGICAL" } }), "d8 mag");
+  // One weapon in the book (the Ghostblade) deals either kind; it used to be labelled "mag".
+  eq("and the both-kinds weapon says both",
+    damageText({ damage: { dice: "D10", modifier: 7, type: "PHYSICAL_OR_MAGICAL" } }), "d10+7 phy/mag");
+  eq("the whole line", weaponStats(longsword), "Agility · Melee · d10+3 phy · Two-handed");
+
+  // Fixtures here carry only the fields the check under test needs, and an unarmed profile has
+  // no burden at all. A formatter that dereferenced damage.dice would make every other check in
+  // this file depend on data it doesn't use.
+  eq("fields a record doesn't carry are left out, not printed as undefined",
+    weaponStats({ trait: "FINESSE", burden: "ONE_HANDED" }), "Finesse · One-handed");
+  eq("and no weapon at all is not a crash", weaponStats(null), "");
+}
+
+group("A picker opens the tiers worth reading");
+{
+  const gear = [
+    { id: "t1a", tier: 1 }, { id: "t1b", tier: 1 },
+    { id: "t2a", tier: 2 }, { id: "t3a", tier: 3 }, { id: "t4a", tier: 4 },
+  ];
+  const tiersOf = (groups) => groups.map((g) => g.tier);
+  const openOf = (groups) => groups.filter((g) => g.open).map((g) => g.tier);
+
+  eq("every tier in the book, lowest first", tiersOf(groupByTier(gear, { tier: 3 })), [1, 2, 3, 4]);
+  eq("the character's own tier is open", openOf(groupByTier(gear, { tier: 3 })), [3]);
+  // A shield handed out at level 1 is still yours at level 8, and a picker that hides what
+  // you're carrying is a picker that lies.
+  eq("so is whichever tier holds what they're carrying",
+    openOf(groupByTier(gear, { tier: 4, equippedId: "t1b" })), [1, 4]);
+  eq("and that's one group, not two, when they coincide",
+    openOf(groupByTier(gear, { tier: 2, equippedId: "t2a" })), [2]);
+  eq("carrying nothing opens only your tier",
+    openOf(groupByTier(gear, { tier: 1, equippedId: null })), [1]);
 }
 
 group("The level up screen and the sheet share the same arithmetic");
