@@ -5,7 +5,7 @@ import {
   communityCardArtPath,
   ancestryCardArtPath,
 } from "./shared/card-render.js";
-import { blankSlotsUsed, ensureLevelFields } from "./shared/advancement.js";
+import { blankSlotsUsed, ensureLevelFields, tierForLevel } from "./shared/advancement.js";
 import { recomputeCharacter } from "./shared/history.js";
 import { derivedStats } from "./shared/derived-stats.js";
 import { statLine } from "./shared/stat-line.js";
@@ -14,7 +14,7 @@ import { renderEffectChoice } from "./shared/effect-choice.js";
 import {
   armorRowContent,
   burdenWarning,
-  featureLine,
+  groupByTier,
   featureText,
   matchesSpellcast,
   spellcastBadge,
@@ -45,6 +45,7 @@ const STEPS = [
 const db = {}; // populated by loadAllData(): classes, subclasses, ancestries, communities, domainCards, weapons, armors, consumables
 let character = null;
 let currentStep = 0;
+let gearFilter = ""; // the equipment step's name filter, kept across re-renders
 
 function titleCase(str) {
   return str.charAt(0) + str.slice(1).toLowerCase();
@@ -100,7 +101,9 @@ function blankCharacter(id) {
     subclassId: null,
     heritage: { ancestryMode: "pure", ancestryIds: [], chosenFeatures: [], communityId: null },
     traits: { agility: null, strength: null, finesse: null, instinct: null, presence: null, knowledge: null },
-    equipment: { weaponMode: "two-handed", primaryWeaponId: null, secondaryWeaponId: null, armorId: null, potionChoice: null },
+    // No weaponMode: what's equipped is the truth. Older saves still carry the field;
+    // nothing reads it, so there's nothing to migrate.
+    equipment: { primaryWeaponId: null, secondaryWeaponId: null, armorId: null, potionChoice: null },
     background: { description: "", answers: "" },
     experiences: [
       { id: "exp_start1", name: "", modifier: 2, baseModifier: 2, sinceLevel: 1 },
@@ -168,9 +171,9 @@ function isStepValid(stepKey) {
       return true;
     case "equipment": {
       const e = character.equipment;
-      if (!e.armorId || !e.potionChoice) return false;
-      if (e.weaponMode === "two-handed") return !!e.primaryWeaponId;
-      return !!e.primaryWeaponId && !!e.secondaryWeaponId;
+      // A secondary weapon is optional: with a two-handed primary there's no hand for one, and
+      // even with a one-handed primary a character may simply not want one.
+      return !!e.armorId && !!e.potionChoice && !!e.primaryWeaponId;
     }
     case "background":
       return true;
@@ -536,41 +539,65 @@ function renderDerivedStep(panel) {
 }
 
 // --- Step 5: Equipment ---
+//
+// This step outlives character creation: it's where gear gets upgraded later too, reached
+// straight from the sheet. So the lists offer every tier in the book rather than only tier 1,
+// with the tier worth reading already open. At level 1 that's tier 1 and nothing else, which is
+// exactly what creation used to show.
 function renderEquipmentStep(panel) {
   const e = character.equipment;
   const spellcastTrait = selectedSubclass()?.spellcastTrait ?? null;
-
-  const modeRow = document.createElement("div");
-  modeRow.className = "field-row";
-  modeRow.innerHTML = `
-    <label><input type="radio" name="weapon-mode" value="two-handed" ${e.weaponMode === "two-handed" ? "checked" : ""}/> Two-handed primary</label>
-    <label><input type="radio" name="weapon-mode" value="one-handed" ${e.weaponMode === "one-handed" ? "checked" : ""}/> One-handed primary + secondary</label>
-  `;
-  panel.appendChild(modeRow);
-  modeRow.querySelectorAll('input[name="weapon-mode"]').forEach((r) => {
-    r.addEventListener("change", (ev) => {
-      e.weaponMode = ev.target.value;
-      e.primaryWeaponId = null;
-      e.secondaryWeaponId = null;
-      onChange();
-    });
-  });
-
-  const primaryBurden = e.weaponMode === "two-handed" ? "TWO_HANDED" : "ONE_HANDED";
-  const primaries = db.weapons.filter((w) => w.tier === 1 && w.burden === primaryBurden && (w.type === "PRIMARY_PHYSICAL" || w.type === "PRIMARY_MAGIC"));
+  const tier = tierForLevel(character.level);
 
   const h3a = document.createElement("h3");
-  h3a.textContent = "Primary weapon (Tier 1)";
+  h3a.textContent = "Primary weapon";
   panel.appendChild(h3a);
-  panel.appendChild(weaponSelect(primaries, "weapon-primary", e.primaryWeaponId, (id) => { e.primaryWeaponId = id; onChange(); }, spellcastTrait));
 
-  if (e.weaponMode === "one-handed") {
-    const secondaries = db.weapons.filter((w) => w.tier === 1 && w.type === "SECONDARY");
-    const h3b = document.createElement("h3");
-    h3b.textContent = "Secondary weapon (Tier 1)";
-    panel.appendChild(h3b);
-    panel.appendChild(weaponSelect(secondaries, "weapon-secondary", e.secondaryWeaponId, (id) => { e.secondaryWeaponId = id; onChange(); }, spellcastTrait));
-  }
+  // The primary list is the long one — 43 or 44 weapons in each of the upper tiers, against ten
+  // or fewer for the other two lists, which is why only this one is worth filtering.
+  const primaries = db.weapons.filter((w) => w.type !== "SECONDARY");
+  const search = document.createElement("input");
+  search.type = "search";
+  search.className = "gear-filter";
+  search.placeholder = "Filter by name…";
+  search.value = gearFilter;
+  panel.appendChild(search);
+
+  const primaryList = document.createElement("div");
+  panel.appendChild(primaryList);
+  const renderPrimaries = () => {
+    primaryList.replaceChildren(gearList(primaries, {
+      groupName: "weapon-primary",
+      selectedId: e.primaryWeaponId,
+      onSelect: (id) => { e.primaryWeaponId = id; onChange(); },
+      rowContent: (w) => weaponRowContent(w, { spellcastTrait }),
+      rowClass: (w) => (matchesSpellcast(w, spellcastTrait) ? " trait-match" : ""),
+      tier,
+      filterText: gearFilter,
+    }));
+  };
+  renderPrimaries();
+  // Rebuilds only the list. Re-rendering the whole step would take the focus out of this input
+  // between keystrokes — the same trap onTextChange() exists to avoid.
+  search.addEventListener("input", (ev) => {
+    gearFilter = ev.target.value;
+    renderPrimaries();
+  });
+
+  const h3b = document.createElement("h3");
+  h3b.textContent = "Secondary weapon";
+  panel.appendChild(h3b);
+  panel.appendChild(gearList(db.weapons.filter((w) => w.type === "SECONDARY"), {
+    groupName: "weapon-secondary",
+    selectedId: e.secondaryWeaponId,
+    onSelect: (id) => { e.secondaryWeaponId = id; onChange(); },
+    rowContent: (w) => weaponRowContent(w, { spellcastTrait }),
+    rowClass: (w) => (matchesSpellcast(w, spellcastTrait) ? " trait-match" : ""),
+    tier,
+    // An off-hand weapon is optional, and a shield you can never put down is worse than no
+    // shield at all.
+    noneLabel: "No secondary weapon",
+  }));
 
   const warning = burdenWarning(
     db.weapons.find((w) => w.id === e.primaryWeaponId),
@@ -585,20 +612,15 @@ function renderEquipmentStep(panel) {
   }
 
   const h3c = document.createElement("h3");
-  h3c.textContent = "Armor (Tier 1)";
+  h3c.textContent = "Armor";
   panel.appendChild(h3c);
-  const armors = db.armors.filter((a) => a.tier === 1);
-  const armorList = document.createElement("div");
-  armorList.className = "option-list";
-  for (const a of armors) {
-    const row = document.createElement("label");
-    row.className = "option-row";
-    row.innerHTML = `<input type="radio" name="armor" value="${escapeHtml(a.id)}" ` +
-      `${e.armorId === a.id ? "checked" : ""}/> ${armorRowContent(a)}`;
-    row.querySelector("input").addEventListener("change", () => { e.armorId = a.id; onChange(); });
-    armorList.appendChild(row);
-  }
-  panel.appendChild(armorList);
+  panel.appendChild(gearList(db.armors, {
+    groupName: "armor",
+    selectedId: e.armorId,
+    onSelect: (id) => { e.armorId = id; onChange(); },
+    rowContent: armorRowContent,
+    tier,
+  }));
 
   const h3d = document.createElement("h3");
   h3d.textContent = "Starting potion";
@@ -620,20 +642,51 @@ function renderEquipmentStep(panel) {
   panel.appendChild(fixed);
 }
 
-// One radio group name per list. It used to fold in the weapon's type and burden, which quietly
-// made the primary list two radio groups — harmless only because every pick re-renders the step.
-function weaponSelect(weapons, groupName, selectedId, onSelect, spellcastTrait) {
-  const list = document.createElement("div");
-  list.className = "option-list";
-  for (const w of weapons) {
+// One picker: an optional "nothing" row, then one <details> per tier of the book. One radio
+// group name per list — it used to fold in the weapon's type and burden, which quietly made the
+// primary list two radio groups, harmless only because every pick re-renders the step.
+function gearList(items, { groupName, selectedId, onSelect, rowContent, rowClass, tier, noneLabel, filterText }) {
+  const wrap = document.createElement("div");
+
+  if (noneLabel) {
     const row = document.createElement("label");
-    row.className = "option-row" + (matchesSpellcast(w, spellcastTrait) ? " trait-match" : "");
-    row.innerHTML = `<input type="radio" name="${escapeHtml(groupName)}" value="${escapeHtml(w.id)}" ` +
-      `${selectedId === w.id ? "checked" : ""}/> ${weaponRowContent(w, { spellcastTrait })}`;
-    row.querySelector("input").addEventListener("change", () => onSelect(w.id));
-    list.appendChild(row);
+    row.className = "option-row";
+    row.innerHTML = `<input type="radio" name="${escapeHtml(groupName)}" value="" ` +
+      `${selectedId ? "" : "checked"}/> <strong>${escapeHtml(noneLabel)}</strong>`;
+    row.querySelector("input").addEventListener("change", () => onSelect(null));
+    wrap.appendChild(row);
   }
-  return list;
+
+  const needle = (filterText || "").trim().toLowerCase();
+  const matches = (item) => !needle || item.name["en-US"].toLowerCase().includes(needle);
+
+  for (const group of groupByTier(items, { tier, equippedId: selectedId })) {
+    const shown = group.items.filter(matches);
+    // A tier with nothing left in it is noise while filtering; a match inside a closed tier is
+    // worse than noise, so anything with a hit opens whatever the default would have been.
+    if (!shown.length) continue;
+
+    const details = document.createElement("details");
+    details.className = "gear-tier";
+    details.open = group.open || !!needle;
+    const summary = document.createElement("summary");
+    summary.textContent = group.tier === tier ? `Tier ${group.tier} — your tier` : `Tier ${group.tier}`;
+    details.appendChild(summary);
+
+    const list = document.createElement("div");
+    list.className = "option-list";
+    for (const item of shown) {
+      const row = document.createElement("label");
+      row.className = "option-row" + (rowClass ? rowClass(item) : "");
+      row.innerHTML = `<input type="radio" name="${escapeHtml(groupName)}" value="${escapeHtml(item.id)}" ` +
+        `${selectedId === item.id ? "checked" : ""}/> ${rowContent(item)}`;
+      row.querySelector("input").addEventListener("change", () => onSelect(item.id));
+      list.appendChild(row);
+    }
+    details.appendChild(list);
+    wrap.appendChild(details);
+  }
+  return wrap;
 }
 
 // --- Step 6: Background ---
