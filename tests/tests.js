@@ -56,10 +56,12 @@ const {
 const {
   EFFECTS,
   blankAnswer,
+  ignoresBurden,
   isAnswered,
   unresolvedChoices,
 } = await import(`../shared/effects.js${RUN}`);
 const {
+  burdenWarning,
   damageText,
   enumLabel,
   groupByTier,
@@ -672,6 +674,29 @@ group("A weapon reads as prose, not as the JSON it came from");
   eq("and no weapon at all is not a crash", weaponStats(null), "");
 }
 
+group("Burden is advice, and the Warrior doesn't even get the advice");
+{
+  const greatsword = { name: { "en-US": "Greatsword" }, burden: "TWO_HANDED" };
+  const broadsword = { name: { "en-US": "Broadsword" }, burden: "ONE_HANDED" };
+  const shield = { name: { "en-US": "Tower Shield" }, burden: "ONE_HANDED" };
+
+  check("a secondary behind a two-handed primary is flagged", !!burdenWarning(greatsword, shield, false));
+  check("a one-handed primary never is", burdenWarning(broadsword, shield, false) === null);
+  check("nor is a two-handed primary carried on its own", burdenWarning(greatsword, null, false) === null);
+  // "You ignore burden when equipping weapons." — Combat Training, in full.
+  check("and a Warrior isn't warned at all", burdenWarning(greatsword, shield, true) === null);
+
+  const WARRIOR = {
+    id: "core_class_warrior", name: "WARRIOR",
+    classFeatures: [{ name: { "en-US": "Combat Training" } }, { name: { "en-US": "Attack of Opportunity" } }],
+  };
+  const GUARDIAN = { id: "cls", name: "GUARDIAN", classFeatures: [{ name: { "en-US": "Unstoppable" } }] };
+  check("Combat Training is what says so",
+    ignoresBurden({ classId: "core_class_warrior" }, { classes: [WARRIOR, GUARDIAN] }));
+  check("and no other class does", !ignoresBurden({ classId: "cls" }, { classes: [WARRIOR, GUARDIAN] }));
+  check("a page that didn't load classes doesn't throw", !ignoresBurden({ classId: "cls" }, {}));
+}
+
 group("A picker opens the tiers worth reading");
 {
   const gear = [
@@ -911,8 +936,14 @@ group("Every id in effects.js still exists in data/");
   // The one group that reads data/ for real. An upstream refresh that renames an id would
   // otherwise drop an effect silently: no error, just a number that quietly stops being right.
   const load = async (name) => (await fetch(`../data/${name}.json${RUN}`)).json();
-  const [ancestries, subclasses, armors, weapons, cards] = await Promise.all(
-    ["ancestries", "subclasses", "armors", "weapons", "domain-cards"].map(load));
+  const [ancestries, subclasses, armors, weapons, cards, classes] = await Promise.all(
+    ["ancestries", "subclasses", "armors", "weapons", "domain-cards", "classes"].map(load));
+
+  // ignoresBurden() matches a class feature by name rather than by an EFFECTS key, so the check
+  // below can't cover it. Renamed upstream, the Warrior would silently start getting a burden
+  // warning the book says they're exempt from.
+  check("the Warrior still has Combat Training to ignore burden with",
+    ignoresBurden({ classId: "core_class_warrior" }, { classes }));
 
   const known = new Set();
   const featureKeys = (list, prefix) => {

@@ -451,3 +451,14 @@ export function unresolvedChoices(ch, db) {
     .filter((e) => e.effect.choice && !isAnswered(e.effect.choice, ch.effectChoices?.[e.key]))
     .map((e) => ({ key: e.key, label: e.label, prompt: e.effect.choice.prompt }));
 }
+
+// "You ignore burden when equipping weapons." — the Warrior's Combat Training.
+//
+// Not an EFFECTS entry: it moves no stat, so there's nothing for EFFECT_STAT_KEYS to carry. It
+// lives here anyway because this is the file allowed to know a feature by name, and the answer
+// is a rule, not a presentation detail. The burden advice in the wizard asks this before it
+// says anything.
+export function ignoresBurden(ch, db) {
+  const cls = (db?.classes || []).find((c) => c.id === ch?.classId);
+  return (cls?.classFeatures || []).some((f) => f.name?.["en-US"] === "Combat Training");
+}
