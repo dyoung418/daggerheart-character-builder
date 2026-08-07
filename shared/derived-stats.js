@@ -135,6 +135,19 @@ function partsFor(contributions, key, ctx, scope) {
   return parts;
 }
 
+// The base a stat starts from when something overrides it — Bare Bones standing in for the
+// armor you chose not to wear. Returns undefined when nothing does, so the caller keeps its own
+// default. Two entries claiming the same base would be a catalogue bug; the first wins, and the
+// label names the source so the "?" breakdown can say where the number came from.
+function baseOverride(contributions, key, ctx) {
+  for (const entry of contributions) {
+    const raw = entry.effect.base?.[key];
+    if (raw === undefined) continue;
+    return { label: entry.label, value: effectValue(raw, ctx) };
+  }
+  return undefined;
+}
+
 /**
  * The stat bonuses a character has from effects, for callers doing their own arithmetic —
  * the level up screen's slot gating, the history validation, the extra domain card count.
@@ -245,11 +258,12 @@ function experienceStats(ch, experienceBonus) {
 
 function armorScoreStat(armor, db, contributions, ctx) {
   if (!db?.armors) return null;
-  // Unarmored is 0 by the SRD. Unreachable today (the wizard requires armor) but the rule is
-  // stated here rather than assumed, so it's already right when equipping becomes optional.
+  // Armor sets the base; without it something may stand in for one (Bare Bones), and failing
+  // that the SRD's plain answer is 0.
+  const override = armor ? undefined : baseOverride(contributions, "armorScore", ctx);
   const parts = armor
     ? [{ label: armor.name["en-US"], value: armor.baseScore }]
-    : [{ label: "No armor", value: 0 }];
+    : [override || { label: "No armor", value: 0 }];
   parts.push(...partsFor(contributions, "armorScore", ctx));
   return capped(stat(parts), MAX_ARMOR_SCORE, "Armor Score");
 }
@@ -273,6 +287,16 @@ function thresholdStats(ch, armor, contributions, ctx) {
         { label: "Your level", value: th.severe - armor.baseSevereThreshold },
         ...severeParts,
       ]),
+    };
+  }
+  // Something may stand in for the armor you aren't wearing (Bare Bones), and its numbers are
+  // bases in the same sense armor's are: your level is added on top either way.
+  const majorBase = baseOverride(contributions, "majorThreshold", ctx);
+  const severeBase = baseOverride(contributions, "severeThreshold", ctx);
+  if (majorBase && severeBase) {
+    return {
+      majorThreshold: stat([majorBase, { label: "Your level", value: ch.level }, ...majorParts]),
+      severeThreshold: stat([severeBase, { label: "Your level", value: ch.level }, ...severeParts]),
     };
   }
   // SRD: unarmored, Major equals your level and Severe twice your level.
