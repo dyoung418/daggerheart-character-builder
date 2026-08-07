@@ -505,6 +505,12 @@ h1, h2, h3, .btn-primary, .btn-ghost, .btn-small, .top-nav a {
 
 .characters-layout { padding: 1rem 1.5rem; }
 .export-csv-btn { width: auto; display: inline-block; margin-bottom: 1rem; }
+/* The two exports, offered in the shared modal. Wraps rather than shrinking: the labels say
+   which sheet you get, so they're worth reading in full on a narrow screen. */
+.export-choices { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.9rem; }
+/* Both buttons size to their label — .btn-ghost is full-width elsewhere, which would put the
+   two choices on separate lines and make the second look like the only one. */
+.export-choices button { width: auto; }
 .characters-list { display: flex; flex-direction: column; gap: 0.6rem; max-width: 700px; }
 
 .character-row {

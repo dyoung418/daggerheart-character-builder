@@ -5,7 +5,7 @@ import {
   communityCardArtPath,
   ancestryCardArtPath,
 } from "./shared/card-render.js";
-import { blankSlotsUsed, ensureLevelFields, tierForLevel } from "./shared/advancement.js";
+import { MAX_HOPE, STARTING_HOPE, blankSlotsUsed, ensureLevelFields, tierForLevel } from "./shared/advancement.js";
 import { recomputeCharacter } from "./shared/history.js";
 import { derivedStats } from "./shared/derived-stats.js";
 import { statLine } from "./shared/stat-line.js";
@@ -544,7 +544,7 @@ function renderDerivedStep(panel) {
   box.appendChild(statLine("Evasion", stats.evasion ? stats.evasion.total : "—", stats.evasion));
   box.appendChild(statLine("Hit Points", stats.hitPoints ? stats.hitPoints.total : "—", stats.hitPoints));
   box.appendChild(statLine("Stress", stats.stress.total, stats.stress));
-  box.appendChild(statLine("Hope", "2 / 6"));
+  box.appendChild(statLine("Hope", `${STARTING_HOPE} / ${MAX_HOPE}`));
   if (stats.spellcast) box.appendChild(statLine("Spellcast", stats.spellcast.display, stats.spellcast));
   // Armor Score and damage thresholds come from equipment, which is the next step. Showing
   // them here as "—" is more honest than omitting them: they belong to this list, they just

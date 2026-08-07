@@ -7,7 +7,9 @@ import {
 } from "./shared/card-render.js";
 import {
   ADVANCEMENT_LABELS,
+  MAX_HOPE,
   SLOT_TIERS,
+  STARTING_HOPE,
   SUBCLASS_TIER_LABELS,
   activeDomainCardIds,
   availableOptionKeys,
@@ -29,6 +31,8 @@ import { UNARMED_PROFILE, derivedStats } from "./shared/derived-stats.js";
 import { statLine } from "./shared/stat-line.js";
 import { ignoresBurden, unresolvedChoices } from "./shared/effects.js";
 import { UNARMED, UNARMORED, armorStats, burdenWarning, featureLine, weaponStats } from "./shared/gear.js";
+import { buildCsv } from "./shared/csv-export.js";
+import { closePopover, openModal } from "./shared/popover.js";
 import { escapeHtml } from "./shared/escape.js";
 
 const signed = (n) => (n > 0 ? `+${n}` : String(n));
@@ -535,7 +539,7 @@ function renderDetail() {
   statsBox2.appendChild(statLine("Evasion", stats.evasion ? stats.evasion.total : "—", stats.evasion));
   statsBox2.appendChild(statLine("Hit Points", stats.hitPoints ? stats.hitPoints.total : "—", stats.hitPoints));
   statsBox2.appendChild(statLine("Stress", stats.stress.total, stats.stress));
-  statsBox2.appendChild(statLine("Hope", "2 / 6"));
+  statsBox2.appendChild(statLine("Hope", `${STARTING_HOPE} / ${MAX_HOPE}`));
   if (stats.armorScore) {
     statsBox2.appendChild(statLine("Armor Score", stats.armorScore.total, stats.armorScore));
   }
@@ -732,90 +736,49 @@ function renderAll() {
 }
 
 // ---------- CSV export for the GM ----------
-
-const CSV_COLUMNS = [
-  "Name", "Pronouns", "Level", "Proficiency",
-  "Class", "Subclass", "Subclass tier",
-  "Ancestry", "Community",
-  "Agility", "Strength", "Finesse", "Instinct", "Presence", "Knowledge",
-  "Evasion", "Hit Points", "Stress", "Hope",
-  "Major Threshold", "Severe Threshold", "Armor Score",
-  "Primary Attack", "Secondary Attack", "Spellcast Trait",
-  "Primary weapon", "Secondary weapon", "Armor", "Potion",
-  "Experience", "Domain Cards (loadout)", "Domain Cards (vault)",
-  "Background", "Appearance", "Connections",
-];
-
-// Standard CSV (RFC 4180): wrap every field in double quotes, doubling any
-// double quotes it contains, to safely handle commas, quotes and newlines.
 //
-// Quoting alone does NOT stop formula injection: Excel, LibreOffice and Google
-// Sheets evaluate a field as a formula when its text starts with = + - @ (or a
-// leading tab/CR), even inside quotes. This export is explicitly meant to be
-// handed to the GM, so a character named `=HYPERLINK("http://evil","click")` —
-// or a background note starting with `=` — would run on someone else's machine.
-// Prefixing with a single quote makes the spreadsheet treat it as literal text.
-// Plain numbers are exempt: trait values are legitimately negative ("-1"), and a
-// spreadsheet evaluating "-1" just yields the number -1. Prefixing those would
-// turn every negative trait into text and break sorting/formulas for the GM.
-const FORMULA_TRIGGER = /^[=+\-@\t\r]/;
-const PLAIN_NUMBER = /^[+-]?\d+(\.\d+)?$/;
+// The columns and the escaping live in shared/csv-export.js, which is DOM-free and tested.
+// What's left here is the parts that need a page: asking which export you want, and saving it.
 
-function csvField(value) {
-  let s = String(value ?? "");
-  if (FORMULA_TRIGGER.test(s) && !PLAIN_NUMBER.test(s)) s = "'" + s;
-  return '"' + s.replace(/"/g, '""') + '"';
+// Two sheets are possible and they disagree about the numbers, so the export asks rather than
+// picking. "With loadout bonuses" leads because it matches what every other screen shows.
+function openExportPicker() {
+  const body = document.createElement("div");
+  const hint = document.createElement("p");
+  hint.className = "hint";
+  hint.textContent = "Your loadout changes at every rest, so the bonuses it grants go stale on " +
+    "a printed sheet. Permanent only leaves them out, as if every card were in your vault.";
+  body.appendChild(hint);
+
+  const row = document.createElement("div");
+  row.className = "export-choices";
+  for (const [label, loadout, cls] of [
+    ["With loadout bonuses", true, "btn-primary"],
+    ["Permanent only", false, "btn-ghost"],
+  ]) {
+    const btn = document.createElement("button");
+    btn.className = cls;
+    btn.textContent = label;
+    btn.addEventListener("click", () => {
+      closePopover();
+      downloadCsv(loadout);
+    });
+    row.appendChild(btn);
+  }
+  body.appendChild(row);
+
+  openModal("Export CSV for the GM", body);
 }
 
-function csvRowForCharacter(ch) {
-  const cls = findClass(ch.classId);
-  const sub = findSubclass(ch.subclassId);
-  const com = findCommunity(ch.heritage.communityId);
-  const ancestries = ch.heritage.ancestryIds.map((id) => findAncestry(id)?.name["en-US"]).filter(Boolean).join(" + ");
-  const stats = derivedStats(ch, db);
-  const activeIds = activeDomainCardIds(ch);
-  const loadoutNames = activeIds.map((id) => findDomainCard(id)?.name["en-US"]).filter(Boolean).join("; ");
-  const vaultNames = ch.domainVaultIds.map((id) => findDomainCard(id)?.name["en-US"]).filter(Boolean).join("; ");
-  const expText = stats.experiences.map((e) => `${e.name || "(unnamed)"} (+${e.total})`).join("; ");
-
-  // Effective traits, matching the sheet: the GM wants the number the player rolls with, which
-  // includes their armor's -1 Agility.
-  const t = stats.traits;
-  const row = [
-    ch.name, ch.pronouns, ch.level, ch.proficiency,
-    cls ? titleCase(cls.name) : "", sub ? sub.name["en-US"] : "", SUBCLASS_TIER_LABELS[ch.subclassTier] ?? ch.subclassTier,
-    ancestries, com ? com.name["en-US"] : "",
-    t.agility.total, t.strength.total, t.finesse.total, t.instinct.total, t.presence.total, t.knowledge.total,
-    stats.evasion ? stats.evasion.total : "", stats.hitPoints ? stats.hitPoints.total : "", stats.stress.total, "2/6",
-    stats.majorThreshold ? stats.majorThreshold.total : "", stats.severeThreshold ? stats.severeThreshold.total : "",
-    stats.armorScore ? stats.armorScore.total : "",
-    stats.primaryAttack ? (stats.primaryAttack.display ?? signed(stats.primaryAttack.total)) : "",
-    stats.secondaryAttack ? signed(stats.secondaryAttack.total) : "",
-    stats.spellcast ? stats.spellcast.display : "",
-    ch.equipment.primaryWeaponId === UNARMED ? "Unarmed" : findWeapon(ch.equipment.primaryWeaponId)?.name["en-US"] || "",
-    findWeapon(ch.equipment.secondaryWeaponId)?.name["en-US"] || "",
-    ch.equipment.armorId === UNARMORED ? "Unarmored" : findArmor(ch.equipment.armorId)?.name["en-US"] || "",
-    findConsumable(ch.equipment.potionChoice)?.name["en-US"] || "",
-    expText, loadoutNames, vaultNames,
-    ch.background.description, ch.background.answers, ch.connectionsNotes,
-  ];
-  return row.map(csvField).join(",");
-}
-
-function buildCsv() {
-  const lines = [CSV_COLUMNS.map(csvField).join(",")];
-  for (const ch of characters) lines.push(csvRowForCharacter(ch));
-  return lines.join("\r\n");
-}
-
-function exportCsv() {
-  const csv = "﻿" + buildCsv(); // BOM so Excel recognizes accented characters
+function downloadCsv(loadout) {
+  const csv = "\ufeff" + buildCsv(characters, db, { loadout }); // BOM so Excel recognizes accented characters
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   const stamp = new Date().toISOString().slice(0, 10);
   a.href = url;
-  a.download = `daggerheart-characters-${stamp}.csv`;
+  // Suffixed, so exporting both ways doesn't leave two files fighting over one name.
+  a.download = `daggerheart-characters-${stamp}${loadout ? "" : "-permanent"}.csv`;
   document.body.appendChild(a);
   a.click();
   a.remove();
@@ -834,7 +797,7 @@ async function init() {
     historyOpen = params.get("history") === "1";
   }
   renderAll();
-  document.getElementById("export-csv-btn").addEventListener("click", exportCsv);
+  document.getElementById("export-csv-btn").addEventListener("click", openExportPicker);
 }
 
 init();
