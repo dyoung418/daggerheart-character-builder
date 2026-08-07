@@ -378,8 +378,12 @@ export function collectEffects(ch, db) {
     add(lookup(`${armor.id}:${name}`, `armor:${name}`), "armor", `${displayName(armor, "Armor")} (${name})`);
   }
 
-  const weaponSlots = [["primary", ch.equipment?.primaryWeaponId]];
-  if (ch.equipment?.weaponMode === "one-handed") weaponSlots.push(["secondary", ch.equipment?.secondaryWeaponId]);
+  // Both slots, always: what's equipped is what applies. See derived-stats.js for why the old
+  // weaponMode gate had to go.
+  const weaponSlots = [
+    ["primary", ch.equipment?.primaryWeaponId],
+    ["secondary", ch.equipment?.secondaryWeaponId],
+  ];
   for (const [scope, weaponId] of weaponSlots) {
     const weapon = (db?.weapons || []).find((w) => w.id === weaponId);
     for (const name of featureNames(weapon)) {

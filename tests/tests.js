@@ -609,19 +609,28 @@ group("Armor Score, thresholds, and the unarmored rule");
   check("and says so when it clamps", !!capped.armorScore.note);
 }
 
-group("Attack uses the weapon's trait, Spellcast names the subclass's");
+group("Attack uses the weapon's trait, and a secondary counts because it's equipped");
 {
-  const twoHanded = derivedStats(statChar({
-    equipment: { weaponMode: "two-handed", primaryWeaponId: "staff", secondaryWeaponId: "dagger" },
+  // This used to assert that a "two-handed" weaponMode meant no secondary attack. That stopped
+  // being true the moment a Warrior — who ignores burden — could carry a shield behind a
+  // greatsword: their secondary attack came back null and the shield's Barrier went missing
+  // from their Armor Score. What's equipped is now the only question asked.
+  const both = derivedStats(statChar({
+    equipment: { primaryWeaponId: "staff", secondaryWeaponId: "dagger" },
   }), STAT_DB);
   // knowledge is -1 in the fixture, finesse is 0
-  eq("primary attack is the weapon's trait, not Proficiency", twoHanded.primaryAttack.total, -1);
-  check("a two-handed build has no secondary attack", twoHanded.secondaryAttack === null);
+  eq("primary attack is the weapon's trait, not Proficiency", both.primaryAttack.total, -1);
+  eq("the off-hand weapon uses its own trait, whatever the primary's burden",
+    both.secondaryAttack.total, 0);
 
-  const oneHanded = derivedStats(statChar({
-    equipment: { weaponMode: "one-handed", primaryWeaponId: "staff", secondaryWeaponId: "dagger" },
-  }), STAT_DB);
-  eq("the off-hand weapon uses its own trait", oneHanded.secondaryAttack.total, 0);
+  check("with no secondary equipped there is no secondary attack",
+    derivedStats(statChar({ equipment: { primaryWeaponId: "staff" } }), STAT_DB).secondaryAttack === null);
+
+  // Characters saved before this change still carry the field. It has to mean nothing.
+  check("a leftover weaponMode from an older save changes nothing",
+    derivedStats(statChar({
+      equipment: { weaponMode: "two-handed", primaryWeaponId: "staff", secondaryWeaponId: "dagger" },
+    }), STAT_DB).secondaryAttack !== null);
 
   eq("Spellcast shows the trait, not a number", derivedStats(statChar(), STAT_DB).spellcast.display, "Knowledge");
   check("subclasses without one get no Spellcast box",
@@ -772,6 +781,15 @@ group("Equipment changes traits, Evasion, Armor Score and attacks");
   eq("Reliable applies to its own weapon only", sword.secondaryAttack.total, 0);
   eq("Tower Shield's Barrier is +2 Armor Score", sword.armorScore.total, 6);
   eq("Barrier's -1 Evasion lands too", sword.evasion.total, 6);
+
+  // The same shield behind a two-handed primary — a Warrior's Combat Training says they can.
+  // This is the case the old weaponMode gate got wrong: the shield was equipped and did nothing.
+  const shielded = derivedStats(statChar({
+    equipment: { primaryWeaponId: "staff", secondaryWeaponId: "core_weapon_tower_shield" },
+  }), FX_DB);
+  // No armor, so Armor Score is Barrier's +2 alone; Evasion is the class's 9 less Barrier's 1.
+  eq("a shield's Barrier applies behind a two-handed primary too", shielded.armorScore.total, 2);
+  eq("and so does its -1 Evasion", shielded.evasion.total, 8);
 
   // "+1 to Spellcast Rolls" is not "+1 to Knowledge": a plain Knowledge roll doesn't get it.
   const chan = derivedStats(statChar({ equipment: { armorId: "core_armor_channeling_armor" } }), FX_DB);
