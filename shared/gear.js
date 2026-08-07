@@ -88,7 +88,51 @@ export function armorStats(armor) {
 }
 
 export function featureText(feature) {
-  return (feature.description || []).map((d) => d.paragraph?.["en-US"] || "").join(" ");
+  let text = "";
+  for (const block of feature?.description || []) {
+    const paragraph = block.paragraph?.["en-US"];
+    if (paragraph) text += (text ? " " : "") + paragraph;
+    // Sixteen class and subclass features state part of their content as bullets, and for one
+    // of them — Guardian's "While Unstoppable, you gain the following benefits:" — the list is
+    // the whole feature. Reading only the paragraphs returned an empty string for it. One item
+    // per line, because they're separate benefits or alternatives rather than a sentence.
+    for (const item of block.list || []) {
+      const line = item?.["en-US"];
+      if (line) text += `\n• ${line}`;
+    }
+  }
+  return text;
+}
+
+function featureName(feature) {
+  return feature?.name?.["en-US"] || "";
+}
+
+// The two plain-text shapes the CSV export needs, where featureLine() below returns HTML.
+//
+// They take a features array rather than an item because a class's hopeFeature is a bare
+// feature and a subclass tier is { features: [...] } — neither is shaped like a weapon.
+//
+// Newline-separated, because a slot holding several features is the normal case rather than the
+// exception: every ancestry has two, Sorcerer has three class features, and tiers like
+// Beastbound's Specialization hold two. The names come back in the same order as the texts, so
+// a document printing both keeps them aligned.
+export function featureNamesText(features) {
+  return (features || []).map(featureName).filter(Boolean).join("\n");
+}
+
+export function featuresText(features) {
+  return (features || []).map((feature) => {
+    const name = featureName(feature);
+    const text = featureText(feature);
+    // Consumables carry a feature with no name at all ("Clear 1d4 HP."), same as featureLine().
+    if (!name) return text;
+    if (!text) return name;
+    // Guardian's is a sentence, colon and all. A second colon would read as a typo.
+    const head = /[:.!?]$/.test(name) ? name : `${name}:`;
+    // A list-only feature's text already starts on a new line and needs no space in front.
+    return text.startsWith("\n") ? head + text : `${head} ${text}`;
+  }).filter(Boolean).join("\n");
 }
 
 // Weapons and armor carry named features, several of which change a stat ("Flexible: +1 to

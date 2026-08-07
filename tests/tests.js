@@ -78,6 +78,11 @@ const {
   groupByTier,
   weaponStats,
 } = await import(`../shared/gear.js${RUN}`);
+const {
+  CSV_COLUMNS,
+  buildCsv,
+  csvField,
+} = await import(`../shared/csv-export.js${RUN}`);
 
 // ---------- tiny runner ----------
 
@@ -1656,6 +1661,218 @@ group("Sheet: fighting unarmed and going unarmored print as the choices they are
   const undecided = deriveSheet(sheetChar({ equipment: { primaryWeaponId: null, secondaryWeaponId: null, armorId: null } }), SHEET_DB);
   eq("a slot nobody has filled in yet still prints a dash", undecided.armorName, "—");
   eq("and an empty pair of hands prints no weapon row", undecided.weapons.length, 0);
+}
+
+// ---------- the CSV export ----------
+
+// The export feeds a mail-merge document in another project, so a column that quietly stops
+// being filled is a blank line on somebody's printed character sheet rather than a crash here.
+
+// Rebuilt from the CSV rather than read off the objects, so the escaping is under test too:
+// every field is quoted, and feature cells deliberately contain newlines.
+function parseCsv(text) {
+  const rows = [];
+  let row = [], field = "", quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (quoted) {
+      if (c === '"' && text[i + 1] === '"') { field += '"'; i++; }
+      else if (c === '"') quoted = false;
+      else field += c;
+    } else if (c === '"') quoted = true;
+    else if (c === ",") { row.push(field); field = ""; }
+    else if (c === "\r" && text[i + 1] === "\n") { row.push(field); field = ""; rows.push(row); row = []; i++; }
+    else field += c;
+  }
+  row.push(field);
+  rows.push(row);
+  return rows;
+}
+
+// One character's row as { header: value }, which is how the renderer reads it.
+function exportRow(ch, opts) {
+  const rows = parseCsv(buildCsv([ch], CSV_DB, opts));
+  return Object.fromEntries(rows[1].map((value, i) => [rows[0][i], value]));
+}
+
+const para = (text) => ({ paragraph: { "en-US": text } });
+const feat = (name, ...description) => ({ name: { "en-US": name }, description });
+
+const CSV_DB = {
+  ...FX_DB,
+  classes: [{
+    id: "cls", name: "GUARDIAN", domains: ["VALOR", "BLADE"], startingHitPoints: 7, startingEvasion: 9,
+    hopeFeature: feat("Frontline Tank", para("Spend 3 Hope to clear 2 Armor Slots.")),
+    classFeatures: [
+      feat("Unstoppable", para("Once per long rest, you can become Unstoppable.")),
+      // Shaped like Guardian's second class feature in data/: a name that is a whole sentence
+      // ending in a colon, and content that is nothing but bullets.
+      {
+        name: { "en-US": "While Unstoppable, you gain the following benefits:" },
+        description: [{ list: [{ "en-US": "You reduce the severity of physical damage." }, { "en-US": "You can't be Restrained." }] }],
+      },
+    ],
+  }],
+  subclasses: [{
+    id: "sub", name: { "en-US": "Stalwart" }, spellcastTrait: "KNOWLEDGE",
+    foundation: { features: [feat("Unwavering", para("Gain a permanent +1 bonus to your damage thresholds."))] },
+    // Two features in one tier, like Beastbound's Specialization.
+    specialization: { features: [feat("Expert Training", para("Choose an additional level-up option.")), feat("Battle-Bonded", para("Gain a +2 bonus to your Evasion."))] },
+    mastery: { features: [feat("Undaunted", para("Gain a permanent +3 bonus."))] },
+  }],
+  ancestries: [
+    { id: "clank", name: { "en-US": "Clank" }, features: [feat("Purposeful Design", para("Decide who made you.")), feat("Efficient", para("Choose a long rest move."))] },
+    { id: "human", name: { "en-US": "Human" }, features: [feat("High Stamina", para("Gain an additional Stress slot."))] },
+  ],
+  communities: [{ id: "com", name: { "en-US": "Highborne" }, features: [feat("Privilege", para("You have advantage on rolls to consort with nobles."))] }],
+  weapons: [
+    { id: "longsword", name: { "en-US": "Longsword" }, trait: "AGILITY", range: "MELEE", burden: "TWO_HANDED", damage: { dice: "D10", modifier: 3, type: "PHYSICAL" }, features: [feat("Reliable", para("+1 to attack rolls."))] },
+    { id: "dagger", name: { "en-US": "Dagger" }, trait: "FINESSE", range: "MELEE", burden: "ONE_HANDED", damage: { dice: "D8", modifier: 1, type: "PHYSICAL" } },
+  ],
+  armors: [{ id: "gambeson", name: { "en-US": "Gambeson" }, baseScore: 3, baseMajorThreshold: 5, baseSevereThreshold: 11, features: [feat("Flexible", para("+1 to Evasion."))] }],
+  consumables: [{ id: "potion", name: { "en-US": "Minor Health Potion" } }],
+};
+
+const csvChar = (over = {}) => statChar({
+  heritage: { ancestryMode: "pure", ancestryIds: ["clank"], chosenFeatures: [{ ancestryId: "clank", featureName: "Purposeful Design" }], communityId: "com" },
+  ...over,
+});
+
+group("Every column is filled, and named once");
+{
+  const rows = parseCsv(buildCsv([csvChar()], CSV_DB));
+  eq("the header names every column", rows[0].length, CSV_COLUMNS.length);
+  eq("and a row has exactly as many fields as there are headers", rows[1].length, rows[0].length);
+
+  const headers = CSV_COLUMNS.map((c) => c.header);
+  eq("no header is used twice", headers.filter((h, i) => headers.indexOf(h) !== i), []);
+
+  // A consumer looks columns up by header, so two of a name means one of them is unreachable.
+  eq("every column has a header and something to put in it",
+    CSV_COLUMNS.filter((c) => !c.header || typeof c.value !== "function"), []);
+}
+
+group("Feature prose is exported, not just feature names");
+{
+  const row = exportRow(csvChar());
+  eq("a community feature comes back name-first", row["Community feature text"], "Privilege: You have advantage on rolls to consort with nobles.");
+  eq("and its name is exported on its own too", row["Community feature name"], "Privilege");
+
+  // Only the feature the player picked, not both of the ancestry's.
+  eq("a heritage exports the chosen feature", row["Heritage feature name"], "Purposeful Design");
+
+  // A class's domains are derivable from its name, and exported anyway: the renderer can't
+  // read classes.json.
+  eq("the class's domains are spelled out", row["Domains"], "Valor, Blade");
+  eq("the Hope feature is a pair like any other", row["Class Hope feature text"], "Frontline Tank: Spend 3 Hope to clear 2 Armor Slots.");
+
+  // A list-only feature used to export an empty cell, because featureText read only paragraphs.
+  const classText = row["Class feature text"].split("\n");
+  eq("several class features are one per line, each named", classText[0], "Unstoppable: Once per long rest, you can become Unstoppable.");
+  eq("a name that is already a sentence doesn't gain a second colon", classText[1], "While Unstoppable, you gain the following benefits:");
+  eq("and its bullets are exported as bullets", classText.slice(2), ["• You reduce the severity of physical damage.", "• You can't be Restrained."]);
+}
+{
+  const mixed = exportRow(csvChar({
+    heritage: {
+      ancestryMode: "mixed", ancestryIds: ["clank", "human"], communityId: "com",
+      chosenFeatures: [{ ancestryId: "clank", featureName: "Efficient" }, { ancestryId: "human", featureName: "High Stamina" }],
+    },
+  }));
+  eq("a mixed heritage names both ancestries", mixed["Heritage"], "Clank + Human");
+  eq("both chosen features are exported, one per line", mixed["Heritage feature name"], "Efficient\nHigh Stamina");
+  eq("and each line of text says which feature it is",
+    mixed["Heritage feature text"], "Efficient: Choose a long rest move.\nHigh Stamina: Gain an additional Stress slot.");
+}
+{
+  // Upgrading a subclass adds a card rather than replacing the one below it, so the tiers below
+  // always print — and the tiers above haven't happened yet.
+  const foundation = exportRow(csvChar());
+  eq("a Foundation character exports their Foundation feature", foundation["Foundation feature name"], "Unwavering");
+  eq("and nothing for the tier they haven't reached", foundation["Specialization feature text"], "");
+
+  const mastered = exportRow(csvChar({ subclassTier: "mastery" }));
+  eq("at Mastery the tiers below are still theirs", mastered["Foundation feature name"], "Unwavering");
+  eq("a tier holding two features exports both", mastered["Specialization feature name"], "Expert Training\nBattle-Bonded");
+  eq("with the texts in the same order", mastered["Specialization feature text"].split("\n").length, 2);
+}
+
+group("A weapon exports the numbers the sheet prints beside it");
+{
+  const armed = exportRow(csvChar({
+    equipment: { primaryWeaponId: "longsword", secondaryWeaponId: null, armorId: "gambeson", potionChoice: "potion" },
+  }));
+  eq("the primary weapon's name", armed["Primary weapon name"], "Longsword");
+  eq("its range, in the sheet's words rather than the JSON's", armed["Primary range"], "Melee");
+  eq("its damage, modifier included", armed["Primary damage"], "d10+3 phy");
+  eq("and its feature", armed["Primary feature"], "Reliable: +1 to attack rolls.");
+  eq("an empty secondary slot exports blanks, not 'undefined'",
+    [armed["Secondary weapon name"], armed["Secondary range"], armed["Secondary damage"], armed["Secondary feature"]], ["", "", "", ""]);
+  eq("armor is named and its feature exported", [armed["Armor name"], armed["Armor feature"]], ["Gambeson", "Flexible: +1 to Evasion."]);
+  eq("Hope is two numbers rather than the string 2/6", [armed["Hope"], armed["Hope Max"]], ["2", "6"]);
+}
+{
+  // Bare hands are a choice with rules of their own, not an empty slot.
+  const barehanded = exportRow(csvChar({
+    equipment: { primaryWeaponId: UNARMED, secondaryWeaponId: null, armorId: UNARMORED, potionChoice: null },
+  }));
+  eq("an unarmed attack still has a weapon's columns",
+    [barehanded["Primary weapon name"], barehanded["Primary range"], barehanded["Primary damage"]], ["Unarmed", "Melee", "d4 phy"]);
+  eq("and no feature", barehanded["Primary feature"], "");
+  eq("choosing to wear nothing says so", barehanded["Armor name"], "Unarmored");
+  eq("with no armor feature to report", barehanded["Armor feature"], "");
+}
+
+group("Two exports, and the column that tells them apart");
+{
+  const untouchable = csvChar({ domainCardIds: ["core_domain_card_untouchable"], domainVaultIds: [] });
+  const withLoadout = exportRow(untouchable);
+  const permanent = exportRow(untouchable, { loadout: false });
+
+  // Agility is +1 in the fixture, and Untouchable is half of it rounded up.
+  eq("with the loadout, the card's bonus is in the number", withLoadout["Evasion"], "10");
+  eq("without it, the number is what's permanently true", permanent["Evasion"], "9");
+  eq("and each row says which it is", [withLoadout["Includes loadout bonuses"], permanent["Includes loadout bonuses"]], ["true", "false"]);
+
+  // Permanent only means every card is in the vault — so the card lists move rather than empty.
+  eq("with the loadout, the card is in the loadout", withLoadout["Domain Cards (loadout)"], "Untouchable");
+  eq("without it, the loadout is empty", permanent["Domain Cards (loadout)"], "");
+  eq("and the card is reported in the vault instead", permanent["Domain Cards (vault)"], "Untouchable");
+}
+{
+  // Vitality is permanent and tells you to vault it, so it applies either way.
+  const vitality = csvChar({
+    domainCardIds: ["core_domain_card_vitality"], domainVaultIds: [],
+    effectChoices: { core_domain_card_vitality: { optionIds: ["stress", "hitPoint"] } },
+  });
+  eq("a permanent card counts in both exports",
+    [exportRow(vitality)["Hit Points"], exportRow(vitality, { loadout: false })["Hit Points"]], ["8", "8"]);
+}
+{
+  // Bare Bones is a loadout card whose effect is a base rather than a bonus. A base a card was
+  // standing in for goes with the card: what's left is the SRD's plain unarmored rule.
+  const bones = csvChar({
+    equipment: { primaryWeaponId: null, secondaryWeaponId: null, armorId: UNARMORED, potionChoice: null },
+    domainCardIds: ["core_domain_card_bare_bones"], domainVaultIds: [],
+  });
+  eq("with the loadout, Bare Bones stands in for armor",
+    [exportRow(bones)["Armor Score"], exportRow(bones)["Major Threshold"], exportRow(bones)["Severe Threshold"]], ["5", "10", "20"]);
+  const permanent = exportRow(bones, { loadout: false });
+  eq("without it, an unarmored character is unarmored",
+    [permanent["Armor Score"], permanent["Major Threshold"], permanent["Severe Threshold"]], ["0", "1", "2"]);
+}
+
+group("The GM's spreadsheet is handed data, never a program");
+{
+  // Quoting alone doesn't stop this: a spreadsheet evaluates a leading = even inside quotes.
+  const hostile = exportRow(csvChar({ name: '=HYPERLINK("http://evil","click")' }));
+  check("a name that looks like a formula is neutralised", hostile["Name"].startsWith("'="), `got ${hostile["Name"]}`);
+  eq("a quote inside a field survives the round trip", hostile["Name"].includes('"http://evil"'), true);
+
+  // Knowledge is -1 in the fixture. Prefixing a plain number would turn every negative trait
+  // into text and break sorting for the GM.
+  eq("a negative number is left alone", exportRow(csvChar())["Knowledge"], "-1");
+  eq("a comma in a field doesn't split it", csvField("a,b"), '"a,b"');
 }
 
 // ---------- report ----------

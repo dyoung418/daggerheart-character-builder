@@ -64,6 +64,12 @@ export const MAX_STRESS_SLOTS = 12;
 // Evasion which come from classes.json.
 export const BASE_STRESS_SLOTS = 6;
 
+// Hope is the same for everyone and nothing in the catalogue moves it, which is why it has no
+// EFFECT_STAT_KEYS entry and no breakdown — but it's still printed on three screens and exported,
+// so the two numbers are stated here rather than as "2 / 6" in each of them.
+export const STARTING_HOPE = 2;
+export const MAX_HOPE = 6;
+
 // "A PC's Armor Score can't exceed 12." (SRD, Armor)
 export const MAX_ARMOR_SCORE = 12;
 
