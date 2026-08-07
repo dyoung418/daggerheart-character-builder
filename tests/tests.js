@@ -764,6 +764,7 @@ const FX_DB = {
   ],
   domainCards: [
     { id: "core_domain_card_untouchable", name: { "en-US": "Untouchable" }, domain: "BONE", level: 1 },
+    { id: "core_domain_card_bare_bones", name: { "en-US": "Bare Bones" }, domain: "VALOR", level: 1 },
     { id: "core_domain_card_vitality", name: { "en-US": "Vitality" }, domain: "BLADE", level: 5 },
     { id: "core_domain_card_codex_touched", name: { "en-US": "Codex-Touched" }, domain: "CODEX", level: 7 },
     ...["a", "b", "c"].map((s) => ({ id: `codex_${s}`, name: { "en-US": `Codex ${s}` }, domain: "CODEX", level: 1 })),
@@ -855,6 +856,39 @@ group("Choosing to wear nothing");
     equipment: { armorId: UNARMORED, secondaryWeaponId: "core_weapon_tower_shield" },
   }), FX_DB);
   eq("a shield's Armor Score still applies", shielded.armorScore.total, 2);
+}
+
+group("Bare Bones stands in for the armor you didn't wear");
+{
+  // strength is +2 in the fixture. Tier 1 base thresholds are 9/19, and your level goes on top
+  // of those exactly as it would on top of a breastplate's.
+  const bones = (over) => derivedStats(statChar({
+    equipment: { armorId: UNARMORED }, domainCardIds: ["core_domain_card_bare_bones"], ...over,
+  }), FX_DB);
+
+  const lv1 = bones({ level: 1 });
+  eq("base Armor Score is 3 + your Strength", lv1.armorScore.total, 5);
+  eq("Major is the card's 9 plus your level", lv1.majorThreshold.total, 10);
+  eq("Severe is the card's 19 plus your level", lv1.severeThreshold.total, 20);
+  eq("and the breakdown names the card, where armor would have named itself",
+    lv1.armorScore.parts[0].label, "Bare Bones");
+
+  // Tier 3 is levels 5-7, so the base moves to 13/31.
+  const lv6 = bones({ level: 6 });
+  eq("the thresholds follow your tier", [lv6.majorThreshold.total, lv6.severeThreshold.total], [19, 37]);
+
+  // A shield is still a shield: additive effects stack on the override as they would on armor.
+  const shielded = bones({ equipment: { armorId: UNARMORED, secondaryWeaponId: "core_weapon_tower_shield" } });
+  eq("Barrier adds to Bare Bones' base", shielded.armorScore.total, 7);
+
+  // "When you choose NOT to equip armor" — wearing any means the card does nothing.
+  const armored = bones({ equipment: { armorId: "gambeson" } });
+  eq("wearing armor, the card is silent", armored.armorScore.total, 3);
+
+  // It's a loadout card, so it stops applying the moment it's vaulted.
+  const vaulted = bones({ domainVaultIds: ["core_domain_card_bare_bones"] });
+  eq("vaulting it gives the plain unarmored rule back", vaulted.armorScore.total, 0);
+  eq("thresholds too", vaulted.majorThreshold.total, 1);
 }
 
 group("Loadout cards apply, vaulted ones don't");
