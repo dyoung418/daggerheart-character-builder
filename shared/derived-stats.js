@@ -163,9 +163,11 @@ export function derivedStats(ch, db) {
   const sub = find(db?.subclasses, ch.subclassId);
   const armor = find(db?.armors, ch.equipment?.armorId);
   const primaryWeapon = find(db?.weapons, ch.equipment?.primaryWeaponId);
-  const secondaryWeapon = ch.equipment?.weaponMode === "one-handed"
-    ? find(db?.weapons, ch.equipment?.secondaryWeaponId)
-    : null;
+  // Whether a secondary counts is whether one is equipped. This used to be gated on a stored
+  // "weaponMode" string, which stopped being the truth the moment a Warrior — who ignores
+  // burden — could carry a shield behind a two-handed primary: their secondary attack came
+  // back null and their Tower Shield's +2 Armor Score quietly went missing.
+  const secondaryWeapon = find(db?.weapons, ch.equipment?.secondaryWeaponId);
 
   const { contributions, exclusions, experienceBonus, ctx } = gather(ch, db);
   const className = cls ? titleCase(cls.name) : "Class";
