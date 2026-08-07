@@ -61,6 +61,7 @@ const {
   unresolvedChoices,
 } = await import(`../shared/effects.js${RUN}`);
 const {
+  UNARMORED,
   burdenWarning,
   damageText,
   featureLine,
@@ -830,6 +831,30 @@ group("Equipment changes traits, Evasion, Armor Score and attacks");
   const chan = derivedStats(statChar({ equipment: { armorId: "core_armor_channeling_armor" } }), FX_DB);
   eq("Channeling armor shows on the Spellcast box", chan.spellcast.display, "Knowledge +1");
   eq("but never on the trait itself", chan.traits.knowledge.total, -1);
+}
+
+group("Choosing to wear nothing");
+{
+  // The SRD's plain unarmored rule, reachable at last: Armor Score 0, Major threshold equal to
+  // your level and Severe twice your level.
+  const bare = derivedStats(statChar({ level: 3, equipment: { armorId: UNARMORED } }), FX_DB);
+  eq("no armor means an Armor Score of 0", bare.armorScore.total, 0);
+  eq("Major threshold is your level", bare.majorThreshold.total, 3);
+  eq("and Severe is twice it", bare.severeThreshold.total, 6);
+
+  // Not the same state as never having chosen — but the arithmetic can't tell them apart, and
+  // shouldn't: a character mid-creation has no armor either.
+  const unset = derivedStats(statChar({ level: 3, equipment: {} }), FX_DB);
+  eq("having chosen nothing yet works out the same", unset.armorScore.total, bare.armorScore.total);
+
+  // The sentinel is a marker, not an id: nothing must go looking for armor by that name.
+  check("it matches no armor in the data", !FX_DB.armors.some((a) => a.id === UNARMORED));
+
+  // A shield is still a shield with no body armor under it.
+  const shielded = derivedStats(statChar({
+    equipment: { armorId: UNARMORED, secondaryWeaponId: "core_weapon_tower_shield" },
+  }), FX_DB);
+  eq("a shield's Armor Score still applies", shielded.armorScore.total, 2);
 }
 
 group("Loadout cards apply, vaulted ones don't");

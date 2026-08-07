@@ -13,6 +13,15 @@
 
 import { escapeHtml } from "./escape.js";
 
+// Choosing to wear nothing is a choice, and not the same as not having chosen yet: the SRD says
+// "when you choose not to equip armor", and Bare Bones keys off exactly that. So it's a stored
+// value rather than a null — but a marker, not a record. There is no such armor in data/, and
+// nothing ever looks one up for it.
+//
+// It lives here because this is the equipment vocabulary both the rules and the pages share;
+// putting it in either of them would have the two importing each other.
+export const UNARMORED = "unarmored";
+
 // enumLabel would turn TWO_HANDED into "Two Handed"; the book hyphenates, and so does the
 // wizard's own prose.
 const BURDEN_LABELS = { ONE_HANDED: "One-handed", TWO_HANDED: "Two-handed" };

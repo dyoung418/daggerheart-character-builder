@@ -16,6 +16,7 @@ import {
   burdenWarning,
   groupByTier,
   featureText,
+  UNARMORED,
   matchesSpellcast,
   spellcastBadge,
   weaponRowContent,
@@ -628,6 +629,9 @@ function renderEquipmentStep(panel) {
     onSelect: (id) => { e.armorId = id; onChange(); },
     rowContent: armorRowContent,
     tier,
+    // Not the same as leaving the step unfinished, which is why it stores a value of its own.
+    noneLabel: "Unarmored",
+    noneValue: UNARMORED,
   }));
 
   const h3d = document.createElement("h3");
@@ -653,15 +657,15 @@ function renderEquipmentStep(panel) {
 // One picker: an optional "nothing" row, then one <details> per tier of the book. One radio
 // group name per list — it used to fold in the weapon's type and burden, which quietly made the
 // primary list two radio groups, harmless only because every pick re-renders the step.
-function gearList(items, { groupName, selectedId, onSelect, rowContent, rowClass, tier, noneLabel, filterText }) {
+function gearList(items, { groupName, selectedId, onSelect, rowContent, rowClass, tier, noneLabel, noneValue = null, filterText }) {
   const wrap = document.createElement("div");
 
   if (noneLabel) {
     const row = document.createElement("label");
     row.className = "option-row";
-    row.innerHTML = `<input type="radio" name="${escapeHtml(groupName)}" value="" ` +
-      `${selectedId ? "" : "checked"}/> <strong>${escapeHtml(noneLabel)}</strong>`;
-    row.querySelector("input").addEventListener("change", () => onSelect(null));
+    row.innerHTML = `<input type="radio" name="${escapeHtml(groupName)}" value="${escapeHtml(noneValue ?? "")}" ` +
+      `${selectedId === noneValue ? "checked" : ""}/> <strong>${escapeHtml(noneLabel)}</strong>`;
+    row.querySelector("input").addEventListener("change", () => onSelect(noneValue));
     wrap.appendChild(row);
   }
 

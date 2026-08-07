@@ -28,7 +28,7 @@ import {
 import { derivedStats } from "./shared/derived-stats.js";
 import { statLine } from "./shared/stat-line.js";
 import { ignoresBurden, unresolvedChoices } from "./shared/effects.js";
-import { armorStats, burdenWarning, featureLine, weaponStats } from "./shared/gear.js";
+import { UNARMORED, armorStats, burdenWarning, featureLine, weaponStats } from "./shared/gear.js";
 import { escapeHtml } from "./shared/escape.js";
 
 const signed = (n) => (n > 0 ? `+${n}` : String(n));
@@ -609,7 +609,10 @@ function renderDetail() {
   const eq = ch.equipment;
   const primary = findWeapon(eq.primaryWeaponId);
   const secondary = findWeapon(eq.secondaryWeaponId);
-  const armor = findArmor(eq.armorId);
+  // A character who chose to wear nothing says so, rather than showing the same dash as one
+  // who hasn't picked yet.
+  const unarmored = eq.armorId === UNARMORED;
+  const armor = unarmored ? { name: { "en-US": "Unarmored" } } : findArmor(eq.armorId);
   const potion = findConsumable(eq.potionChoice);
   const eqBox = document.createElement("div");
   eqBox.className = "detail-summary";
@@ -789,7 +792,7 @@ function csvRowForCharacter(ch) {
     stats.spellcast ? stats.spellcast.display : "",
     findWeapon(ch.equipment.primaryWeaponId)?.name["en-US"] || "",
     findWeapon(ch.equipment.secondaryWeaponId)?.name["en-US"] || "",
-    findArmor(ch.equipment.armorId)?.name["en-US"] || "",
+    ch.equipment.armorId === UNARMORED ? "Unarmored" : findArmor(ch.equipment.armorId)?.name["en-US"] || "",
     findConsumable(ch.equipment.potionChoice)?.name["en-US"] || "",
     expText, loadoutNames, vaultNames,
     ch.background.description, ch.background.answers, ch.connectionsNotes,
