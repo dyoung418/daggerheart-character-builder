@@ -66,6 +66,7 @@ const {
 const {
   burdenWarning,
   damageText,
+  featureLine,
   enumLabel,
   groupByTier,
   weaponStats,
@@ -675,6 +676,15 @@ group("A weapon reads as prose, not as the JSON it came from");
   eq("fields a record doesn't carry are left out, not printed as undefined",
     weaponStats({ trait: "FINESSE", burden: "ONE_HANDED" }), "Finesse · One-handed");
   eq("and no weapon at all is not a crash", weaponStats(null), "");
+
+  // Consumables carry a feature with no name, and the sheet puts potions through the same
+  // renderer as weapons — without this it read "Minor Health Potion : Clear 1d4 HP."
+  eq("a nameless feature is just its text",
+    featureLine({ features: [{ description: [{ paragraph: { "en-US": "Clear 1d4 HP." } }] }] }),
+    `<span class="option-feature">Clear 1d4 HP.</span>`);
+  eq("a named one still reads name-then-text",
+    featureLine({ features: [{ name: { "en-US": "Reliable" }, description: [{ paragraph: { "en-US": "+1 to attack rolls" } }] }] }),
+    `<span class="option-feature"><em>Reliable</em>: +1 to attack rolls</span>`);
 }
 
 group("Burden is advice, and the Warrior doesn't even get the advice");

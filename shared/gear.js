@@ -81,6 +81,9 @@ export function featureLine(item) {
   const features = (item?.features || []).map((f) => {
     const name = f.name?.["en-US"] || "";
     const text = featureText(f);
+    // Consumables carry a feature with no name at all ("Clear 1d4 HP."), so the colon only
+    // belongs here when there's something in front of it.
+    if (!name) return escapeHtml(text);
     return `<em>${escapeHtml(name)}</em>${text ? `: ${escapeHtml(text)}` : ""}`;
   });
   return features.length ? `<span class="option-feature">${features.join(" · ")}</span>` : "";

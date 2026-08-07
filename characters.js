@@ -27,7 +27,8 @@ import {
 } from "./shared/history.js";
 import { derivedStats } from "./shared/derived-stats.js";
 import { statLine } from "./shared/stat-line.js";
-import { unresolvedChoices } from "./shared/effects.js";
+import { ignoresBurden, unresolvedChoices } from "./shared/effects.js";
+import { armorStats, burdenWarning, featureLine, weaponStats } from "./shared/gear.js";
 import { escapeHtml } from "./shared/escape.js";
 
 const signed = (n) => (n > 0 ? `+${n}` : String(n));
@@ -619,12 +620,33 @@ function renderDetail() {
   const potion = findConsumable(eq.potionChoice);
   const eqBox = document.createElement("div");
   eqBox.className = "detail-summary";
-  eqBox.innerHTML = `
-    <p><strong>Primary weapon:</strong> ${primary ? escapeHtml(primary.name["en-US"]) : "—"}</p>
-    ${secondary ? `<p><strong>Secondary weapon:</strong> ${escapeHtml(secondary.name["en-US"])}</p>` : ""}
-    <p><strong>Armor:</strong> ${armor ? escapeHtml(armor.name["en-US"]) : "—"}</p>
-    <p><strong>Potion:</strong> ${potion ? escapeHtml(potion.name["en-US"]) : "—"}</p>
-  `;
+  // A slot the sheet doesn't draw is a slot the player forgets they can fill, so an empty
+  // secondary says so rather than vanishing. The stats under each name are the ones that used
+  // to be visible only while picking the thing.
+  const gearLine = (label, item, stats) => `
+    <p><strong>${label}:</strong> ${item ? escapeHtml(item.name["en-US"]) : "—"}
+    ${item && stats ? `<span class="gear-stats">${escapeHtml(stats)}</span>` : ""}
+    ${item ? featureLine(item) : ""}</p>`;
+  eqBox.innerHTML =
+    gearLine("Primary weapon", primary, weaponStats(primary)) +
+    gearLine("Secondary weapon", secondary, weaponStats(secondary)) +
+    gearLine("Armor", armor, armorStats(armor)) +
+    gearLine("Potion", potion, "");
+
+  const warning = burdenWarning(primary, secondary, ignoresBurden(ch, db));
+  if (warning) {
+    const p = document.createElement("p");
+    p.className = "hint";
+    p.textContent = `⚠ ${warning}`;
+    eqBox.appendChild(p);
+  }
+
+  // Equipment is the one part of a character the sheet sends you back to the wizard for, so
+  // send you to the right step rather than to the start of it.
+  const changeBtn = button("Change equipment", "btn-small", () => {
+    location.href = `create.html?id=${ch.id}&step=equipment`;
+  });
+  eqBox.appendChild(changeBtn);
   container.appendChild(eqBox);
 
   const expBox = document.createElement("div");
