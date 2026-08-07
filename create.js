@@ -9,10 +9,11 @@ import { blankSlotsUsed, ensureLevelFields } from "./shared/advancement.js";
 import { recomputeCharacter } from "./shared/history.js";
 import { derivedStats } from "./shared/derived-stats.js";
 import { statLine } from "./shared/stat-line.js";
-import { EFFECTS, blankAnswer, collectEffects } from "./shared/effects.js";
+import { EFFECTS, blankAnswer, collectEffects, ignoresBurden } from "./shared/effects.js";
 import { renderEffectChoice } from "./shared/effect-choice.js";
 import {
   armorRowContent,
+  burdenWarning,
   featureLine,
   featureText,
   matchesSpellcast,
@@ -569,6 +570,18 @@ function renderEquipmentStep(panel) {
     h3b.textContent = "Secondary weapon (Tier 1)";
     panel.appendChild(h3b);
     panel.appendChild(weaponSelect(secondaries, "weapon-secondary", e.secondaryWeaponId, (id) => { e.secondaryWeaponId = id; onChange(); }, spellcastTrait));
+  }
+
+  const warning = burdenWarning(
+    db.weapons.find((w) => w.id === e.primaryWeaponId),
+    db.weapons.find((w) => w.id === e.secondaryWeaponId),
+    ignoresBurden(character, db),
+  );
+  if (warning) {
+    const p = document.createElement("p");
+    p.className = "hint";
+    p.textContent = `⚠ ${warning}`;
+    panel.appendChild(p);
   }
 
   const h3c = document.createElement("h3");
