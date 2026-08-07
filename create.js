@@ -128,10 +128,18 @@ function blankCharacter(id) {
 function initCharacter() {
   const params = new URLSearchParams(location.search);
   const id = params.get("id");
+  // The equipment step outlives creation, so the sheet links straight to it. Any step key works;
+  // an unknown one just starts at the beginning, as a bare ?id= always has.
+  const step = STEPS.findIndex((s) => s.key === params.get("step"));
+  if (step >= 0) currentStep = step;
   if (id) {
     const found = loadAllCharacters().find((c) => c.id === id);
     if (found) {
       character = ensureLevelFields(found);
+      // Coming back to change one thing isn't creating a character, and the page shouldn't
+      // greet you as though it were.
+      document.title = "Daggerheart — Edit Character";
+      document.querySelector(".topbar h1 span").textContent = "Edit Character";
       return;
     }
   }
