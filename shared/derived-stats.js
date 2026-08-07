@@ -19,7 +19,7 @@ import {
   damageThresholds,
 } from "./advancement.js";
 import { EFFECT_STAT_KEYS, collectEffects, effectValue, loadoutDomainCounts } from "./effects.js";
-import { UNARMORED } from "./gear.js";
+import { UNARMED, UNARMORED } from "./gear.js";
 
 export const TRAIT_KEYS = ["agility", "strength", "finesse", "instinct", "presence", "knowledge"];
 export const TRAIT_LABELS = {
@@ -49,6 +49,8 @@ export function evasionTotal(cls, bonus, extra = 0) {
 
 // ---------- effect plumbing ----------
 
+const signed = (n) => (n > 0 ? `+${n}` : String(n));
+
 function stat(parts) {
   return { total: parts.reduce((sum, p) => sum + p.value, 0), parts };
 }
@@ -65,6 +67,19 @@ function find(list, id) {
 // Deliberately unarmored resolves to no armor, the same as not having picked any — the
 // difference between the two matters to the wizard, not to the arithmetic. Asked explicitly
 // rather than left to find() missing, so the sentinel can't be mistaken for a typo'd id.
+// SRD: "Unarmed attack rolls use either Strength or Finesse (GM's choice)", and "successful
+// unarmed attacks inflict [Proficiency]d4 damage" — the same Proficiency-multiplies-the-dice
+// rule as any weapon, so d4 is the rating in the same sense d10+3 is a Longsword's.
+//
+// Two traits rather than one, so this deliberately isn't shaped like a weapon record. It's a
+// core rule, which is why it lives here and not in data/ or in the effects catalogue.
+export const UNARMED_PROFILE = {
+  name: { "en-US": "Unarmed" },
+  traits: ["STRENGTH", "FINESSE"],
+  range: "MELEE",
+  damage: { dice: "D4", type: "PHYSICAL" },
+};
+
 function equippedArmor(ch, db) {
   if (ch.equipment?.armorId === UNARMORED) return null;
   return find(db?.armors, ch.equipment?.armorId);
@@ -184,7 +199,8 @@ export function derivedStats(ch, db) {
   const cls = find(db?.classes, ch.classId);
   const sub = find(db?.subclasses, ch.subclassId);
   const armor = equippedArmor(ch, db);
-  const primaryWeapon = find(db?.weapons, ch.equipment?.primaryWeaponId);
+  const unarmed = ch.equipment?.primaryWeaponId === UNARMED;
+  const primaryWeapon = unarmed ? null : find(db?.weapons, ch.equipment?.primaryWeaponId);
   // Whether a secondary counts is whether one is equipped. This used to be gated on a stored
   // "weaponMode" string, which stopped being the truth the moment a Warrior — who ignores
   // burden — could carry a shield behind a two-handed primary: their secondary attack came
@@ -221,7 +237,9 @@ export function derivedStats(ch, db) {
     proficiency: stat([{ label: "Level achievements and advancements", value: ch.proficiency }]),
     armorScore: armorScoreStat(armor, db, contributions, ctx),
     ...thresholdStats(ch, armor, contributions, ctx),
-    primaryAttack: attackStat(primaryWeapon, traits, contributions, ctx, "primary"),
+    primaryAttack: unarmed
+      ? unarmedAttackStat(traits, contributions, ctx)
+      : attackStat(primaryWeapon, traits, contributions, ctx, "primary"),
     secondaryAttack: attackStat(secondaryWeapon, traits, contributions, ctx, "secondary"),
     spellcast: spellcastStat(sub, traits, contributions, ctx),
   };
@@ -329,6 +347,31 @@ function attackStat(weapon, traits, contributions, ctx, scope) {
       { label: `${TRAIT_LABELS[key]} (${weapon.name["en-US"]})`, value: trait.total },
       ...partsFor(contributions, "attack", ctx, scope),
     ]),
+  };
+}
+
+// Two traits, and the choice between them belongs to the GM at the table rather than to the
+// sheet. So this reports both rather than quietly picking the better one — same shape as the
+// Spellcast box, which is also a stat that isn't a single number.
+function unarmedAttackStat(traits, contributions, ctx) {
+  const bonusParts = partsFor(contributions, "attack", ctx, "primary");
+  const bonus = bonusParts.reduce((sum, p) => sum + p.value, 0);
+  const options = UNARMED_PROFILE.traits.map((t) => {
+    const key = t.toLowerCase();
+    return { key, label: TRAIT_LABELS[key], total: (traits[key]?.total ?? 0) + bonus };
+  });
+  const display = options.map((o) => `${o.label} ${signed(o.total)}`).join(" / ");
+  return {
+    weaponName: UNARMED_PROFILE.name["en-US"],
+    unarmed: true,
+    display,
+    // No total: these two aren't parts of a sum, they're alternatives, and the popover skips
+    // the Total row for a stat that doesn't have one.
+    parts: [
+      ...options.map((o) => ({ label: `${o.label} (unarmed)`, value: traits[o.key]?.total ?? 0 })),
+      ...bonusParts,
+    ],
+    note: "Unarmed attack rolls use Strength or Finesse, whichever the GM calls for.",
   };
 }
 

@@ -75,7 +75,7 @@
 // both if a card ever needs to. Its values are functions of the same context.
 
 import { SUBCLASS_TIER_ORDER, tierForLevel } from "./advancement.js";
-import { UNARMORED } from "./gear.js";
+import { UNARMED, UNARMORED } from "./gear.js";
 
 // Requirement shared by the *-Touched cards: "When 4 or more of the domain cards in your
 // loadout are from the X domain". The card is itself an X card, so it counts toward its own 4.
@@ -412,8 +412,10 @@ export function collectEffects(ch, db) {
 
   // Both slots, always: what's equipped is what applies. See derived-stats.js for why the old
   // weaponMode gate had to go.
+  // Bare hands carry no features, and the sentinel matches no id — asked outright rather than
+  // left to the lookup to miss, same as the armor above.
   const weaponSlots = [
-    ["primary", ch.equipment?.primaryWeaponId],
+    ["primary", ch.equipment?.primaryWeaponId === UNARMED ? null : ch.equipment?.primaryWeaponId],
     ["secondary", ch.equipment?.secondaryWeaponId],
   ];
   for (const [scope, weaponId] of weaponSlots) {

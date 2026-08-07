@@ -16,6 +16,7 @@ import {
   burdenWarning,
   groupByTier,
   featureText,
+  UNARMED,
   UNARMORED,
   matchesSpellcast,
   spellcastBadge,
@@ -583,6 +584,10 @@ function renderEquipmentStep(panel) {
       rowClass: (w) => (matchesSpellcast(w, spellcastTrait) ? " trait-match" : ""),
       tier,
       filterText: gearFilter,
+      // Carrying nothing is a choice the rules have an answer for, and one a Brawler will make
+      // on purpose.
+      noneLabel: "Unarmed",
+      noneValue: UNARMED,
     }));
   };
   renderPrimaries();

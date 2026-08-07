@@ -47,6 +47,7 @@ const {
   validateLevelUps,
 } = await import(`../shared/history.js${RUN}`);
 const {
+  UNARMED_PROFILE,
   derivedStats,
   effectBonuses,
   evasionTotal,
@@ -64,6 +65,7 @@ const {
   deriveSheet,
 } = await import(`../shared/sheet-data.js${RUN}`);
 const {
+  UNARMED,
   UNARMORED,
   burdenWarning,
   damageText,
@@ -859,6 +861,35 @@ group("Choosing to wear nothing");
     equipment: { armorId: UNARMORED, secondaryWeaponId: "core_weapon_tower_shield" },
   }), FX_DB);
   eq("a shield's Armor Score still applies", shielded.armorScore.total, 2);
+}
+
+group("Fighting with nothing in your hands");
+{
+  // "Unarmed attack rolls use either Strength or Finesse (GM's choice)." The sheet reports both
+  // rather than quietly picking the better one — that choice belongs to the table.
+  // strength is +2 in the fixture, finesse 0.
+  const bare = derivedStats(statChar({ equipment: { primaryWeaponId: UNARMED } }), FX_DB);
+  // signed() writes zero as "0", the same as every other stat box on the sheet.
+  eq("both traits are offered, neither is chosen", bare.primaryAttack.display, "Strength +2 / Finesse 0");
+  eq("and the breakdown shows each of them",
+    bare.primaryAttack.parts.map((p) => p.label), ["Strength (unarmed)", "Finesse (unarmed)"]);
+  check("with a note saying whose choice it is", /GM/.test(bare.primaryAttack.note));
+
+  // "Successful unarmed attacks inflict [Proficiency]d4 damage" — d4 is the rating, in the same
+  // sense d10+3 is a Longsword's.
+  eq("bare hands hit for d4", weaponStats(UNARMED_PROFILE), "Strength or Finesse · Melee · d4 phy");
+
+  // The sentinel is a marker, not an id.
+  check("it matches no weapon in the data", !FX_DB.weapons.some((w) => w.id === UNARMED));
+  eq("and carries no weapon features into the effects", 
+    derivedStats(statChar({ equipment: { primaryWeaponId: UNARMED } }), FX_DB).evasion.total, 9);
+
+  // A secondary is still a secondary when the other hand is empty.
+  const withShield = derivedStats(statChar({
+    equipment: { primaryWeaponId: UNARMED, secondaryWeaponId: "core_weapon_tower_shield" },
+  }), FX_DB);
+  eq("an off-hand weapon still applies", withShield.armorScore.total, 2);
+  check("and still gets its own attack", withShield.secondaryAttack !== null);
 }
 
 group("Bare Bones stands in for the armor you didn't wear");

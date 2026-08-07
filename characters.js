@@ -25,10 +25,10 @@ import {
   unresolvedProblems,
   validateLevelUps,
 } from "./shared/history.js";
-import { derivedStats } from "./shared/derived-stats.js";
+import { UNARMED_PROFILE, derivedStats } from "./shared/derived-stats.js";
 import { statLine } from "./shared/stat-line.js";
 import { ignoresBurden, unresolvedChoices } from "./shared/effects.js";
-import { UNARMORED, armorStats, burdenWarning, featureLine, weaponStats } from "./shared/gear.js";
+import { UNARMED, UNARMORED, armorStats, burdenWarning, featureLine, weaponStats } from "./shared/gear.js";
 import { escapeHtml } from "./shared/escape.js";
 
 const signed = (n) => (n > 0 ? `+${n}` : String(n));
@@ -561,7 +561,9 @@ function renderDetail() {
     ));
   }
   if (stats.primaryAttack) {
-    statsBox2.appendChild(statLine("Primary attack", signed(stats.primaryAttack.total), stats.primaryAttack));
+    // Unarmed reports two traits rather than one number, the way Spellcast does.
+    statsBox2.appendChild(statLine("Primary attack",
+      stats.primaryAttack.display ?? signed(stats.primaryAttack.total), stats.primaryAttack));
   }
   if (stats.secondaryAttack) {
     statsBox2.appendChild(statLine("Secondary attack", signed(stats.secondaryAttack.total), stats.secondaryAttack));
@@ -614,7 +616,8 @@ function renderDetail() {
   }
 
   const eq = ch.equipment;
-  const primary = findWeapon(eq.primaryWeaponId);
+  const unarmedPrimary = eq.primaryWeaponId === UNARMED;
+  const primary = unarmedPrimary ? UNARMED_PROFILE : findWeapon(eq.primaryWeaponId);
   const secondary = findWeapon(eq.secondaryWeaponId);
   // A character who chose to wear nothing says so, rather than showing the same dash as one
   // who hasn't picked yet.
@@ -794,10 +797,10 @@ function csvRowForCharacter(ch) {
     stats.evasion ? stats.evasion.total : "", stats.hitPoints ? stats.hitPoints.total : "", stats.stress.total, "2/6",
     stats.majorThreshold ? stats.majorThreshold.total : "", stats.severeThreshold ? stats.severeThreshold.total : "",
     stats.armorScore ? stats.armorScore.total : "",
-    stats.primaryAttack ? signed(stats.primaryAttack.total) : "",
+    stats.primaryAttack ? (stats.primaryAttack.display ?? signed(stats.primaryAttack.total)) : "",
     stats.secondaryAttack ? signed(stats.secondaryAttack.total) : "",
     stats.spellcast ? stats.spellcast.display : "",
-    findWeapon(ch.equipment.primaryWeaponId)?.name["en-US"] || "",
+    ch.equipment.primaryWeaponId === UNARMED ? "Unarmed" : findWeapon(ch.equipment.primaryWeaponId)?.name["en-US"] || "",
     findWeapon(ch.equipment.secondaryWeaponId)?.name["en-US"] || "",
     ch.equipment.armorId === UNARMORED ? "Unarmored" : findArmor(ch.equipment.armorId)?.name["en-US"] || "",
     findConsumable(ch.equipment.potionChoice)?.name["en-US"] || "",
