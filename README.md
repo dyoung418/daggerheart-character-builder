@@ -8,7 +8,7 @@ Built out of a personal need: converting a tabletop party from D&D 5e to Daggerh
 
 - **Card browser** (`index.html`) — filter the 189 domain cards by domain, type, and level; build a 5-card loadout plus a vault, saved locally.
 - **Character creator** (`create.html`) — a 9-step wizard following the Core Rulebook's character creation steps exactly (class → subclass, ancestry/community, traits, derived stats, equipment, background, experience, domain cards, connections), with the same validations the book describes (fixed trait array, mixed-ancestry rule, etc.). The equipment step is also where you upgrade gear later: it offers every tier, with your own already open, and each weapon states its trait, range, damage and burden. Weapon burden is shown and warned about rather than enforced — a Warrior's Combat Training ignores it, and what your character can carry is your GM's call. Going unarmored or fighting unarmed are both choices you can make, with the rules that come with them (including `Bare Bones`).
-- **Character list & sheet** (`characters.html`) — save multiple characters locally, view a read-only sheet showing what each piece of your gear does, export a CSV summary for your GM. The sheet shows every subclass card you've earned, since an upgrade adds a card rather than replacing the one below it. Every stat that a card can modify has a **?** next to it that shows the modifications that have been applied. The numbers include what your ancestry, subclass, equipment and domain card loadout do to them.
+- **Character list & sheet** (`characters.html`) — save multiple characters locally, view a read-only sheet showing what each piece of your gear does, export a CSV summary for your GM, and save all your characters to a file you can load into another browser. That file keeps everything, including the choices you made at each level up, so a character you move across can still have any of its level ups changed or undone. The sheet shows every subclass card you've earned, since an upgrade adds a card rather than replacing the one below it. Every stat that a card can modify has a **?** next to it that shows the modifications that have been applied. The numbers include what your ancestry, subclass, equipment and domain card loadout do to them.
 - **Printable sheet** (`sheet.html?id=<character>`, linked as "Print sheet") — a print-first, two-page A4 character sheet with no art: identity, traits, defenses, weapons, experiences and loadout names on page one, with empty pen-fillable circles for HP/Stress/Hope; the full rules text of your loadout cards and features on page two, so the table doesn't need the app open to look anything up.
 - **Level up** (`level-up.html`) — levels 1–10 following the official advancement rules (tiers, level achievements at 2/5/8, the generic per-tier advancement options with their slot limits). Advancements are marked on a grid laid out like the one printed on the character sheet. A collapsible **Level history** on the character sheet shows which level marked each advancement slot and lets you go back and change any past level up decision. Multiclassing is intentionally not implemented — it's rare in play and would add a lot of complexity for little benefit in a tool this size.
 
@@ -33,7 +33,7 @@ python3 serve.py 8080
 
 ## Tests
 
-Open `tests/index.html` in the browser — that's all. It checks the advancement rules, the level history replay, the derived stats and the effects catalogue in `shared/advancement.js`, `shared/history.js`, `shared/derived-stats.js` and `shared/effects.js` against hand-written fixtures. No dependencies, no build step, nothing to install, and nothing the app itself loads. If you delete the `tests/` directory, the app is completely unaffected.
+Open `tests/index.html` in the browser — that's all. It checks the advancement rules, the level history replay, the derived stats, the effects catalogue and the character transfer file in `shared/advancement.js`, `shared/history.js`, `shared/derived-stats.js`, `shared/effects.js` and `shared/transfer.js` against hand-written fixtures. No dependencies, no build step, nothing to install, and nothing the app itself loads. If you delete the `tests/` directory, the app is completely unaffected.
 
 ## Security notes
 
@@ -41,6 +41,9 @@ The app has no backend and no accounts: every character lives in the `localStora
 of the browser that created it. There is no server-side data to breach, and hosting
 it does **not** give the group a shared character store — each player sees only their
 own browser's characters.
+
+A character file you save from **Backup & transfer** is a plain, unencrypted copy of
+your characters. Treat it like any other file you share.
 
 ### If you expose it beyond localhost
 

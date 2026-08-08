@@ -510,13 +510,22 @@ h1, h2, h3, .btn-primary, .btn-ghost, .btn-small, .top-nav a {
 /* ---------- Lista/scheda personaggi ---------- */
 
 .characters-layout { padding: 1rem 1.5rem; }
-.export-csv-btn { width: auto; display: inline-block; margin-bottom: 1rem; }
+/* The margin lives on the toolbar, not the buttons: two of them each carrying their own would
+   double the gap above the list the moment they wrapped onto separate lines. */
+.characters-toolbar { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
+.export-csv-btn { width: auto; display: inline-block; }
 /* The two exports, offered in the shared modal. Wraps rather than shrinking: the labels say
    which sheet you get, so they're worth reading in full on a narrow screen. */
 .export-choices { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.9rem; }
 /* Both buttons size to their label — .btn-ghost is full-width elsewhere, which would put the
    two choices on separate lines and make the second look like the only one. */
 .export-choices button { width: auto; }
+/* One row per character the imported file already has here. The two dated lines are the whole
+   point of the row — they're what tells you which copy is the one you want to keep. */
+.import-clash { display: flex; justify-content: space-between; align-items: center; gap: 0.6rem; flex-wrap: wrap; padding: 0.5rem 0; border-bottom: 1px solid var(--border); }
+.import-clash-main { display: flex; flex-direction: column; gap: 0.15rem; }
+.import-clash-actions { display: flex; gap: 0.35rem; }
+.import-clash-actions .is-chosen { border-color: var(--accent); color: var(--accent); }
 .characters-list { display: flex; flex-direction: column; gap: 0.6rem; max-width: 700px; }
 
 .character-row {

@@ -32,6 +32,14 @@ import { statLine } from "./shared/stat-line.js";
 import { ignoresBurden, unresolvedChoices } from "./shared/effects.js";
 import { UNARMED, UNARMORED, armorStats, burdenWarning, featureLine, weaponStats } from "./shared/gear.js";
 import { buildCsv } from "./shared/csv-export.js";
+import {
+  DEFAULT_RESOLUTION,
+  applyImport,
+  parseTransferFile,
+  planImport,
+  serializeTransferFile,
+  transferFilename,
+} from "./shared/transfer.js";
 import { closePopover, openModal } from "./shared/popover.js";
 import { escapeHtml } from "./shared/escape.js";
 
@@ -48,6 +56,10 @@ let openId = null; // id of the character open in detail view, null = list view
 let pendingDeleteId = null; // id awaiting delete confirmation (inline confirm, never window.confirm)
 let pendingRemoveLevel = null; // level awaiting remove confirmation, same inline pattern
 let historyOpen = false; // keeps the level history accordion open across re-renders
+let importPlan = null; // parsed file awaiting collision resolution
+let importResolutions = null; // incoming character id -> keep-both | overwrite | skip
+let importDropped = 0; // entries in the file that weren't characters
+let importUndo = null; // { characters, undoSlot } captured before the last commit
 
 function titleCase(str) {
   return str.charAt(0) + str.slice(1).toLowerCase();
@@ -777,19 +789,311 @@ function openExportPicker() {
   openModal("Export CSV for the GM", body);
 }
 
-function downloadCsv(loadout) {
-  const csv = "\ufeff" + buildCsv(characters, db, { loadout }); // BOM so Excel recognizes accented characters
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+// The only thing in the app that writes a file. Both exports go through it.
+function downloadFile(filename, text, mime) {
+  const blob = new Blob([text], { type: mime });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  const stamp = new Date().toISOString().slice(0, 10);
   a.href = url;
-  // Suffixed, so exporting both ways doesn't leave two files fighting over one name.
-  a.download = `daggerheart-characters-${stamp}${loadout ? "" : "-permanent"}.csv`;
+  a.download = filename;
   document.body.appendChild(a);
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
+}
+
+function downloadCsv(loadout) {
+  const stamp = new Date().toISOString().slice(0, 10);
+  downloadFile(
+    // Suffixed, so exporting both ways doesn't leave two files fighting over one name.
+    `daggerheart-characters-${stamp}${loadout ? "" : "-permanent"}.csv`,
+    "\ufeff" + buildCsv(characters, db, { loadout }), // BOM so Excel recognizes accented characters
+    "text/csv;charset=utf-8;",
+  );
+}
+
+// ---------- backup & transfer ----------
+//
+// The CSV above is for the GM. This file is for the player: the characters exactly as
+// localStorage holds them, so another browser can pick them up and still edit or undo a level.
+// shared/transfer.js owns the format, what counts as a valid file, and the merge \u2014 all of it
+// testable. What's left here is the parts that need a page: asking, reading a file, saving.
+//
+// Names in a file someone shared with you are not yours. Every path below writes them with
+// textContent, the CSP blocks inline script, and csv-export.js already defangs a leading "=",
+// so a name shaped like a spreadsheet formula stays inert all the way to the GM's export.
+
+const plural = (n, noun) => `${n} ${noun}${n === 1 ? "" : "s"}`;
+
+function savedOn(iso) {
+  const when = iso ? new Date(iso) : null;
+  if (!when || Number.isNaN(when.getTime())) return "date unknown";
+  return when.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+}
+
+// Enough to tell two copies of one character apart. The file is db-free; this screen isn't,
+// and an id this browser doesn't know renders the same dash the roster already shows.
+function transferSummary(ch) {
+  const cls = findClass(ch.classId);
+  return `Lv ${ch.level} \u00b7 ${cls ? titleCase(cls.name) : "\u2014"} \u00b7 saved ${savedOn(ch.updatedAt)}`;
+}
+
+function openTransferModal(opts = {}) {
+  const body = document.createElement("div");
+
+  const hint = document.createElement("p");
+  hint.className = "hint";
+  hint.textContent = "The CSV is for your GM: it spells everything out in words, and it can't be " +
+    "loaded back. This file is for you \u2014 it holds your characters exactly as this browser has them, " +
+    "level-up choices and all, so another browser can pick them up and still undo or edit any level.";
+  body.appendChild(hint);
+
+  // Hidden, and clicked by the button beside it: a bare file input next to two styled buttons
+  // reads as a bug, and the error screens need to reopen the picker without one anyway.
+  const fileInput = document.createElement("input");
+  fileInput.type = "file";
+  fileInput.accept = "application/json,.json";
+  fileInput.hidden = true;
+  fileInput.addEventListener("change", () => readTransferFile(fileInput));
+  body.appendChild(fileInput);
+
+  const row = document.createElement("div");
+  row.className = "export-choices";
+  const save = button("Save to file", "btn-primary", () => { closePopover(); downloadTransferFile(); });
+  save.disabled = characters.length === 0;
+  row.appendChild(save);
+  // Never disabled: a browser with nothing in it is exactly where loading a file matters most.
+  row.appendChild(button("Load from file\u2026", "btn-ghost", () => fileInput.click()));
+  body.appendChild(row);
+
+  const note = document.createElement("p");
+  note.className = "hint";
+  note.textContent = characters.length === 0
+    ? "No characters here yet to save. Loading a file is how you'd bring some in."
+    : "Nothing leaves your browser either way: the file is written and read on this machine.";
+  body.appendChild(note);
+
+  openModal("Backup & transfer", body);
+  if (opts.pick) fileInput.click();
+}
+
+function downloadTransferFile() {
+  downloadFile(transferFilename(), serializeTransferFile(characters), "application/json");
+}
+
+async function readTransferFile(input) {
+  const file = input.files && input.files[0];
+  // Cleared before anything else can fail, so picking the same file again still fires change.
+  input.value = "";
+  if (!file) return;
+
+  let text;
+  try {
+    text = await file.text();
+  } catch {
+    showTransferError("That file couldn't be read.");
+    return;
+  }
+
+  const parsed = parseTransferFile(text);
+  if (!parsed.ok) {
+    showTransferError(parsed.error);
+    return;
+  }
+  startImport(parsed);
+}
+
+function startImport(parsed) {
+  importDropped = parsed.dropped;
+  importPlan = planImport(parsed.characters, characters);
+  importResolutions = {};
+  // Nothing to ask about: get on with it.
+  if (importPlan.clashes.length === 0) {
+    commitImport();
+    return;
+  }
+  for (const clash of importPlan.clashes) importResolutions[clash.id] = DEFAULT_RESOLUTION;
+  renderImportReview();
+}
+
+function clashRow(clash) {
+  const row = document.createElement("div");
+  row.className = "import-clash";
+
+  const main = document.createElement("div");
+  main.className = "import-clash-main";
+  const name = document.createElement("strong");
+  name.textContent = clash.incoming.name || "(unnamed)";
+  main.appendChild(name);
+  for (const [label, ch] of [["In the file", clash.incoming], ["Here already", clash.existing]]) {
+    const line = document.createElement("span");
+    line.className = "hint";
+    line.textContent = `${label}: ${transferSummary(ch)}`;
+    main.appendChild(line);
+  }
+  row.appendChild(main);
+
+  const actions = document.createElement("div");
+  actions.className = "import-clash-actions";
+  for (const [label, value] of [["Keep both", "keep-both"], ["Replace mine", "overwrite"], ["Skip", "skip"]]) {
+    const chosen = importResolutions[clash.id] === value;
+    const btn = button(label, "btn-small" + (chosen ? " is-chosen" : ""), () => {
+      importResolutions[clash.id] = value;
+      renderImportReview();
+    });
+    btn.setAttribute("aria-pressed", chosen ? "true" : "false");
+    actions.appendChild(btn);
+  }
+  row.appendChild(actions);
+  return row;
+}
+
+// openModal swaps the title and body of the overlay that's already open, so re-rendering after
+// each choice doesn't flicker or stack a second dialog.
+function renderImportReview() {
+  const body = document.createElement("div");
+  const fresh = importPlan.fresh.length;
+  const clashes = importPlan.clashes.length;
+
+  const intro = document.createElement("p");
+  intro.textContent = `${plural(importPlan.incoming.length, "character")} in this file. ` +
+    (fresh ? `${fresh} ${fresh === 1 ? "is" : "are"} new. ` : "") +
+    `${clashes} already ${clashes === 1 ? "exists" : "exist"} in this browser \u2014 ` +
+    "choose what to do with each.";
+  body.appendChild(intro);
+
+  for (const clash of importPlan.clashes) body.appendChild(clashRow(clash));
+
+  const help = document.createElement("p");
+  help.className = "hint";
+  help.textContent = "Keep both gives the incoming copy a new name and a new id, so you end up " +
+    "with two. Replace mine overwrites this browser's copy \u2014 its level history goes with it. " +
+    "Skip leaves this browser's copy alone and drops the one from the file.";
+  body.appendChild(help);
+
+  const landing = fresh + importPlan.clashes.filter((c) => importResolutions[c.id] !== "skip").length;
+  const row = document.createElement("div");
+  row.className = "export-choices";
+  const go = button(landing ? `Import ${plural(landing, "character")}` : "Nothing to import",
+    "btn-primary", commitImport);
+  go.disabled = landing === 0;
+  row.appendChild(go);
+  row.appendChild(button("Cancel", "btn-ghost", () => { closePopover(); clearImportState(); }));
+  body.appendChild(row);
+
+  openModal("Import characters", body);
+}
+
+function commitImport() {
+  const result = applyImport(characters, importPlan, importResolutions || {});
+  const before = { characters, undoSlot: localStorage.getItem(UNDO_STORAGE_KEY) };
+
+  // Written before it's adopted: a full quota must not leave the page holding characters that
+  // were never saved. saveCharacters() is unguarded, but this is the one action that can
+  // multiply the roster in a single click.
+  try {
+    localStorage.setItem(CHAR_STORAGE_KEY, JSON.stringify(result.characters));
+  } catch {
+    showTransferError("There wasn't room in this browser's storage for those characters. " +
+      "Delete a character you no longer need and try again.");
+    return;
+  }
+
+  // Ids used to be unique to one browser, so a level-edit undo could only ever describe the
+  // character it was taken from. A file brings foreign ids in: overwrite one and the snapshot
+  // is left pointing at a character that no longer exists, ready to write a stranger's level
+  // history over the imported one.
+  for (const id of result.overwrittenIds) {
+    if (loadUndo(id)) { localStorage.removeItem(UNDO_STORAGE_KEY); break; }
+  }
+
+  characters = result.characters;
+  // Only worth offering where something was destroyed. In memory and short-lived on purpose:
+  // it costs no storage on the one action that already needed a quota guard, and it covers the
+  // moment that matters \u2014 realising straight away that you chose wrong.
+  importUndo = result.replaced > 0 ? before : null;
+  renderAll();
+  renderImportSummary(result);
+}
+
+function undoImport() {
+  if (!importUndo) return;
+  characters = importUndo.characters;
+  saveCharacters();
+  // Put the level-edit undo back exactly as it was, including having been absent.
+  if (importUndo.undoSlot === null) localStorage.removeItem(UNDO_STORAGE_KEY);
+  else localStorage.setItem(UNDO_STORAGE_KEY, importUndo.undoSlot);
+  closePopover();
+  clearImportState();
+  renderAll();
+}
+
+function renderImportSummary(result) {
+  const body = document.createElement("div");
+
+  const counts = [];
+  if (result.added) counts.push(`${result.added} added`);
+  if (result.replaced) counts.push(`${result.replaced} replaced`);
+  if (result.skipped) counts.push(`${result.skipped} skipped`);
+  const line = document.createElement("p");
+  line.textContent = counts.length ? `${counts.join(", ")}.` : "Nothing was imported.";
+  body.appendChild(line);
+
+  if (result.renamed.length) {
+    const renamed = document.createElement("p");
+    renamed.className = "hint";
+    renamed.textContent = `Renamed to avoid a clash: ${result.renamed.map((n) => `"${n}"`).join(", ")}. ` +
+      "You can rename them in the wizard.";
+    body.appendChild(renamed);
+  }
+
+  if (importDropped) {
+    const dropped = document.createElement("p");
+    dropped.className = "hint";
+    dropped.textContent = importDropped === 1
+      ? "One entry in that file wasn't a character and was ignored."
+      : `${importDropped} entries in that file weren't characters and were ignored.`;
+    body.appendChild(dropped);
+  }
+
+  const row = document.createElement("div");
+  row.className = "export-choices";
+  row.appendChild(button("Done", "btn-primary", () => { closePopover(); clearImportState(); }));
+  if (importUndo) row.appendChild(button("Undo this import", "btn-ghost", undoImport));
+  body.appendChild(row);
+
+  if (importUndo) {
+    const note = document.createElement("p");
+    note.className = "hint";
+    note.textContent = "Undo puts every character back the way it was, but only while this is open.";
+    body.appendChild(note);
+  }
+
+  openModal("Import complete", body);
+}
+
+function showTransferError(message) {
+  const body = document.createElement("div");
+  const box = document.createElement("div");
+  box.className = "problem-box";
+  box.textContent = message;
+  body.appendChild(box);
+
+  const row = document.createElement("div");
+  row.className = "export-choices";
+  // One code path, one input lifetime: the modal is rebuilt and its fresh input is clicked.
+  row.appendChild(button("Try another file", "btn-primary", () => openTransferModal({ pick: true })));
+  row.appendChild(button("Cancel", "btn-ghost", () => { closePopover(); clearImportState(); }));
+  body.appendChild(row);
+
+  openModal("Backup & transfer", body);
+}
+
+function clearImportState() {
+  importPlan = null;
+  importResolutions = null;
+  importDropped = 0;
+  importUndo = null;
 }
 
 async function init() {
@@ -805,6 +1109,7 @@ async function init() {
   }
   renderAll();
   document.getElementById("export-csv-btn").addEventListener("click", openExportPicker);
+  document.getElementById("transfer-btn").addEventListener("click", () => openTransferModal());
 }
 
 init();

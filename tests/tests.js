@@ -83,6 +83,18 @@ const {
   buildCsv,
   csvField,
 } = await import(`../shared/csv-export.js${RUN}`);
+const {
+  TRANSFER_FORMAT,
+  TRANSFER_VERSION,
+  applyImport,
+  buildTransferFile,
+  importedName,
+  mintCharacterId,
+  parseTransferFile,
+  planImport,
+  serializeTransferFile,
+  transferFilename,
+} = await import(`../shared/transfer.js${RUN}`);
 
 // ---------- tiny runner ----------
 
@@ -1873,6 +1885,336 @@ group("The GM's spreadsheet is handed data, never a program");
   // into text and break sorting for the GM.
   eq("a negative number is left alone", exportRow(csvChar())["Knowledge"], "-1");
   eq("a comma in a field doesn't split it", csvField("a,b"), '"a,b"');
+}
+
+// ---------- backup & transfer ----------
+
+// A file written by one browser and read by another. What matters is that the RECORDED CHOICES
+// survive, not just the numbers: a character that arrives with the right stats but no levelUps
+// looks perfect on the sheet and can't be edited or undone, which is the whole point of the file.
+
+const roundTrip = (list, now) => parseTransferFile(serializeTransferFile(list, now));
+
+// newCharacter() predates the fields the wizard makes, and normalizeImported fills them in on
+// the way through — so a fixture without them would differ from its own import for reasons that
+// have nothing to do with the file. A character that has actually been through the wizard, as
+// every real save has, is the like-for-like comparison.
+function wizardCharacter() {
+  const ch = newCharacter();
+  ch.name = "Kaz";
+  ch.heritage = { ancestryMode: "pure", ancestryIds: [], chosenFeatures: [], communityId: null };
+  ch.equipment = { primaryWeaponId: null, secondaryWeaponId: null, armorId: null, potionChoice: null };
+  return ch;
+}
+
+// A character taken to level 4 the way the level up screen would.
+function levelledCharacter() {
+  const ch = wizardCharacter();
+  record(ch, 2, [{ key: "traits", slotTier: 2, traits: ["agility", "finesse"] }, { key: "stress", slotTier: 2 }], "c2");
+  record(ch, 3, [{ key: "hitPoint", slotTier: 2 }, { key: "evasion", slotTier: 2 }], "c3");
+  record(ch, 4, [{ key: "experience", slotTier: 2, experienceIds: ["e1", "e2"] }, { key: "stress", slotTier: 2 }], "c4");
+  return ch;
+}
+
+// Everything a level up can move, in one comparable lump.
+const statShape = (c) => ({
+  level: c.level, traits: c.traits, traitMarks: c.traitMarks, proficiency: c.proficiency,
+  hp: c.hitPointSlotsBonus, stress: c.stressSlotsBonus, evasion: c.evasionBonus,
+  tier: c.subclassTier, slots: c.advancementSlotsUsed,
+  cards: c.domainCardIds, vault: c.domainVaultIds,
+  experiences: c.experiences.map((e) => `${e.id}:${e.modifier}:${e.sinceLevel}`),
+});
+
+const envelope = (characters, over = {}) =>
+  JSON.stringify({ format: TRANSFER_FORMAT, version: TRANSFER_VERSION, characters, ...over });
+
+group("A roster saved to a file comes back as the same roster");
+{
+  const ch = levelledCharacter();
+  const out = roundTrip([ch]);
+  const back = out.characters[0];
+
+  eq("the file is readable", out.ok, true);
+  eq("every recorded level survives", back.levelUps, ch.levelUps);
+  eq("so does the baseline the replay starts from", back.baseline, ch.baseline);
+  eq("and the level it was captured at", back.baselineLevel, ch.baselineLevel);
+  eq("the starting cards are kept apart from the rest", back.creationDomainCardIds, ch.creationDomainCardIds);
+  eq("experiences come back whole", back.experiences, ch.experiences);
+
+  // A shared reference would let the receiving side mutate the roster it was read from.
+  check("the imported character is a copy, not the same object", back !== ch);
+  back.levelUps[0].level = 99;
+  eq("editing the import doesn't reach back into the original", ch.levelUps[0].level, 2);
+}
+
+group("A character imported into a fresh browser can still undo its level 4");
+{
+  // The headline. Do to the imported copy exactly what characters.js:removeLevel does, and it
+  // has to land on the same character as one that was only ever taken to level 3.
+  const back = roundTrip([levelledCharacter()]).characters[0];
+  back.levelUps = back.levelUps.filter((e) => e.level !== 4);
+  back.experiences = back.experiences.filter((e) => e.sinceLevel < 4);
+  back.level = 3;
+  recomputeCharacter(back);
+
+  const neverLevelled = wizardCharacter();
+  record(neverLevelled, 2, [{ key: "traits", slotTier: 2, traits: ["agility", "finesse"] }, { key: "stress", slotTier: 2 }], "c2");
+  record(neverLevelled, 3, [{ key: "hitPoint", slotTier: 2 }, { key: "evasion", slotTier: 2 }], "c3");
+
+  eq("removing the imported level 4 lands exactly where level 3 would", statShape(back), statShape(neverLevelled));
+  eq("and the level 4 entry is the only one gone", back.levelUps.map((e) => e.level), [2, 3]);
+}
+
+group("An imported character's stats are the ones it was exported with");
+{
+  const ch = levelledCharacter();
+  const back = roundTrip([ch]).characters[0];
+
+  // No recompute on the way in, so these are the numbers the file carried.
+  eq("every level-dependent stat matches", statShape(back), statShape(ch));
+  eq("and so does everything the sheet derives from them",
+    derivedStats(back, DB), derivedStats(ch, DB));
+
+  const snapshot = JSON.parse(JSON.stringify(statShape(back)));
+  recomputeCharacter(back);
+  eq("replaying the import changes nothing, so importing without one loses nothing",
+    statShape(back), snapshot);
+}
+
+group("Importing doesn't restamp when a character was last changed");
+{
+  // The collision screen shows both dates so you can tell which copy is newer. Bumping on
+  // import would stamp every incoming character with today and make that comparison useless.
+  const ch = levelledCharacter();
+  ch.updatedAt = "2026-07-20T09:00:00.000Z";
+  const back = roundTrip([ch]).characters[0];
+  eq("the round trip leaves it alone", back.updatedAt, "2026-07-20T09:00:00.000Z");
+
+  const mine = { ...JSON.parse(JSON.stringify(ch)), updatedAt: "2026-08-01T09:00:00.000Z" };
+  const plan = planImport([back], [mine]);
+  for (const resolution of ["keep-both", "overwrite", "skip"]) {
+    const result = applyImport([mine], plan, { [ch.id]: resolution });
+    const stamps = result.characters.map((c) => c.updatedAt).sort();
+    check(`${resolution} restamps nothing`,
+      stamps.every((s) => s === "2026-07-20T09:00:00.000Z" || s === "2026-08-01T09:00:00.000Z"),
+      JSON.stringify(stamps));
+  }
+}
+
+group("A file that isn't from this app is refused with a reason");
+{
+  const why = (text) => {
+    const r = parseTransferFile(text);
+    return r.ok ? ["(the file was accepted)"] : [r.error];
+  };
+
+  // The likeliest mistake of all: two files in one downloads folder, both named
+  // daggerheart-characters-<date>. The CSV has to be recognised, not just rejected.
+  has("the GM's CSV is named as the GM's CSV", why('﻿"Name","Pronouns","Level"\r\n'), "GM's CSV");
+  has("something that isn't JSON says so", why("not json at all"), "couldn't be read as JSON");
+  has("JSON from somewhere else is turned away", why("{}"), "not one from this app");
+  has("and so is a file wearing another format", why(envelope([], { format: "something-else" })), "not one from this app");
+  has("a file from a newer app names both versions",
+    why(envelope([{ id: "x", traits: {} }], { version: 99 })), "file version 99");
+  has("an empty roster is refused", why(envelope([])), "no characters in it");
+  has("so is one where nothing is a character", why(envelope([null, 7, "x", {}])), "looked like a character");
+
+  // A missing or odd version is read as this one: every file written so far carries a number,
+  // and guessing beats refusing a file that would have loaded fine.
+  eq("a file with no version still loads",
+    parseTransferFile(envelope([{ id: "x", traits: {} }], { version: undefined })).ok, true);
+}
+
+group("Entries in the file that aren't characters are dropped, the rest still import");
+{
+  // Losing four good characters because a fifth entry is malformed is the wrong trade for a
+  // file people may well open in an editor.
+  const out = parseTransferFile(envelope([null, 7, "x", {}, newCharacter()]));
+  eq("the file still loads", out.ok, true);
+  eq("the character comes through", out.characters.length, 1);
+  eq("and the junk is counted, so the summary can mention it", out.dropped, 4);
+}
+
+group("A character with no heritage still imports as a draft");
+{
+  // characters.js:isComplete reaches into heritage, traits, equipment and experiences with no
+  // guards, for every row of the list. A file missing any of them would throw inside renderList
+  // and blank the whole roster. newCharacter() has neither heritage nor equipment, like any
+  // save from before the wizard grew them.
+  const back = parseTransferFile(envelope([newCharacter()])).characters[0];
+
+  eq("heritage is there to be read", typeof back.heritage.communityId, "object");
+  eq("so is the ancestry list", Array.isArray(back.heritage.ancestryIds), true);
+  eq("equipment is there to be read", typeof back.equipment.armorId, "object");
+  eq("every experience has a name to trim", back.experiences.every((e) => typeof e.name === "string"), true);
+  eq("the card lists are arrays", [Array.isArray(back.domainCardIds), Array.isArray(back.domainVaultIds)], [true, true]);
+
+  // The same guard, against the shapes a hand-edited file can produce.
+  const wrecked = parseTransferFile(envelope([
+    { id: "w", name: "W", traits: {}, experiences: [null, { name: 7 }], heritage: 5, equipment: "no", level: "banana" },
+  ])).characters[0];
+  eq("a null experience is dropped rather than walked into", wrecked.experiences.length, 1);
+  eq("a non-string name becomes one", wrecked.experiences[0].name, "");
+  eq("a nonsense level falls back to 1", wrecked.level, 1);
+  eq("a nonsense heritage is replaced", Array.isArray(wrecked.heritage.ancestryIds), true);
+  eq("and so is a nonsense equipment", wrecked.equipment.armorId, null);
+}
+
+group("Importing onto a browser that already has the same character asks first");
+{
+  const mine = { ...newCharacter(), id: "char_same", name: "Kaz" };
+  const theirs = { ...newCharacter(), id: "char_same", name: "Kaz" };
+  const stranger = { ...newCharacter(), id: "char_other", name: "Vex" };
+  // Same name, different id. Two characters, and the app has always allowed that.
+  const namesake = { ...newCharacter(), id: "char_third", name: "Kaz" };
+
+  const plan = planImport([theirs, stranger, namesake], [mine]);
+  eq("the shared id is the only clash", plan.clashes.map((c) => c.id), ["char_same"]);
+  eq("the clash carries both sides so the screen can compare them",
+    [plan.clashes[0].incoming.id, plan.clashes[0].existing.id], ["char_same", "char_same"]);
+  eq("everything else is new here", plan.fresh.map((c) => c.id), ["char_other", "char_third"]);
+  eq("a shared name is not a clash", plan.clashes.some((c) => c.incoming.name === "Kaz" && c.id === "char_third"), false);
+}
+
+group("Keeping both copies leaves two characters that can be told apart");
+{
+  const mine = { ...newCharacter(), id: "char_same", name: "Kaz", level: 4 };
+  const theirs = { ...newCharacter(), id: "char_same", name: "Kaz", level: 5 };
+  const before = JSON.parse(JSON.stringify(mine));
+
+  const plan = planImport([theirs], [mine]);
+  const out = applyImport([mine], plan, { char_same: "keep-both" });
+
+  eq("the roster gains one", out.characters.length, 2);
+  eq("counted as an add, not a replace", [out.added, out.replaced, out.skipped], [1, 0, 0]);
+  check("the incoming copy gets an id of its own", out.characters[1].id !== "char_same");
+  check("in the shape create.js mints", out.characters[1].id.startsWith("char_"));
+  eq("and a name that says where it came from", out.characters[1].name, "Kaz (imported)");
+  eq("which the summary can report", out.renamed, ["Kaz (imported)"]);
+  eq("nothing was overwritten", out.overwrittenIds, []);
+  eq("the character already here is untouched", out.characters[0], before);
+
+  // Importing the same file twice must not produce "Kaz (imported) (imported)".
+  const again = applyImport(out.characters, planImport([out.characters[1]], out.characters), {});
+  eq("a second round doesn't stack the suffix", again.renamed, ["Kaz (imported)"]);
+}
+
+group("Replacing overwrites the character where it already sat");
+{
+  const first = { ...newCharacter(), id: "char_a", name: "First" };
+  const mine = { ...levelledCharacter(), id: "char_same", name: "Kaz" };
+  const last = { ...newCharacter(), id: "char_z", name: "Last" };
+  const theirs = { ...newCharacter(), id: "char_same", name: "Kaz elsewhere" };
+
+  const roster = [first, mine, last];
+  const out = applyImport(roster, planImport([theirs], roster), { char_same: "overwrite" });
+
+  eq("the roster is the same length", out.characters.length, 3);
+  eq("counted as a replace", [out.added, out.replaced, out.skipped], [0, 1, 0]);
+  eq("the roster doesn't reshuffle", out.characters.map((c) => c.id), ["char_a", "char_same", "char_z"]);
+  eq("the incoming copy is what's there now", out.characters[1].name, "Kaz elsewhere");
+  eq("with the incoming level history", out.characters[1].levelUps, theirs.levelUps);
+  // characters.js needs this to clear a level-edit undo that now describes a character that's gone.
+  eq("and the overwritten id is reported back", out.overwrittenIds, ["char_same"]);
+  eq("the original object wasn't mutated", mine.name, "Kaz");
+}
+
+group("Skipping leaves this browser's copy alone");
+{
+  const mine = { ...levelledCharacter(), id: "char_same", name: "Kaz" };
+  const theirs = { ...newCharacter(), id: "char_same", name: "Kaz elsewhere" };
+  const before = JSON.parse(JSON.stringify([mine]));
+
+  const out = applyImport([mine], planImport([theirs], [mine]), { char_same: "skip" });
+  eq("counted as a skip", [out.added, out.replaced, out.skipped], [0, 0, 1]);
+  eq("the roster is exactly as it was", out.characters, before);
+  eq("nothing was overwritten", out.overwrittenIds, []);
+}
+
+group("A clash with no answer keeps both, because that's the choice that destroys nothing");
+{
+  const mine = { ...levelledCharacter(), id: "char_same", name: "Kaz" };
+  const theirs = { ...newCharacter(), id: "char_same", name: "Kaz" };
+  const out = applyImport([mine], planImport([theirs], [mine]), {});
+  eq("the default is keep-both", [out.added, out.replaced, out.skipped], [1, 0, 0]);
+  eq("so the character already here survives an unanswered screen", out.characters[0].levelUps, mine.levelUps);
+
+  const nonsense = applyImport([mine], planImport([theirs], [mine]), { char_same: "shrug" });
+  eq("and so does an answer nobody recognises", nonsense.added, 1);
+}
+
+group("A new id is never one already in use");
+{
+  const first = "char_" + (0.11111111).toString(36).slice(2, 10);
+  let calls = 0;
+  const minted = mintCharacterId(new Set([first]), () => (calls++ === 0 ? 0.11111111 : 0.22222222));
+  eq("a collision is retried rather than returned", calls, 2);
+  check("and the retry is a different id", minted !== first, minted);
+
+  // A rand that never yields anything new must still terminate.
+  const cornered = mintCharacterId([first], () => 0.11111111);
+  check("a hopeless generator still returns something usable",
+    cornered.startsWith("char_") && cornered !== first, cornered);
+
+  // Two entries in one file carrying the same id: both land, with ids of their own.
+  const twins = [{ ...newCharacter(), id: "char_dup" }, { ...newCharacter(), id: "char_dup" }];
+  const out = applyImport([], planImport(twins, []), {});
+  eq("both twins arrive", out.characters.length, 2);
+  check("with different ids", out.characters[0].id !== out.characters[1].id,
+    out.characters.map((c) => c.id).join(" "));
+
+  // An entry with no id at all goes through the same minting path.
+  const nameless = applyImport([], planImport([{ ...newCharacter(), id: "" }], []), {});
+  check("an entry with no id is given one", nameless.characters[0].id.startsWith("char_"));
+
+  eq("the imported suffix is idempotent",
+    [importedName("Kaz"), importedName("Kaz (imported)"), importedName(""), importedName("   ")],
+    ["Kaz (imported)", "Kaz (imported)", "(imported)", "(imported)"]);
+}
+
+group("A character saved before levels existed survives the round trip");
+{
+  // The same shape as the migration group above, with the id every real save carries. If the
+  // export ever starts stripping derived fields, this is what fails: for a character like this
+  // the derived fields ARE the truth, and there are no levelUps to rebuild them from.
+  const legacy = ensureLevelFields({
+    id: "char_old", name: "Old",
+    level: 6, proficiency: 3,
+    traits: { agility: 2, strength: 3, finesse: 0, instinct: 1, presence: 0, knowledge: -1 },
+    experiences: [{ name: "A", modifier: 3 }, { name: "B", modifier: 2 }],
+    domainCardIds: ["a", "b", "c", "d", "e", "f"], domainVaultIds: ["a"],
+    traitMarks: { agility: true, strength: false, finesse: false, instinct: false, presence: false, knowledge: false },
+    hitPointSlotsBonus: 3, stressSlotsBonus: 1, evasionBonus: 1, subclassTier: "specialization",
+    advancementSlotsUsed: { traits: 4, hitPoint: 3, stress: 1, experience: 1, domainCard: 0, evasion: 1, subclass: 1, proficiency: 0 },
+  });
+  const back = roundTrip([legacy]).characters[0];
+
+  eq("its collection arrives whole", back.domainCardIds, ["a", "b", "c", "d", "e", "f"]);
+  eq("so does the vault", back.domainVaultIds, ["a"]);
+  eq("and the starting cards it was credited with", back.creationDomainCardIds, legacy.creationDomainCardIds);
+  eq("the baseline is intact", back.baseline, legacy.baseline);
+  eq("at the level it was captured", back.baselineLevel, 6);
+  eq("its stats are the ones it had", statShape(back), statShape(legacy));
+
+  const snapshot = JSON.parse(JSON.stringify(statShape(back)));
+  recomputeCharacter(back);
+  eq("and replaying it still changes nothing", statShape(back), snapshot);
+}
+
+group("The saved file names itself after the day it was written");
+{
+  // An explicit UTC instant: a local-time stamp would make this flake depending on the machine.
+  const when = new Date("2026-08-08T12:00:00Z");
+  eq("the filename carries the date", transferFilename(when), "daggerheart-characters-2026-08-08.json");
+
+  const file = buildTransferFile([newCharacter()], when);
+  eq("the envelope says what it is", file.format, TRANSFER_FORMAT);
+  eq("and which version wrote it", file.version, TRANSFER_VERSION);
+  eq("and when", file.exportedAt, "2026-08-08T12:00:00.000Z");
+  eq("the file reports back when it was written", roundTrip([newCharacter()], when).exportedAt, "2026-08-08T12:00:00.000Z");
+
+  // Written for a person to open, so it isn't one long line.
+  check("it's indented", serializeTransferFile([newCharacter()], when).includes('\n  "format"'));
 }
 
 // ---------- report ----------
