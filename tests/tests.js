@@ -1136,7 +1136,8 @@ function sheetChar(over = {}) {
   ch.classId = "cls";
   ch.subclassId = "sub";
   ch.heritage = { ancestryMode: "pure", ancestryIds: ["anc_a"], chosenFeatures: [{ ancestryId: "anc_a", featureName: "Endurance" }, { ancestryId: "anc_a", featureName: "Reach" }], communityId: "com" };
-  ch.equipment = { weaponMode: "two-handed", primaryWeaponId: null, secondaryWeaponId: null, armorId: "gambeson", potionChoice: null };
+  // No weaponMode, the same shape create.js now saves. Tests that need the legacy field say so.
+  ch.equipment = { primaryWeaponId: null, secondaryWeaponId: null, armorId: "gambeson", potionChoice: null };
   ch.background = { description: "", answers: "" };
   ch.connectionsNotes = "";
   return Object.assign(ch, over);
@@ -1151,16 +1152,27 @@ group("Sheet damage strings: Proficiency copies of the die, plus an optional mod
   eq("a weapon with no modifier never prints a trailing +0", noMod.weapons[0].damage, "1d6");
 }
 
-group("Sheet weapons: the off-hand only counts in a one-handed build");
+group("Sheet weapons: a secondary prints because it's equipped, not because of a mode string");
 {
-  const oneHanded = deriveSheet(sheetChar({ equipment: { weaponMode: "one-handed", primaryWeaponId: "plain", secondaryWeaponId: "modified", armorId: "gambeson" } }), SHEET_DB);
-  eq("both weapons print", oneHanded.weapons.length, 2);
+  // This used to assert that a "two-handed" weaponMode printed only the primary. The sheet was
+  // the last reader of that field, and it outlived the truth: nothing writes weaponMode any
+  // more, so the gate was never satisfied and every off-hand weapon quietly went missing from
+  // the printed page — including the shield a Warrior is allowed to carry behind a two-handed
+  // primary, whose Barrier was already counted in the Armor Score printed alongside it.
+  const both = deriveSheet(sheetChar({ equipment: { primaryWeaponId: "plain", secondaryWeaponId: "modified", armorId: "gambeson" } }), SHEET_DB);
+  eq("both weapons print", both.weapons.length, 2);
+  eq("and the off-hand is the one that was equipped", both.weapons[1].name, "Heavy Warhammer");
 
-  // secondaryWeaponId is still set here — an artifact of switching burden after equipping a
-  // two-handed weapon — but weaponMode says two-handed, so it must not appear, same as
-  // derivedStats() never looks it up in that case.
-  const twoHanded = deriveSheet(sheetChar({ equipment: { weaponMode: "two-handed", primaryWeaponId: "plain", secondaryWeaponId: "modified", armorId: "gambeson" } }), SHEET_DB);
-  eq("a two-handed build prints only the primary", twoHanded.weapons.length, 1);
+  // A two-handed primary with a secondary still equipped is the Warrior case, not a stale slot.
+  const twoHandedPrimary = deriveSheet(sheetChar({ equipment: { primaryWeaponId: "modified", secondaryWeaponId: "plain", armorId: "gambeson" } }), SHEET_DB);
+  eq("a two-handed primary doesn't hide what's in the other hand", twoHandedPrimary.weapons.length, 2);
+
+  // Characters saved before the change still carry the field. It has to mean nothing.
+  const legacy = deriveSheet(sheetChar({ equipment: { weaponMode: "two-handed", primaryWeaponId: "plain", secondaryWeaponId: "modified", armorId: "gambeson" } }), SHEET_DB);
+  eq("a leftover weaponMode from an older save changes nothing", legacy.weapons.length, 2);
+
+  const alone = deriveSheet(sheetChar({ equipment: { primaryWeaponId: "plain", armorId: "gambeson" } }), SHEET_DB);
+  eq("with nothing in the off hand, only the primary prints", alone.weapons.length, 1);
 }
 
 group("Sheet heritage: mixed ancestry prints only the chosen feature, pure prints them all");
@@ -1396,6 +1408,35 @@ group("Sheet stats agree with derivedStats() rather than re-deriving anything");
   const capped = deriveSheet(sheetChar({ equipment: { weaponMode: "two-handed", armorId: "absurd" } }), EFFECT_DB);
   eq("Armor Score is capped at 12, not printed as the raw baseScore of 40", capped.armorScore, 12);
   check("and the cap is explained in a note the printed page can show", !!capped.armorScoreNote);
+}
+
+group("Sheet: fighting unarmed and going unarmored print as the choices they are");
+{
+  // Both sentinels are stored values with no record behind them in data/, so a sheet that looks
+  // them up the ordinary way finds nothing: an empty weapon block and a bare dash, exactly what
+  // a character who never finished the wizard would print. The whole point of choosing them is
+  // that they ARE choices, and the table needs the rules that come with them.
+  const barehanded = deriveSheet(sheetChar({ equipment: { primaryWeaponId: UNARMED, secondaryWeaponId: null, armorId: UNARMORED } }), SHEET_DB);
+
+  eq("an unarmed character still gets a weapon row", barehanded.weapons.length, 1);
+  eq("named for what it is", barehanded.weapons[0].name, "Unarmed");
+  // SRD: successful unarmed attacks inflict [Proficiency]d4 — the same Proficiency-multiplies-
+  // the-dice rule as any weapon. Proficiency is 1 in the fixture.
+  eq("with the SRD's [Proficiency]d4 damage", barehanded.weapons[0].damage, "1d4");
+  eq("at melee range", barehanded.weapons[0].range, "Melee");
+  // Strength 2, Finesse 0 in the fixture. The GM calls which one per roll, so both print — and
+  // a zero prints bare, the same as everywhere else a modifier is signed.
+  eq("and both traits the GM can call for", barehanded.weapons[0].attack, "Strength +2 / Finesse 0");
+  // That string names its own traits, so sheet.js must not print a bracketed trait after it.
+  eq("with no single trait to name in brackets", barehanded.weapons[0].traitLabel, "");
+
+  eq("choosing to wear nothing says so", barehanded.armorName, "Unarmored");
+  eq("and scores 0, per the unarmored rule", barehanded.armorScore, 0);
+
+  // The dash is what an unfinished character gets — the two have to stay distinguishable.
+  const undecided = deriveSheet(sheetChar({ equipment: { primaryWeaponId: null, secondaryWeaponId: null, armorId: null } }), SHEET_DB);
+  eq("a slot nobody has filled in yet still prints a dash", undecided.armorName, "—");
+  eq("and an empty pair of hands prints no weapon row", undecided.weapons.length, 0);
 }
 
 // ---------- report ----------

@@ -24,8 +24,9 @@
 // responsible for that, same as characters.js's loadCharacters() is.
 
 import { activeDomainCardIds, SUBCLASS_TIER_LABELS, subclassTiersUpTo } from "./advancement.js";
-import { derivedStats, TRAIT_KEYS, TRAIT_LABELS } from "./derived-stats.js";
+import { UNARMED_PROFILE, derivedStats, TRAIT_KEYS, TRAIT_LABELS } from "./derived-stats.js";
 import { unresolvedChoices } from "./effects.js";
+import { UNARMED, UNARMORED } from "./gear.js";
 
 function find(list, id) {
   return id ? (list || []).find((x) => x.id === id) || null : null;
@@ -92,11 +93,16 @@ function weaponEntry(weapon, attackStat, proficiencyTotal) {
     name: weapon.name["en-US"],
     range: prettyEnum(weapon.range),
     burden: prettyEnum(weapon.burden),
+    // Empty for an unarmed profile, which names two traits rather than one — see `attack`.
     traitLabel: TRAIT_LABELS[traitKey] || "",
-    // attackStat is null when derivedStats() has nothing to report — no trait assigned yet
-    // (a draft), or (for the secondary slot) a two-handed build, where derivedStats() doesn't
-    // even look up the off-hand weapon. Either way, "—" rather than a number that isn't real.
-    attack: attackStat ? signed(attackStat.total) : "—",
+    // attackStat is null when derivedStats() has nothing to report: no trait assigned yet on a
+    // draft, armed or not. "—" then, rather than a number that isn't real.
+    //
+    // An unarmed attack has no single total to sign. The SRD hands the GM the choice of Strength
+    // or Finesse per roll, so derivedStats() reports both as a `display` ("Strength +2 / Finesse
+    // 0") and no total. That string already names its traits, so it prints alone and traitLabel
+    // stays empty — the same reason the Spellcast box below drops its own traitLabel.
+    attack: !attackStat ? "—" : attackStat.unarmed ? attackStat.display : signed(attackStat.total),
     damage: `${proficiencyTotal}${dice}${modifierText}`,
     damageType: prettyEnum(weapon.damage.type),
     features: features(weapon.features),
@@ -114,16 +120,26 @@ export function deriveSheet(character, db) {
 
   const cls = find(db?.classes, character.classId);
   const sub = find(db?.subclasses, character.subclassId);
-  const armor = find(db?.armors, character.equipment?.armorId);
+  // Choosing to wear nothing is a choice, and not the same as not having chosen yet: it prints
+  // as "Unarmored" where an unfilled slot prints a dash. There is no such armor in data/ — the
+  // sentinel is asked for by name, because find() would only ever return null for it.
+  const unarmored = character.equipment?.armorId === UNARMORED;
+  const armor = unarmored ? null : find(db?.armors, character.equipment?.armorId);
   const community = find(db?.communities, character.heritage.communityId);
   const ancestries = character.heritage.ancestryIds.map((id) => find(db?.ancestries, id)).filter(Boolean);
 
-  const primaryWeapon = find(db?.weapons, character.equipment?.primaryWeaponId);
-  // Same gate derivedStats() uses for the secondary attack: a two-handed build has nothing in
-  // the off hand, whatever secondaryWeaponId happens to still hold from an earlier equip step.
-  const secondaryWeapon = character.equipment?.weaponMode === "one-handed"
-    ? find(db?.weapons, character.equipment?.secondaryWeaponId)
-    : null;
+  // Fighting unarmed is a choice with rules of its own — [Proficiency]d4, Strength or Finesse —
+  // so the sheet prints them rather than leaving the weapon block empty. The profile is a core
+  // rule rather than a data/ record, which is why it comes from derived-stats.js and not db.
+  const primaryWeapon = character.equipment?.primaryWeaponId === UNARMED
+    ? UNARMED_PROFILE
+    : find(db?.weapons, character.equipment?.primaryWeaponId);
+  // Whether a secondary counts is whether one is equipped — the same question derivedStats()
+  // asks. This used to be gated on a stored "weaponMode" string; nothing writes that field any
+  // more, so gating on it here printed no off-hand weapon at all, and for a Warrior carrying a
+  // shield behind a two-handed primary — the case the burden rule exists to allow — it dropped
+  // the very weapon whose Barrier was already in their Armor Score.
+  const secondaryWeapon = find(db?.weapons, character.equipment?.secondaryWeaponId);
 
   const loadout = activeDomainCardIds(character)
     .map((id) => find(db?.domainCards, id))
@@ -179,7 +195,7 @@ export function deriveSheet(character, db) {
       weaponEntry(primaryWeapon, stats.primaryAttack, stats.proficiency.total),
       weaponEntry(secondaryWeapon, stats.secondaryAttack, stats.proficiency.total),
     ].filter(Boolean),
-    armorName: armor ? armor.name["en-US"] : "—",
+    armorName: armor ? armor.name["en-US"] : unarmored ? "Unarmored" : "—",
     armorFeatures: features(armor?.features),
     potionName: find(db?.consumables, character.equipment?.potionChoice)?.name["en-US"] || "—",
 

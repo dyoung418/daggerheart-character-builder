@@ -188,7 +188,9 @@ function renderEquipment(s) {
     const row = el("div", "weapon-row");
     row.appendChild(el("strong", null, w.name));
     row.appendChild(el("span", null, w.range));
-    row.appendChild(el("span", null, `${w.attack} (${w.traitLabel})`));
+    // An unarmed attack carries no single trait to name in brackets — its attack string already
+    // reads "Strength +2 / Finesse +0" — so the bracket is printed only when there's a trait.
+    row.appendChild(el("span", null, w.traitLabel ? `${w.attack} (${w.traitLabel})` : w.attack));
     row.appendChild(el("span", null, `${w.damage} ${w.damageType}`));
     row.appendChild(el("span", "weapon-burden", w.burden));
     box.appendChild(row);
