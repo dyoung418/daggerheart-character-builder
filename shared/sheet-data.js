@@ -23,7 +23,7 @@
 // other caller of derivedStats() has. Whoever loads the character for the sheet page is
 // responsible for that, same as characters.js's loadCharacters() is.
 
-import { activeDomainCardIds, SUBCLASS_TIER_LABELS } from "./advancement.js";
+import { activeDomainCardIds, SUBCLASS_TIER_LABELS, subclassTiersUpTo } from "./advancement.js";
 import { derivedStats, TRAIT_KEYS, TRAIT_LABELS } from "./derived-stats.js";
 import { unresolvedChoices } from "./effects.js";
 
@@ -204,7 +204,16 @@ export function deriveSheet(character, db) {
     loadout,
     hopeFeature: cls ? features([cls.hopeFeature])[0] : null,
     classFeatures: features(cls?.classFeatures),
-    subclassFeatures: features(sub?.[character.subclassTier]?.features),
+    // Every tier up to the character's current one, not just the current tier: upgrading a
+    // subclass card ADDS a tier, it doesn't replace the one below it (characters.js's detail
+    // view renders all of them for exactly this reason — subclassTiersUpTo() is the same
+    // helper it uses, not a second implementation of the same idea). A Mastery character still
+    // has their Foundation and Specialization features in play, so the sheet has to print all
+    // three. Each feature carries `source` (the tier's label) the same way ancestryFeatures
+    // carries the ancestry's name, so the render layer can label which tier granted it.
+    subclassFeatures: subclassTiersUpTo(character.subclassTier).flatMap((tier) =>
+      features(sub?.[tier]?.features).map((f) => ({ ...f, source: SUBCLASS_TIER_LABELS[tier] })),
+    ),
     // Only the features actually picked in heritage.chosenFeatures print — not every
     // feature of every ancestry in ancestryIds. For a pure-ancestry character
     // create.js seeds chosenFeatures with all of that ancestry's features (see

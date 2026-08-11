@@ -890,6 +890,8 @@ const SHEET_DB = {
   subclasses: [{
     id: "sub", name: { "en-US": "Stalwart" }, spellcastTrait: "KNOWLEDGE",
     foundation: { features: [{ name: { "en-US": "Unwavering" }, description: [{ paragraph: { "en-US": "+1 to your damage thresholds." } }] }] },
+    specialization: { features: [{ name: { "en-US": "Unrelenting" }, description: [{ paragraph: { "en-US": "+2 to your damage thresholds." } }] }] },
+    mastery: { features: [{ name: { "en-US": "Undaunted" }, description: [{ paragraph: { "en-US": "+3 to your damage thresholds." } }] }] },
   }],
   ancestries: [
     {
@@ -1121,6 +1123,24 @@ group("Sheet experiences: a resolved permanent-bonus choice reaches the printed 
   eq("the chosen Experience shows the base value plus the permanent bonus",
     s.experiences.find((e) => e.name === "A").display, "+3"); // base 2 + Purposeful Design's +1
   eq("the Experience not chosen is untouched", s.experiences.find((e) => e.name === "B").display, "+2");
+}
+
+group("Sheet subclassFeatures: every tier earned prints, not just the current one");
+{
+  // Upgrading a subclass card ADDS a tier, it doesn't replace the one below it — the same
+  // rule subclassTiersUpTo() encodes for characters.js's detail view (see "A subclass upgrade
+  // adds a card, it doesn't replace the one below" above). A Mastery character still has their
+  // Foundation and Specialization features; printing only sub[subclassTier] silently dropped
+  // them.
+  const mastery = deriveSheet(sheetChar({ subclassTier: "mastery" }), SHEET_DB);
+  eq("Foundation, Specialization and Mastery all print, in that order",
+    mastery.subclassFeatures.map((f) => f.name), ["Unwavering", "Unrelenting", "Undaunted"]);
+  eq("each feature is labelled with ITS OWN tier, not the character's current one",
+    mastery.subclassFeatures.map((f) => f.source), ["Foundation", "Specialization", "Mastery"]);
+
+  const foundation = deriveSheet(sheetChar(), SHEET_DB); // sheetChar()'s default tier is foundation
+  eq("a Foundation character only gets the Foundation feature",
+    foundation.subclassFeatures.map((f) => f.name), ["Unwavering"]);
 }
 
 group("Sheet: a draft with no class chosen is still printable");

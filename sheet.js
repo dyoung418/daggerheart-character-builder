@@ -315,7 +315,10 @@ function renderPageTwo(s) {
   const feats = el("div", "feature-entries");
   if (s.hopeFeature) feats.appendChild(featureBlock(s.hopeFeature, `${s.className} — Hope feature`));
   for (const f of s.classFeatures) feats.appendChild(featureBlock(f, s.className));
-  for (const f of s.subclassFeatures) feats.appendChild(featureBlock(f, `${s.subclassName} (${s.subclassTierLabel})`));
+  // Each feature's own tier (f.source — Foundation/Specialization/Mastery), not the
+  // character's current tier: a Mastery character prints Foundation and Specialization
+  // features labelled as such, not all three relabelled "Mastery".
+  for (const f of s.subclassFeatures) feats.appendChild(featureBlock(f, `${s.subclassName} (${f.source})`));
   for (const f of s.ancestryFeatures) feats.appendChild(featureBlock(f, f.source));
   for (const f of s.communityFeatures) feats.appendChild(featureBlock(f, f.source));
   // Equipment features are prose the app never applies mechanically (e.g. Gambeson's
