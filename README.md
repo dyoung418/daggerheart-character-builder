@@ -68,7 +68,9 @@ If you own the official Core Rulebook PDF, you could write your own script to cr
 
 ## Data source
 
-The JSON files in `data/` are the Daggerheart System Reference Document (SRD), reused under the DPCGL. They're a straightforward re-export of the community-maintained [`daggersearch/daggerheart-data`](https://github.com/daggersearch/daggerheart-data) dataset — full credit to that project for structuring the SRD as clean JSON in the first place.
+The JSON files in `data/` are the Daggerheart System Reference Document (SRD), reused under the DPCGL. They're a re-export of the community-maintained [`daggersearch/daggerheart-data`](https://github.com/daggersearch/daggerheart-data) dataset — full credit to that project for structuring the SRD as clean JSON in the first place.
+
+One deliberate divergence from upstream, in `data/classes.json`: the Guardian's *Unstoppable* was split across two `classFeatures` entries, the second of which carried the lead-in sentence "While Unstoppable, you gain the following benefits:" in its `name` field rather than its description. Anywhere feature names are listed on their own — the printable sheet's summary strip, for one — that sentence turned up as if it were the name of a second feature. The two entries are merged here into one, with the lead-in as a paragraph before the list it introduces. It's the only feature in the whole dataset whose name is a sentence, so re-exporting from upstream means re-applying this.
 
 ## License
 
