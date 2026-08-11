@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="
+    default-src 'self';
+    script-src 'self';
+    style-src 'self' https://fonts.googleapis.com;
+    font-src https://fonts.gstatic.com;
+    img-src 'self';
+    connect-src 'self';
+    object-src 'none';
+    base-uri 'none';
+    form-action 'none'" />
+  <meta name="referrer" content="no-referrer" />
+  <title>Daggerheart — Character Sheet</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="sheet.css" />
+</head>
+<body class="sheet-body">
+  <div class="sheet-toolbar">
+    <a href="characters.html">← My Characters</a>
+    <button id="print-btn" class="btn-primary" type="button">Print</button>
+  </div>
+
+  <main id="sheet-root"></main>
+
+  <script type="module" src="sheet.js"></script>
+</body>
+</html>

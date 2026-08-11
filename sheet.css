@@ -1,0 +1,441 @@
+/* Print-first layout for sheet.html. The A4 page is the target; the on-screen view
+   is the same layout on a white card. No background-color carries information:
+   browsers drop background graphics when printing by default, so anything that
+   matters is a border or text. */
+
+@page {
+  size: A4 portrait;
+  margin: 10mm;
+}
+
+.sheet-body {
+  background: #f4f2ee;
+  margin: 0;
+  padding: 1.5rem;
+  font-family: Georgia, "Times New Roman", serif;
+  color: #14110d;
+}
+
+.sheet-toolbar {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  max-width: 190mm;
+  margin: 0 auto 1rem;
+}
+
+.sheet-page {
+  box-sizing: border-box;
+  width: 190mm;
+  min-height: 277mm;
+  margin: 0 auto 1.5rem;
+  padding: 6mm;
+  background: #fff;
+  border: 1px solid #14110d;
+  display: flex;
+  flex-direction: column;
+  gap: 4mm;
+}
+
+/* --- identity --- */
+
+.sheet-identity {
+  border-bottom: 2px solid #14110d;
+  padding-bottom: 2mm;
+}
+.sheet-name {
+  margin: 0;
+  font-size: clamp(1.1rem, 4.2vw, 1.9rem);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.sheet-subtitle {
+  margin: 0.5mm 0 0;
+  font-size: 0.85rem;
+  font-style: italic;
+}
+.sheet-identity-stats {
+  display: flex;
+  gap: 4mm;
+  margin-top: 1mm;
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* --- unresolved effect choices: a card that grants nothing until answered. Sits above
+   every derived stat on the page, dashed rather than solid so it reads as a to-do, not
+   as structural as the identity/defense borders around it. --- */
+
+.choice-warning {
+  border: 1.5px dashed #14110d;
+  padding: 2mm 2.5mm;
+  font-size: 0.72rem;
+}
+.choice-warning strong {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.68rem;
+}
+.choice-warning ul {
+  margin: 1mm 0 0;
+  padding-left: 4mm;
+}
+.choice-warning li {
+  margin-bottom: 0.5mm;
+}
+
+/* --- two-column body --- */
+
+.sheet-columns {
+  display: grid;
+  grid-template-columns: 42mm 1fr;
+  gap: 4mm;
+}
+.sheet-right {
+  display: flex;
+  flex-direction: column;
+  gap: 3mm;
+}
+
+/* --- traits: hexagons drawn as inline SVG strokes, no images, no backgrounds --- */
+
+.trait-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2mm;
+}
+.trait,
+.stat-badge {
+  position: relative;
+  color: #14110d;
+}
+.trait {
+  height: 18mm;
+}
+.hex-outline {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.trait-inner,
+.stat-badge-inner {
+  position: relative;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.trait-label {
+  font-size: 0.6rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.trait-value {
+  font-size: 1.3rem;
+  font-weight: bold;
+  line-height: 1.1;
+}
+
+/* --- defenses --- */
+
+.defense-block {
+  border: 1.5px solid #14110d;
+  padding: 2.5mm;
+  display: flex;
+  flex-direction: column;
+  gap: 2mm;
+}
+.defense-top {
+  display: flex;
+  gap: 4mm;
+}
+/* Column around a badge so its capped-stat note (e.g. Armor Score clamped at the
+   rules maximum) prints directly under the number it explains. */
+.stat-badge-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1mm;
+}
+.stat-badge-note {
+  font-size: 0.55rem;
+  font-style: italic;
+  text-align: center;
+  max-width: 22mm;
+  line-height: 1.15;
+}
+.stat-badge {
+  width: 20mm;
+  height: 20mm;
+}
+/* Evasion gets the SVG hexagon; Armor keeps a plain square outline. */
+.badge-armor {
+  border: 1.5px solid #14110d;
+}
+.stat-badge-value {
+  font-size: 1.4rem;
+  font-weight: bold;
+  line-height: 1;
+}
+.stat-badge-label {
+  font-size: 0.55rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* Guardian and Warrior have no Spellcast trait, so this row is absent for them rather
+   than shown empty — deriveSheet() returns spellcast: null and sheet.js skips it. */
+.spellcast-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  border-top: 1px solid #14110d;
+  border-bottom: 1px solid #14110d;
+  padding: 1mm 0;
+  font-size: 0.8rem;
+}
+.spellcast-label {
+  font-size: 0.65rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.tick-row {
+  display: flex;
+  align-items: center;
+  gap: 2mm;
+  flex-wrap: wrap;
+}
+.tick-label {
+  width: 16mm;
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.ticks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.2mm;
+}
+.tick {
+  width: 4mm;
+  height: 4mm;
+  border: 1px solid #14110d;
+  border-radius: 50%;
+}
+/* Capped-stat caption (e.g. "Capped at the maximum Stress slots of 6."): a full-width
+   line under the row it explains rather than a squeezed inline afterthought, since a
+   flex row with no wrap would otherwise push it past the printable width. */
+.tick-note {
+  flex-basis: 100%;
+  margin-left: 18mm;
+  font-size: 0.65rem;
+  font-style: italic;
+}
+/* Unknown value (e.g. HP on a draft with no class yet): a dash instead of a
+   zero-length tick row, so it reads as "not known" rather than "zero". */
+.tick-unknown {
+  font-size: 0.9rem;
+  font-weight: bold;
+}
+
+.threshold-row {
+  display: flex;
+  gap: 6mm;
+  border-top: 1px solid #14110d;
+  padding-top: 1.5mm;
+  font-size: 0.8rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* --- equipment, experiences, loadout --- */
+
+.equipment-block,
+.experience-block,
+.loadout-block,
+.sheet-features {
+  border: 1.5px solid #14110d;
+  padding: 2.5mm;
+}
+.equipment-block h2,
+.experience-block h2,
+.loadout-block h2,
+.sheet-features h2 {
+  margin: 0 0 1.5mm;
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.weapon-row,
+.experience-row,
+.loadout-row {
+  display: flex;
+  gap: 3mm;
+  align-items: baseline;
+  font-size: 0.8rem;
+  padding: 0.8mm 0;
+  border-bottom: 1px dotted #b6ada0;
+}
+.weapon-row:last-child,
+.experience-row:last-child,
+.loadout-row:last-child {
+  border-bottom: none;
+}
+.experience-row {
+  justify-content: space-between;
+}
+.loadout-row {
+  border-left: 3px solid #14110d;
+  padding-left: 2mm;
+}
+.loadout-index {
+  font-weight: bold;
+}
+/* Domain colour as a secondary cue on top of the border that's already there (never
+   the only thing distinguishing a row): same values style.css uses for the card
+   browser's art-missing fallback border, so a domain reads the same colour everywhere
+   in the app. Each colour is dark/saturated enough to still separate from its
+   neighbours once printed or viewed in black and white. */
+.loadout-row.domain-arcana,
+.card-entry.domain-arcana { border-left-color: var(--c-arcana); }
+.loadout-row.domain-blade,
+.card-entry.domain-blade { border-left-color: var(--c-blade); }
+.loadout-row.domain-bone,
+.card-entry.domain-bone { border-left-color: var(--c-bone); }
+.loadout-row.domain-codex,
+.card-entry.domain-codex { border-left-color: var(--c-codex); }
+.loadout-row.domain-grace,
+.card-entry.domain-grace { border-left-color: var(--c-grace); }
+.loadout-row.domain-midnight,
+.card-entry.domain-midnight { border-left-color: var(--c-midnight); }
+.loadout-row.domain-sage,
+.card-entry.domain-sage { border-left-color: var(--c-sage); }
+.loadout-row.domain-splendor,
+.card-entry.domain-splendor { border-left-color: var(--c-splendor); }
+.loadout-row.domain-valor,
+.card-entry.domain-valor { border-left-color: var(--c-valor); }
+.potion-line,
+.weapon-burden {
+  font-size: 0.7rem;
+  font-style: italic;
+}
+.potion-line {
+  margin: 1.5mm 0 0;
+}
+.weapon-burden {
+  margin-left: auto;
+}
+
+.sheet-lower {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4mm;
+}
+.sheet-features {
+  margin-top: auto;
+  font-size: 0.75rem;
+}
+.sheet-features p {
+  margin: 0;
+}
+
+/* --- page 2: card and feature text --- */
+
+.page-title {
+  margin: 0 0 1.5mm;
+  font-size: 0.75rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  border-bottom: 1.5px solid #14110d;
+  padding-bottom: 0.8mm;
+}
+/* No margin-bottom here: .sheet-page already puts a 4mm flex `gap` between every direct
+   child (this container included), so a margin here on top of that gap would double the
+   space between sections rather than add to it — a genuine stacking bug, independent of
+   how tall page 2 ends up (it's designed to flow onto further sheets; see the comment on
+   .feature-entry p below). Columns stay at 2 rather than 3: with as few as 5 cards or a
+   handful of features, a third column split unevenly (CSS balances by count, not by
+   knowing which entries are long) and made the tallest column *taller*, not shorter —
+   measured on a level-10, five-loadout-slot character. Two columns balances more
+   predictably at this item count. */
+.card-entries,
+.feature-entries,
+.note-entries {
+  columns: 2;
+  column-gap: 6mm;
+}
+.card-entry,
+.feature-entry {
+  break-inside: avoid;
+  margin-bottom: 3mm;
+}
+.card-entry {
+  border-left: 3px solid #14110d;
+  padding-left: 2mm;
+}
+.card-entry-head {
+  display: flex;
+  flex-direction: column;
+}
+.card-entry-head span {
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.feature-entry h3 {
+  margin: 0 0 0.5mm;
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+/* 0.75rem / 1.4: rules prose read on paper in whatever light a table has. An earlier
+   pass shrank this to 0.72rem/1.2 to fit a level-10 character's page 2 on one sheet,
+   measured on screen where .sheet-page carries 6mm of padding — print drops that
+   padding (.sheet-page becomes width: auto, padding: 0 inside the 190mm @page box),
+   so print has ~7% more width, and correspondingly less height, than that measurement
+   assumed. It also chased a constraint that isn't real: page 2 is designed to flow onto
+   further sheets (.sheet-page gets min-height: 0 and break-after: page in print, and
+   .card-entry/.feature-entry use break-inside: avoid), and can't be satisfied by type
+   size regardless — the worst case in the SRD (a level-10 Druid/Warden of the Elements
+   with a full loadout) still runs past one page even with the tightened type. */
+.feature-entry p {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+.feature-entry ul {
+  margin: 0.8mm 0 0;
+  padding-left: 4mm;
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+.feature-entry li {
+  margin-bottom: 0.4mm;
+}
+
+/* --- print --- */
+
+@media print {
+  .sheet-body {
+    background: #fff;
+    padding: 0;
+  }
+  .sheet-toolbar {
+    display: none;
+  }
+  .sheet-page {
+    width: auto;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    border: none;
+    break-after: page;
+  }
+  .sheet-page:last-child {
+    break-after: auto;
+  }
+}

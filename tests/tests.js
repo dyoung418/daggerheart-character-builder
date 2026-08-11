@@ -59,6 +59,9 @@ const {
   isAnswered,
   unresolvedChoices,
 } = await import(`../shared/effects.js${RUN}`);
+const {
+  deriveSheet,
+} = await import(`../shared/sheet-data.js${RUN}`);
 
 // ---------- tiny runner ----------
 
@@ -863,6 +866,328 @@ group("Every id in effects.js still exists in data/");
   const missing = Object.keys(EFFECTS).filter((k) => !known.has(k));
   check(`all ${Object.keys(EFFECTS).length} effect keys resolve`, missing.length === 0,
     missing.length ? `not found in data/:\n${missing.join("\n")}` : undefined);
+}
+
+// ---------- sheet-data.js ----------
+//
+// sheet-data.js delegates every number it used to compute by hand to derivedStats(), so most
+// of what would need testing here is already covered by the "derived stats" groups above — a
+// bug in that arithmetic would show up there, not here. What's left to check is genuinely
+// sheet-specific: the damage-die string (not a derivedStats() concern at all), the heritage
+// feature filter (a correctness fix the old branch made and this rewrite must not lose), the
+// list-block flattening, and that a draft with no class chosen yet still produces a sheet
+// instead of throwing.
+
+// A small fixture db with just enough of each entity's shape for deriveSheet() to walk: named
+// fields, feature arrays with both `paragraph` and `list` description blocks, weapons with and
+// without a damage modifier.
+const SHEET_DB = {
+  classes: [{
+    id: "cls", name: "GUARDIAN", domains: ["VALOR", "BLADE"], startingHitPoints: 7, startingEvasion: 9,
+    hopeFeature: { name: { "en-US": "Unstoppable" }, description: [{ paragraph: { "en-US": "Reduce incoming damage by one threshold." } }] },
+    classFeatures: [{ name: { "en-US": "Frontline Tank" }, description: [{ paragraph: { "en-US": "You mark 1 fewer Stress." } }] }],
+  }],
+  subclasses: [{
+    id: "sub", name: { "en-US": "Stalwart" }, spellcastTrait: "KNOWLEDGE",
+    foundation: { features: [{ name: { "en-US": "Unwavering" }, description: [{ paragraph: { "en-US": "+1 to your damage thresholds." } }] }] },
+    specialization: { features: [{ name: { "en-US": "Unrelenting" }, description: [{ paragraph: { "en-US": "+2 to your damage thresholds." } }] }] },
+    mastery: { features: [{ name: { "en-US": "Undaunted" }, description: [{ paragraph: { "en-US": "+3 to your damage thresholds." } }] }] },
+  }],
+  ancestries: [
+    {
+      id: "anc_a", name: { "en-US": "Giant" },
+      features: [
+        { name: { "en-US": "Endurance" }, description: [{ paragraph: { "en-US": "Gain an additional Hit Point slot." } }] },
+        { name: { "en-US": "Reach" }, description: [{ paragraph: { "en-US": "Extend your reach by one range band." } }] },
+      ],
+    },
+    {
+      id: "anc_b", name: { "en-US": "Simiah" },
+      features: [
+        { name: { "en-US": "Natural Climber" }, description: [{ paragraph: { "en-US": "You always succeed on Agility Rolls to climb." } }] },
+        { name: { "en-US": "Nimble" }, description: [{ paragraph: { "en-US": "+1 to Evasion." } }] },
+      ],
+    },
+  ],
+  communities: [{ id: "com", name: { "en-US": "Wanderborne" }, features: [{ name: { "en-US": "Nomadic Pack" }, description: [{ paragraph: { "en-US": "Extra inventory slot." } }] }] }],
+  domainCards: [{ id: "card1", name: { "en-US": "Rise Up" }, domain: "VALOR", level: 1, type: "ABILITY", recallCost: 0, features: [] }],
+  armors: [{ id: "gambeson", name: { "en-US": "Gambeson" }, baseScore: 3, baseMajorThreshold: 5, baseSevereThreshold: 11, features: [] }],
+  weapons: [
+    { id: "modified", name: { "en-US": "Heavy Warhammer" }, trait: "STRENGTH", range: "MELEE", burden: "TWO_HANDED", damage: { dice: "D10", modifier: 3, type: "PHYSICAL" }, features: [] },
+    { id: "plain", name: { "en-US": "Shortsword" }, trait: "AGILITY", range: "MELEE", burden: "ONE_HANDED", damage: { dice: "D6", type: "PHYSICAL" }, features: [] },
+    // A feature whose only description block is a `list`, the way Guardian's Unstoppable is in
+    // the real data — no `paragraph` at all, so `text` must come back empty and `items` must
+    // carry the bullets, or the render layer prints a heading over nothing.
+    { id: "listed", name: { "en-US": "Listed Blade" }, trait: "AGILITY", range: "MELEE", burden: "ONE_HANDED", damage: { dice: "D6", type: "PHYSICAL" }, features: [{ name: { "en-US": "Options" }, description: [{ list: [{ "en-US": "Choose fire." }, { "en-US": "Choose frost." }] }] }] },
+  ],
+  consumables: [],
+};
+
+function sheetChar(over = {}) {
+  const ch = newCharacter();
+  ch.classId = "cls";
+  ch.subclassId = "sub";
+  ch.heritage = { ancestryMode: "pure", ancestryIds: ["anc_a"], chosenFeatures: [{ ancestryId: "anc_a", featureName: "Endurance" }, { ancestryId: "anc_a", featureName: "Reach" }], communityId: "com" };
+  ch.equipment = { weaponMode: "two-handed", primaryWeaponId: null, secondaryWeaponId: null, armorId: "gambeson", potionChoice: null };
+  ch.background = { description: "", answers: "" };
+  ch.connectionsNotes = "";
+  return Object.assign(ch, over);
+}
+
+group("Sheet damage strings: Proficiency copies of the die, plus an optional modifier");
+{
+  const withMod = deriveSheet(sheetChar({ proficiency: 2, equipment: { weaponMode: "two-handed", primaryWeaponId: "modified", armorId: "gambeson" } }), SHEET_DB);
+  eq("a D10 with +3 at Proficiency 2 prints 2d10+3", withMod.weapons[0].damage, "2d10+3");
+
+  const noMod = deriveSheet(sheetChar({ proficiency: 1, equipment: { weaponMode: "two-handed", primaryWeaponId: "plain", armorId: "gambeson" } }), SHEET_DB);
+  eq("a weapon with no modifier never prints a trailing +0", noMod.weapons[0].damage, "1d6");
+}
+
+group("Sheet weapons: the off-hand only counts in a one-handed build");
+{
+  const oneHanded = deriveSheet(sheetChar({ equipment: { weaponMode: "one-handed", primaryWeaponId: "plain", secondaryWeaponId: "modified", armorId: "gambeson" } }), SHEET_DB);
+  eq("both weapons print", oneHanded.weapons.length, 2);
+
+  // secondaryWeaponId is still set here — an artifact of switching burden after equipping a
+  // two-handed weapon — but weaponMode says two-handed, so it must not appear, same as
+  // derivedStats() never looks it up in that case.
+  const twoHanded = deriveSheet(sheetChar({ equipment: { weaponMode: "two-handed", primaryWeaponId: "plain", secondaryWeaponId: "modified", armorId: "gambeson" } }), SHEET_DB);
+  eq("a two-handed build prints only the primary", twoHanded.weapons.length, 1);
+}
+
+group("Sheet heritage: mixed ancestry prints only the chosen feature, pure prints them all");
+{
+  // Mirrors create.js's ancestry-mode "pure" branch, where chosenFeatures is seeded with every
+  // feature of the ancestry — so filtering by it is a no-op there.
+  const pure = deriveSheet(sheetChar(), SHEET_DB); // sheetChar()'s default heritage is pure, both Giant features chosen
+  eq("pure ancestry: filtering by chosenFeatures is a no-op", pure.ancestryFeatures.map((f) => f.name).sort(), ["Endurance", "Reach"]);
+
+  // Mixed ancestry: create.js records exactly one feature per ancestry. A Giant whose ONE pick
+  // was Reach must not also print Endurance just because it belongs to the same ancestry.
+  const mixed = deriveSheet(sheetChar({
+    heritage: {
+      ancestryMode: "mixed",
+      ancestryIds: ["anc_a", "anc_b"],
+      chosenFeatures: [{ ancestryId: "anc_a", featureName: "Reach" }, { ancestryId: "anc_b", featureName: "Nimble" }],
+      communityId: "com",
+    },
+  }), SHEET_DB);
+  eq("mixed ancestry: only the picked feature per ancestry prints", mixed.ancestryFeatures.map((f) => f.name).sort(), ["Nimble", "Reach"]);
+  check("the unpicked sibling features are gone", !mixed.ancestryFeatures.some((f) => f.name === "Endurance" || f.name === "Natural Climber"));
+}
+
+group("Sheet features: list-block description without a paragraph still prints");
+{
+  const s = deriveSheet(sheetChar({ equipment: { weaponMode: "two-handed", primaryWeaponId: "listed", armorId: "gambeson" } }), SHEET_DB);
+  const f = s.weapons[0].features[0];
+  eq("a single list block survives, tagged and in order", f.description,
+    [{ type: "list", items: ["Choose fire.", "Choose frost."] }]);
+}
+
+group("Sheet features: paragraph -> list -> paragraph keeps its blocks in source order");
+{
+  // Shaped exactly like the real Champion's Edge (10 of the 189 domain cards share this
+  // paragraph -> list -> paragraph shape): a lead-in, the Hope options it introduces, then a
+  // paragraph restricting them. Before this fix, features() joined every paragraph into one
+  // string and every list into another, which welded the restriction onto the lead-in and
+  // printed it BEFORE the options it restricts — this is the fixture that would have caught it.
+  const EDGE_DB = {
+    ...SHEET_DB,
+    domainCards: [...SHEET_DB.domainCards, {
+      id: "card_edge", name: { "en-US": "Champion's Edge" }, domain: "BLADE", level: 5,
+      type: "ABILITY", recallCost: 1,
+      features: [{
+        description: [
+          { paragraph: { "en-US": "Choose one of the following options for each Hope spent:" } },
+          {
+            list: [
+              { "en-US": "Clear a Hit Point." },
+              { "en-US": "Clear an Armor Slot." },
+              { "en-US": "The target marks an additional Hit Point." },
+            ],
+          },
+          { paragraph: { "en-US": "You can't choose the same option more than once." } },
+        ],
+      }],
+    }],
+  };
+  const s = deriveSheet(sheetChar({ domainCardIds: ["card_edge"], creationDomainCardIds: ["card_edge"] }), EDGE_DB);
+  const blocks = s.loadout[0].features[0].description;
+  eq("all three blocks survive, in source order", blocks.map((b) => b.type), ["paragraph", "list", "paragraph"]);
+  eq("the lead-in prints first", blocks[0].text, "Choose one of the following options for each Hope spent:");
+  eq("the three Hope options are untouched", blocks[1].items.length, 3);
+  eq("the restriction prints LAST, after its options — the bug this fixes",
+    blocks[2].text, "You can't choose the same option more than once.");
+}
+
+group("Sheet features: multiple paragraphs stay separate blocks, not a run-on string");
+{
+  // Shaped like Beastbound's Companion: two paragraphs, no list. 65 of 354 features have more
+  // than one paragraph; the old `text: (description).map(...).join(" ")` printed them as one
+  // block with no break, which is what this equality check on the block array rules out.
+  const db = {
+    ...SHEET_DB,
+    classes: [{
+      ...SHEET_DB.classes[0],
+      classFeatures: [{
+        name: { "en-US": "Companion" },
+        description: [
+          { paragraph: { "en-US": "You have an animal companion of your choice." } },
+          { paragraph: { "en-US": "Take the Ranger Companion sheet." } },
+        ],
+      }],
+    }],
+  };
+  const s = deriveSheet(sheetChar(), db);
+  eq("two paragraph blocks, not one joined string", s.classFeatures[0].description, [
+    { type: "paragraph", text: "You have an animal companion of your choice." },
+    { type: "paragraph", text: "Take the Ranger Companion sheet." },
+  ]);
+}
+
+group("Sheet spellcast: trait name, a bonus applied, and no box for non-casters");
+{
+  const plain = deriveSheet(sheetChar(), SHEET_DB); // "sub"'s spellcastTrait is KNOWLEDGE
+  eq("shows the trait name, not a bare number", plain.spellcast.display, "Knowledge");
+  check("traitLabel doesn't ride along onto the sheet (finding 6: display already names the trait)",
+    !("traitLabel" in plain.spellcast));
+
+  // The armor's feature is named "Channeling", the same generic `armor:Channeling` key
+  // effects.js resolves for any armor with that feature — the trick the "Sheet stats agree
+  // with derivedStats()" group above already uses for Very Heavy.
+  const BONUS_DB = {
+    ...SHEET_DB,
+    armors: [...SHEET_DB.armors, {
+      id: "chan", name: { "en-US": "Channeling Armor" }, baseScore: 5,
+      baseMajorThreshold: 13, baseSevereThreshold: 36,
+      features: [{ name: { "en-US": "Channeling" }, description: [{ paragraph: { "en-US": "+1 to Spellcast Rolls." } }] }],
+    }],
+  };
+  const boosted = deriveSheet(sheetChar({
+    equipment: { weaponMode: "two-handed", primaryWeaponId: null, secondaryWeaponId: null, armorId: "chan", potionChoice: null },
+  }), BONUS_DB);
+  eq("a bonus shows on the Spellcast box, not folded into the trait", boosted.spellcast.display, "Knowledge +1");
+
+  const NOCAST_DB = { ...SHEET_DB, subclasses: [...SHEET_DB.subclasses, { id: "nocast", name: { "en-US": "Stonewall" } }] };
+  const guardian = deriveSheet(sheetChar({ subclassId: "nocast" }), NOCAST_DB);
+  check("Guardian/Warrior subclasses with no Spellcast trait get no box at all", guardian.spellcast === null);
+}
+
+group("Sheet hitPointsNote and stressNote: the same clamp caption armorScoreNote already gets");
+{
+  const capped = deriveSheet(sheetChar({ hitPointSlotsBonus: 20, stressSlotsBonus: 20 }), SHEET_DB);
+  eq("Hit Points clamp at the rules maximum", capped.hitPoints, MAX_HIT_POINT_SLOTS);
+  check("and the sheet is told why", !!capped.hitPointsNote);
+  eq("Stress clamps too", capped.stress, MAX_STRESS_SLOTS);
+  check("with its own note", !!capped.stressNote);
+
+  const uncapped = deriveSheet(sheetChar(), SHEET_DB);
+  check("no note printed when nothing clamped", !uncapped.hitPointsNote && !uncapped.stressNote);
+}
+
+group("Sheet loadout: a vaulted card is filtered out, an active one isn't");
+{
+  const DB2 = {
+    ...SHEET_DB,
+    domainCards: [...SHEET_DB.domainCards,
+      { id: "card2", name: { "en-US": "Two" }, domain: "VALOR", level: 1, type: "ABILITY", recallCost: 0, features: [] }],
+  };
+  const s = deriveSheet(sheetChar({
+    domainCardIds: ["card1", "card2"], creationDomainCardIds: ["card1", "card2"], domainVaultIds: ["card2"],
+  }), DB2);
+  eq("only the active card prints in the loadout", s.loadout.map((c) => c.id), ["card1"]);
+}
+
+group("Sheet experiences: a resolved permanent-bonus choice reaches the printed total");
+{
+  // Clank's Purposeful Design, the fix sheet-data.js's own comment claims: "a couple of
+  // features ... add a permanent bonus on top of the level-up value, and the old file's
+  // `character.experiences[i].modifier` never saw that bonus." Real id, because effects.js is
+  // keyed by real ids (`core_ancestry_clank:Purposeful Design`) and an entry keyed to an id
+  // that doesn't exist grants nothing at all, silently.
+  const CLANK_DB = {
+    ...SHEET_DB,
+    ancestries: [...SHEET_DB.ancestries, {
+      id: "core_ancestry_clank", name: { "en-US": "Clank" },
+      features: [{ name: { "en-US": "Purposeful Design" }, description: [{ paragraph: { "en-US": "..." } }] }],
+    }],
+  };
+  const s = deriveSheet(sheetChar({
+    heritage: {
+      ancestryMode: "pure", ancestryIds: ["core_ancestry_clank"],
+      chosenFeatures: [{ ancestryId: "core_ancestry_clank", featureName: "Purposeful Design" }],
+      communityId: null,
+    },
+    effectChoices: { "core_ancestry_clank:Purposeful Design": { optionId: "one", experienceIds: ["e1"] } },
+  }), CLANK_DB);
+  eq("the chosen Experience shows the base value plus the permanent bonus",
+    s.experiences.find((e) => e.name === "A").display, "+3"); // base 2 + Purposeful Design's +1
+  eq("the Experience not chosen is untouched", s.experiences.find((e) => e.name === "B").display, "+2");
+}
+
+group("Sheet subclassFeatures: every tier earned prints, not just the current one");
+{
+  // Upgrading a subclass card ADDS a tier, it doesn't replace the one below it — the same
+  // rule subclassTiersUpTo() encodes for characters.js's detail view (see "A subclass upgrade
+  // adds a card, it doesn't replace the one below" above). A Mastery character still has their
+  // Foundation and Specialization features; printing only sub[subclassTier] silently dropped
+  // them.
+  const mastery = deriveSheet(sheetChar({ subclassTier: "mastery" }), SHEET_DB);
+  eq("Foundation, Specialization and Mastery all print, in that order",
+    mastery.subclassFeatures.map((f) => f.name), ["Unwavering", "Unrelenting", "Undaunted"]);
+  eq("each feature is labelled with ITS OWN tier, not the character's current one",
+    mastery.subclassFeatures.map((f) => f.source), ["Foundation", "Specialization", "Mastery"]);
+
+  const foundation = deriveSheet(sheetChar(), SHEET_DB); // sheetChar()'s default tier is foundation
+  eq("a Foundation character only gets the Foundation feature",
+    foundation.subclassFeatures.map((f) => f.name), ["Unwavering"]);
+}
+
+group("Sheet: a draft with no class chosen is still printable");
+{
+  const draft = deriveSheet(sheetChar({ classId: null, subclassId: null }), SHEET_DB);
+  eq("class name falls back to a dash", draft.className, "—");
+  eq("subclass name falls back to a dash", draft.subclassName, "—");
+  check("Evasion has nothing to show", draft.evasion === null);
+  check("Hit Points has nothing to show", draft.hitPoints === null);
+  check("there's no Hope feature to print", draft.hopeFeature === null);
+  eq("no class features either", draft.classFeatures, []);
+  check("Spellcast has nothing to show without a subclass", draft.spellcast === null);
+  // Thresholds and Armor Score don't depend on class at all — they're still there.
+  check("Armor Score doesn't need a class", draft.armorScore === 3);
+}
+
+group("Sheet stats agree with derivedStats() rather than re-deriving anything");
+{
+  // "Very Heavy" is keyed generically in effects.js as `armor:Very Heavy` — it resolves off the
+  // FEATURE NAME, not the armor's id, so a fixture armor picks up the real, unmodified
+  // effects.js entry (-2 Evasion, -1 Agility) the same way a real "Full Plate Armor" would.
+  // That makes this a genuine check that the sheet reads EFFECTIVE traits/Evasion (through
+  // derivedStats()), not `character.traits` / `startingEvasion + evasionBonus` directly.
+  const EFFECT_DB = {
+    ...SHEET_DB,
+    weapons: [...SHEET_DB.weapons, { id: "sword", name: { "en-US": "Broadsword" }, trait: "AGILITY", range: "MELEE", burden: "ONE_HANDED", damage: { dice: "D8", type: "PHYSICAL" }, features: [] }],
+    armors: [
+      ...SHEET_DB.armors,
+      { id: "heavy", name: { "en-US": "Full Plate" }, baseScore: 4, baseMajorThreshold: 8, baseSevereThreshold: 17, features: [{ name: { "en-US": "Very Heavy" }, description: [{ paragraph: { "en-US": "-2 to Evasion; -1 to Agility" } }] }] },
+      { id: "absurd", name: { "en-US": "Absurd Plate" }, baseScore: 40, baseMajorThreshold: 5, baseSevereThreshold: 11, features: [] },
+    ],
+  };
+  const heavy = deriveSheet(sheetChar({
+    level: 3, traits: { agility: 1, strength: 2, finesse: 0, instinct: 1, presence: 0, knowledge: -1 },
+    equipment: { weaponMode: "one-handed", primaryWeaponId: "sword", armorId: "heavy" },
+  }), EFFECT_DB);
+  eq("Evasion picks up Very Heavy's -2, not just the class baseline", heavy.evasion, 7); // 9 - 2
+  eq("the trait row shows the reduced Agility", heavy.traits.find((t) => t.key === "agility").display, "0"); // 1 - 1
+  eq("the weapon's own attack roll uses the same reduced Agility", heavy.weapons[0].attack, "0");
+  eq("thresholds are armor base plus level, same as derivedStats()", heavy.thresholds, { major: 11, severe: 20 }); // 8+3, 17+3
+
+  // Armor Score can't exceed 12 (SRD) — printing armor.baseScore directly, as the old file did,
+  // would show 40. The note is the one thing worth carrying onto a printed page even without a
+  // popover to put it in, since nothing else at the table would tell a player their number capped.
+  const capped = deriveSheet(sheetChar({ equipment: { weaponMode: "two-handed", armorId: "absurd" } }), EFFECT_DB);
+  eq("Armor Score is capped at 12, not printed as the raw baseScore of 40", capped.armorScore, 12);
+  check("and the cap is explained in a note the printed page can show", !!capped.armorScoreNote);
 }
 
 // ---------- report ----------
