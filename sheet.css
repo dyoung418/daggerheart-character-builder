@@ -355,12 +355,13 @@
 }
 /* No margin-bottom here: .sheet-page already puts a 4mm flex `gap` between every direct
    child (this container included), so a margin here on top of that gap would double the
-   space between sections rather than add to it — the kind of thing that quietly eats the
-   couple of centimetres a full 5-card loadout needs to fit on one printed page. Columns
-   stay at 2 rather than 3: with as few as 5 cards or a handful of features, a third column
-   split unevenly (CSS balances by count, not by knowing which entries are long) and made
-   the tallest column *taller*, not shorter — measured on a level-10, five-loadout-slot
-   character. Two columns balances more predictably at this item count. */
+   space between sections rather than add to it — a genuine stacking bug, independent of
+   how tall page 2 ends up (it's designed to flow onto further sheets; see the comment on
+   .feature-entry p below). Columns stay at 2 rather than 3: with as few as 5 cards or a
+   handful of features, a third column split unevenly (CSS balances by count, not by
+   knowing which entries are long) and made the tallest column *taller*, not shorter —
+   measured on a level-10, five-loadout-slot character. Two columns balances more
+   predictably at this item count. */
 .card-entries,
 .feature-entries,
 .note-entries {
@@ -370,7 +371,7 @@
 .card-entry,
 .feature-entry {
   break-inside: avoid;
-  margin-bottom: 1.5mm;
+  margin-bottom: 3mm;
 }
 .card-entry {
   border-left: 3px solid #14110d;
@@ -391,16 +392,26 @@
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
+/* 0.75rem / 1.4: rules prose read on paper in whatever light a table has. An earlier
+   pass shrank this to 0.72rem/1.2 to fit a level-10 character's page 2 on one sheet,
+   measured on screen where .sheet-page carries 6mm of padding — print drops that
+   padding (.sheet-page becomes width: auto, padding: 0 inside the 190mm @page box),
+   so print has ~7% more width, and correspondingly less height, than that measurement
+   assumed. It also chased a constraint that isn't real: page 2 is designed to flow onto
+   further sheets (.sheet-page gets min-height: 0 and break-after: page in print, and
+   .card-entry/.feature-entry use break-inside: avoid), and can't be satisfied by type
+   size regardless — the worst case in the SRD (a level-10 Druid/Warden of the Elements
+   with a full loadout) still runs past one page even with the tightened type. */
 .feature-entry p {
   margin: 0;
-  font-size: 0.72rem;
-  line-height: 1.2;
+  font-size: 0.75rem;
+  line-height: 1.4;
 }
 .feature-entry ul {
   margin: 0.8mm 0 0;
   padding-left: 4mm;
-  font-size: 0.72rem;
-  line-height: 1.2;
+  font-size: 0.75rem;
+  line-height: 1.4;
 }
 .feature-entry li {
   margin-bottom: 0.4mm;

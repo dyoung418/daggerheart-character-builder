@@ -27,11 +27,6 @@ import { activeDomainCardIds, SUBCLASS_TIER_LABELS } from "./advancement.js";
 import { derivedStats, TRAIT_KEYS, TRAIT_LABELS } from "./derived-stats.js";
 import { unresolvedChoices } from "./effects.js";
 
-// Re-exported under the sheet's own name for anything that wants "the trait order to print
-// in" without reaching into derived-stats.js for it — the two are the same list by definition,
-// so this is a name, not a second source of truth.
-export const TRAIT_ORDER = TRAIT_KEYS;
-
 function find(list, id) {
   return id ? (list || []).find((x) => x.id === id) || null : null;
 }
@@ -53,17 +48,27 @@ function prettyEnum(value) {
 // Feature list flattened to plain strings, so the render layer never walks the
 // nested { name: {"en-US"}, description: [{ paragraph: {"en-US"} } | { list: [{"en-US"}] }] }
 // shape. description blocks come in two shapes: `paragraph` (most of them) and
-// `list` (bulleted benefits, e.g. Guardian's Unstoppable). text keeps joining the
-// paragraph blocks; items carries the flattened list-block strings separately so
-// the render layer can emit a real <ul> instead of folding bullets into prose.
+// `list` (bulleted benefits, e.g. Guardian's Unstoppable) — and a feature can mix
+// several of each, in either order (Champion's Edge is paragraph → list → paragraph:
+// the lead-in, the three Hope options, then "You can't choose the same option more
+// than once", which is a restriction on the options and has to print after them).
+// `description` keeps every block, tagged and in source order, the same principle
+// shared/card-render.js's descriptionHtml() already applies to this exact data —
+// collapsing paragraphs into one joined string (the old shape) or hoisting every
+// list to the end would both scramble that order.
 //
 // Nothing in derived-stats.js does this: it turns feature prose into stat contributions,
 // it never needs the prose itself, so flattening it stays entirely a sheet concern.
 function features(list) {
   return (list || []).map((f) => ({
     name: f.name?.["en-US"] || "",
-    text: (f.description || []).map((d) => d.paragraph?.["en-US"] || "").join(" "),
-    items: (f.description || []).flatMap((d) => (d.list || []).map((item) => item["en-US"] || "")),
+    description: (f.description || [])
+      .map((d) => {
+        if (d.paragraph) return { type: "paragraph", text: d.paragraph["en-US"] || "" };
+        if (Array.isArray(d.list)) return { type: "list", items: d.list.map((item) => item["en-US"] || "") };
+        return null;
+      })
+      .filter(Boolean),
   }));
 }
 
@@ -100,6 +105,12 @@ function weaponEntry(weapon, attackStat, proficiencyTotal) {
 
 export function deriveSheet(character, db) {
   const stats = derivedStats(character, db);
+  // stats.exclusions (bonuses the character has that DON'T count towards a total — Rise Up,
+  // a *-Touched card below its threshold, Armorer while unarmored) isn't surfaced below. On
+  // screen it sits next to the total so a player can see why a bonus they own isn't in the
+  // number; on paper there's no number-adjacent spot for it either, and every bonus it could
+  // name is a card or feature whose full text is already printed on page 2 — a player reading
+  // that text already has the "why", so there's nothing this field would add.
 
   const cls = find(db?.classes, character.classId);
   const sub = find(db?.subclasses, character.subclassId);
@@ -184,8 +195,10 @@ export function deriveSheet(character, db) {
     // exactly the kind of thing a player looks up every session, and the sheet is meant to
     // stand in for the app at the table. `note` explains that a bonus here (e.g. Channeling
     // armor's +1) applies to Spellcast Rolls only, not to a plain roll of the trait.
+    // (stats.spellcast.traitLabel is dropped: `display` already reads e.g. "Knowledge +1",
+    // so nothing on the sheet has a reason to print the bare trait name a second time.)
     spellcast: stats.spellcast
-      ? { traitLabel: stats.spellcast.traitLabel, display: stats.spellcast.display, note: stats.spellcast.note }
+      ? { display: stats.spellcast.display, note: stats.spellcast.note }
       : null,
 
     loadout,

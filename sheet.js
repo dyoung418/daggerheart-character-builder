@@ -226,10 +226,13 @@ function renderLoadout(s) {
   return box;
 }
 
-// Names only. Full text is on page 2.
+// Names only. Full text is on page 2. Every feature category the sheet prints belongs here,
+// including the class's own (classFeatures) — a Rogue's strip used to name neither Cloaked
+// nor Sneak Attack, which read as though the class itself contributed nothing.
 function renderFeatureStrip(s) {
   const named = [
     s.hopeFeature?.name,
+    ...s.classFeatures.map((f) => f.name),
     ...s.subclassFeatures.map((f) => f.name),
     ...s.ancestryFeatures.map((f) => f.name),
     ...s.communityFeatures.map((f) => f.name),
@@ -265,18 +268,26 @@ function renderPageOne(s) {
   return page;
 }
 
-// feature.items is an array of bullet strings ([] when the feature has none). Some
-// features have items and empty text (e.g. Guardian's Unstoppable, whose three
-// benefits live entirely in items); some have text and no items. Both must render.
+// feature.description is an ordered list of { type: "paragraph", text } and
+// { type: "list", items } blocks, in the same order the source prose has them — see
+// shared/sheet-data.js's features(). Rendering them one element per block, in that order,
+// is what keeps e.g. Champion's Edge's closing restriction ("You can't choose the same
+// option more than once") printing AFTER the bullet options it restricts, and keeps a
+// multi-paragraph feature (Beastbound's Companion) from running its paragraphs into one
+// block with no break. shared/card-render.js's descriptionHtml() does the same thing for
+// the card browser's fallback, for the same reason.
 function featureBlock(feature, sourceLabel) {
   const box = el("div", "feature-entry");
   const heading = [feature.name, sourceLabel].filter(Boolean).join(" — ");
   if (heading) box.appendChild(el("h3", null, heading));
-  if (feature.text) box.appendChild(el("p", null, feature.text));
-  if (feature.items && feature.items.length) {
-    const list = el("ul");
-    for (const item of feature.items) list.appendChild(el("li", null, item));
-    box.appendChild(list);
+  for (const block of feature.description || []) {
+    if (block.type === "paragraph") {
+      if (block.text) box.appendChild(el("p", null, block.text));
+    } else if (block.type === "list") {
+      const list = el("ul");
+      for (const item of block.items) list.appendChild(el("li", null, item));
+      box.appendChild(list);
+    }
   }
   return box;
 }
@@ -315,12 +326,16 @@ function renderPageTwo(s) {
   for (const f of s.armorFeatures) feats.appendChild(featureBlock(f, s.armorName));
   page.appendChild(feats);
 
+  // Free-text notes, not data-driven features, so they're wrapped in a single-paragraph
+  // description block by hand rather than going through features() — same shape featureBlock()
+  // expects either way.
+  const noteBlock = (name, text) => featureBlock({ name, description: [{ type: "paragraph", text }] });
   if (s.background || s.appearance || s.connections) {
     page.appendChild(el("h2", "page-title", "Notes"));
     const notes = el("div", "note-entries");
-    if (s.background) notes.appendChild(featureBlock({ name: "Background", text: s.background }));
-    if (s.appearance) notes.appendChild(featureBlock({ name: "Appearance", text: s.appearance }));
-    if (s.connections) notes.appendChild(featureBlock({ name: "Connections", text: s.connections }));
+    if (s.background) notes.appendChild(noteBlock("Background", s.background));
+    if (s.appearance) notes.appendChild(noteBlock("Appearance", s.appearance));
+    if (s.connections) notes.appendChild(noteBlock("Connections", s.connections));
     page.appendChild(notes);
   }
 

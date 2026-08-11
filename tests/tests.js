@@ -978,8 +978,149 @@ group("Sheet features: list-block description without a paragraph still prints")
 {
   const s = deriveSheet(sheetChar({ equipment: { weaponMode: "two-handed", primaryWeaponId: "listed", armorId: "gambeson" } }), SHEET_DB);
   const f = s.weapons[0].features[0];
-  eq("no paragraph text", f.text, "");
-  eq("the list block's bullets survive as items", f.items, ["Choose fire.", "Choose frost."]);
+  eq("a single list block survives, tagged and in order", f.description,
+    [{ type: "list", items: ["Choose fire.", "Choose frost."] }]);
+}
+
+group("Sheet features: paragraph -> list -> paragraph keeps its blocks in source order");
+{
+  // Shaped exactly like the real Champion's Edge (10 of the 189 domain cards share this
+  // paragraph -> list -> paragraph shape): a lead-in, the Hope options it introduces, then a
+  // paragraph restricting them. Before this fix, features() joined every paragraph into one
+  // string and every list into another, which welded the restriction onto the lead-in and
+  // printed it BEFORE the options it restricts — this is the fixture that would have caught it.
+  const EDGE_DB = {
+    ...SHEET_DB,
+    domainCards: [...SHEET_DB.domainCards, {
+      id: "card_edge", name: { "en-US": "Champion's Edge" }, domain: "BLADE", level: 5,
+      type: "ABILITY", recallCost: 1,
+      features: [{
+        description: [
+          { paragraph: { "en-US": "Choose one of the following options for each Hope spent:" } },
+          {
+            list: [
+              { "en-US": "Clear a Hit Point." },
+              { "en-US": "Clear an Armor Slot." },
+              { "en-US": "The target marks an additional Hit Point." },
+            ],
+          },
+          { paragraph: { "en-US": "You can't choose the same option more than once." } },
+        ],
+      }],
+    }],
+  };
+  const s = deriveSheet(sheetChar({ domainCardIds: ["card_edge"], creationDomainCardIds: ["card_edge"] }), EDGE_DB);
+  const blocks = s.loadout[0].features[0].description;
+  eq("all three blocks survive, in source order", blocks.map((b) => b.type), ["paragraph", "list", "paragraph"]);
+  eq("the lead-in prints first", blocks[0].text, "Choose one of the following options for each Hope spent:");
+  eq("the three Hope options are untouched", blocks[1].items.length, 3);
+  eq("the restriction prints LAST, after its options — the bug this fixes",
+    blocks[2].text, "You can't choose the same option more than once.");
+}
+
+group("Sheet features: multiple paragraphs stay separate blocks, not a run-on string");
+{
+  // Shaped like Beastbound's Companion: two paragraphs, no list. 65 of 354 features have more
+  // than one paragraph; the old `text: (description).map(...).join(" ")` printed them as one
+  // block with no break, which is what this equality check on the block array rules out.
+  const db = {
+    ...SHEET_DB,
+    classes: [{
+      ...SHEET_DB.classes[0],
+      classFeatures: [{
+        name: { "en-US": "Companion" },
+        description: [
+          { paragraph: { "en-US": "You have an animal companion of your choice." } },
+          { paragraph: { "en-US": "Take the Ranger Companion sheet." } },
+        ],
+      }],
+    }],
+  };
+  const s = deriveSheet(sheetChar(), db);
+  eq("two paragraph blocks, not one joined string", s.classFeatures[0].description, [
+    { type: "paragraph", text: "You have an animal companion of your choice." },
+    { type: "paragraph", text: "Take the Ranger Companion sheet." },
+  ]);
+}
+
+group("Sheet spellcast: trait name, a bonus applied, and no box for non-casters");
+{
+  const plain = deriveSheet(sheetChar(), SHEET_DB); // "sub"'s spellcastTrait is KNOWLEDGE
+  eq("shows the trait name, not a bare number", plain.spellcast.display, "Knowledge");
+  check("traitLabel doesn't ride along onto the sheet (finding 6: display already names the trait)",
+    !("traitLabel" in plain.spellcast));
+
+  // The armor's feature is named "Channeling", the same generic `armor:Channeling` key
+  // effects.js resolves for any armor with that feature — the trick the "Sheet stats agree
+  // with derivedStats()" group above already uses for Very Heavy.
+  const BONUS_DB = {
+    ...SHEET_DB,
+    armors: [...SHEET_DB.armors, {
+      id: "chan", name: { "en-US": "Channeling Armor" }, baseScore: 5,
+      baseMajorThreshold: 13, baseSevereThreshold: 36,
+      features: [{ name: { "en-US": "Channeling" }, description: [{ paragraph: { "en-US": "+1 to Spellcast Rolls." } }] }],
+    }],
+  };
+  const boosted = deriveSheet(sheetChar({
+    equipment: { weaponMode: "two-handed", primaryWeaponId: null, secondaryWeaponId: null, armorId: "chan", potionChoice: null },
+  }), BONUS_DB);
+  eq("a bonus shows on the Spellcast box, not folded into the trait", boosted.spellcast.display, "Knowledge +1");
+
+  const NOCAST_DB = { ...SHEET_DB, subclasses: [...SHEET_DB.subclasses, { id: "nocast", name: { "en-US": "Stonewall" } }] };
+  const guardian = deriveSheet(sheetChar({ subclassId: "nocast" }), NOCAST_DB);
+  check("Guardian/Warrior subclasses with no Spellcast trait get no box at all", guardian.spellcast === null);
+}
+
+group("Sheet hitPointsNote and stressNote: the same clamp caption armorScoreNote already gets");
+{
+  const capped = deriveSheet(sheetChar({ hitPointSlotsBonus: 20, stressSlotsBonus: 20 }), SHEET_DB);
+  eq("Hit Points clamp at the rules maximum", capped.hitPoints, MAX_HIT_POINT_SLOTS);
+  check("and the sheet is told why", !!capped.hitPointsNote);
+  eq("Stress clamps too", capped.stress, MAX_STRESS_SLOTS);
+  check("with its own note", !!capped.stressNote);
+
+  const uncapped = deriveSheet(sheetChar(), SHEET_DB);
+  check("no note printed when nothing clamped", !uncapped.hitPointsNote && !uncapped.stressNote);
+}
+
+group("Sheet loadout: a vaulted card is filtered out, an active one isn't");
+{
+  const DB2 = {
+    ...SHEET_DB,
+    domainCards: [...SHEET_DB.domainCards,
+      { id: "card2", name: { "en-US": "Two" }, domain: "VALOR", level: 1, type: "ABILITY", recallCost: 0, features: [] }],
+  };
+  const s = deriveSheet(sheetChar({
+    domainCardIds: ["card1", "card2"], creationDomainCardIds: ["card1", "card2"], domainVaultIds: ["card2"],
+  }), DB2);
+  eq("only the active card prints in the loadout", s.loadout.map((c) => c.id), ["card1"]);
+}
+
+group("Sheet experiences: a resolved permanent-bonus choice reaches the printed total");
+{
+  // Clank's Purposeful Design, the fix sheet-data.js's own comment claims: "a couple of
+  // features ... add a permanent bonus on top of the level-up value, and the old file's
+  // `character.experiences[i].modifier` never saw that bonus." Real id, because effects.js is
+  // keyed by real ids (`core_ancestry_clank:Purposeful Design`) and an entry keyed to an id
+  // that doesn't exist grants nothing at all, silently.
+  const CLANK_DB = {
+    ...SHEET_DB,
+    ancestries: [...SHEET_DB.ancestries, {
+      id: "core_ancestry_clank", name: { "en-US": "Clank" },
+      features: [{ name: { "en-US": "Purposeful Design" }, description: [{ paragraph: { "en-US": "..." } }] }],
+    }],
+  };
+  const s = deriveSheet(sheetChar({
+    heritage: {
+      ancestryMode: "pure", ancestryIds: ["core_ancestry_clank"],
+      chosenFeatures: [{ ancestryId: "core_ancestry_clank", featureName: "Purposeful Design" }],
+      communityId: null,
+    },
+    effectChoices: { "core_ancestry_clank:Purposeful Design": { optionId: "one", experienceIds: ["e1"] } },
+  }), CLANK_DB);
+  eq("the chosen Experience shows the base value plus the permanent bonus",
+    s.experiences.find((e) => e.name === "A").display, "+3"); // base 2 + Purposeful Design's +1
+  eq("the Experience not chosen is untouched", s.experiences.find((e) => e.name === "B").display, "+2");
 }
 
 group("Sheet: a draft with no class chosen is still printable");
