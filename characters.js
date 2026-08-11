@@ -493,17 +493,10 @@ function renderDetail() {
     container.appendChild(levelUpBtn);
   }
 
-  // .btn-ghost is width: 100% (it doubles as a full-width "Back to list" bar above), so it
-  // needs an explicit width override here to sit next to Level Up instead of dropping onto
-  // its own full-width line.
   const printSheetLink = document.createElement("a");
-  printSheetLink.className = "btn-ghost";
+  printSheetLink.className = "btn-ghost detail-print-link" + (ch.level < 10 ? " detail-print-link--spaced" : "");
   printSheetLink.href = `sheet.html?id=${ch.id}`;
   printSheetLink.textContent = "Print sheet";
-  printSheetLink.style.display = "inline-block";
-  printSheetLink.style.width = "auto";
-  printSheetLink.style.marginBottom = "0.75rem";
-  if (ch.level < 10) printSheetLink.style.marginLeft = "0.75rem";
   container.appendChild(printSheetLink);
 
   const cardsRow = document.createElement("div");
