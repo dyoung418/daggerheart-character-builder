@@ -59,6 +59,9 @@ const {
   isAnswered,
   unresolvedChoices,
 } = await import(`../shared/effects.js${RUN}`);
+const {
+  deriveSheet,
+} = await import(`../shared/sheet-data.js${RUN}`);
 
 // ---------- tiny runner ----------
 
@@ -863,6 +866,167 @@ group("Every id in effects.js still exists in data/");
   const missing = Object.keys(EFFECTS).filter((k) => !known.has(k));
   check(`all ${Object.keys(EFFECTS).length} effect keys resolve`, missing.length === 0,
     missing.length ? `not found in data/:\n${missing.join("\n")}` : undefined);
+}
+
+// ---------- sheet-data.js ----------
+//
+// sheet-data.js delegates every number it used to compute by hand to derivedStats(), so most
+// of what would need testing here is already covered by the "derived stats" groups above — a
+// bug in that arithmetic would show up there, not here. What's left to check is genuinely
+// sheet-specific: the damage-die string (not a derivedStats() concern at all), the heritage
+// feature filter (a correctness fix the old branch made and this rewrite must not lose), the
+// list-block flattening, and that a draft with no class chosen yet still produces a sheet
+// instead of throwing.
+
+// A small fixture db with just enough of each entity's shape for deriveSheet() to walk: named
+// fields, feature arrays with both `paragraph` and `list` description blocks, weapons with and
+// without a damage modifier.
+const SHEET_DB = {
+  classes: [{
+    id: "cls", name: "GUARDIAN", domains: ["VALOR", "BLADE"], startingHitPoints: 7, startingEvasion: 9,
+    hopeFeature: { name: { "en-US": "Unstoppable" }, description: [{ paragraph: { "en-US": "Reduce incoming damage by one threshold." } }] },
+    classFeatures: [{ name: { "en-US": "Frontline Tank" }, description: [{ paragraph: { "en-US": "You mark 1 fewer Stress." } }] }],
+  }],
+  subclasses: [{
+    id: "sub", name: { "en-US": "Stalwart" }, spellcastTrait: "KNOWLEDGE",
+    foundation: { features: [{ name: { "en-US": "Unwavering" }, description: [{ paragraph: { "en-US": "+1 to your damage thresholds." } }] }] },
+  }],
+  ancestries: [
+    {
+      id: "anc_a", name: { "en-US": "Giant" },
+      features: [
+        { name: { "en-US": "Endurance" }, description: [{ paragraph: { "en-US": "Gain an additional Hit Point slot." } }] },
+        { name: { "en-US": "Reach" }, description: [{ paragraph: { "en-US": "Extend your reach by one range band." } }] },
+      ],
+    },
+    {
+      id: "anc_b", name: { "en-US": "Simiah" },
+      features: [
+        { name: { "en-US": "Natural Climber" }, description: [{ paragraph: { "en-US": "You always succeed on Agility Rolls to climb." } }] },
+        { name: { "en-US": "Nimble" }, description: [{ paragraph: { "en-US": "+1 to Evasion." } }] },
+      ],
+    },
+  ],
+  communities: [{ id: "com", name: { "en-US": "Wanderborne" }, features: [{ name: { "en-US": "Nomadic Pack" }, description: [{ paragraph: { "en-US": "Extra inventory slot." } }] }] }],
+  domainCards: [{ id: "card1", name: { "en-US": "Rise Up" }, domain: "VALOR", level: 1, type: "ABILITY", recallCost: 0, features: [] }],
+  armors: [{ id: "gambeson", name: { "en-US": "Gambeson" }, baseScore: 3, baseMajorThreshold: 5, baseSevereThreshold: 11, features: [] }],
+  weapons: [
+    { id: "modified", name: { "en-US": "Heavy Warhammer" }, trait: "STRENGTH", range: "MELEE", burden: "TWO_HANDED", damage: { dice: "D10", modifier: 3, type: "PHYSICAL" }, features: [] },
+    { id: "plain", name: { "en-US": "Shortsword" }, trait: "AGILITY", range: "MELEE", burden: "ONE_HANDED", damage: { dice: "D6", type: "PHYSICAL" }, features: [] },
+    // A feature whose only description block is a `list`, the way Guardian's Unstoppable is in
+    // the real data — no `paragraph` at all, so `text` must come back empty and `items` must
+    // carry the bullets, or the render layer prints a heading over nothing.
+    { id: "listed", name: { "en-US": "Listed Blade" }, trait: "AGILITY", range: "MELEE", burden: "ONE_HANDED", damage: { dice: "D6", type: "PHYSICAL" }, features: [{ name: { "en-US": "Options" }, description: [{ list: [{ "en-US": "Choose fire." }, { "en-US": "Choose frost." }] }] }] },
+  ],
+  consumables: [],
+};
+
+function sheetChar(over = {}) {
+  const ch = newCharacter();
+  ch.classId = "cls";
+  ch.subclassId = "sub";
+  ch.heritage = { ancestryMode: "pure", ancestryIds: ["anc_a"], chosenFeatures: [{ ancestryId: "anc_a", featureName: "Endurance" }, { ancestryId: "anc_a", featureName: "Reach" }], communityId: "com" };
+  ch.equipment = { weaponMode: "two-handed", primaryWeaponId: null, secondaryWeaponId: null, armorId: "gambeson", potionChoice: null };
+  ch.background = { description: "", answers: "" };
+  ch.connectionsNotes = "";
+  return Object.assign(ch, over);
+}
+
+group("Sheet damage strings: Proficiency copies of the die, plus an optional modifier");
+{
+  const withMod = deriveSheet(sheetChar({ proficiency: 2, equipment: { weaponMode: "two-handed", primaryWeaponId: "modified", armorId: "gambeson" } }), SHEET_DB);
+  eq("a D10 with +3 at Proficiency 2 prints 2d10+3", withMod.weapons[0].damage, "2d10+3");
+
+  const noMod = deriveSheet(sheetChar({ proficiency: 1, equipment: { weaponMode: "two-handed", primaryWeaponId: "plain", armorId: "gambeson" } }), SHEET_DB);
+  eq("a weapon with no modifier never prints a trailing +0", noMod.weapons[0].damage, "1d6");
+}
+
+group("Sheet weapons: the off-hand only counts in a one-handed build");
+{
+  const oneHanded = deriveSheet(sheetChar({ equipment: { weaponMode: "one-handed", primaryWeaponId: "plain", secondaryWeaponId: "modified", armorId: "gambeson" } }), SHEET_DB);
+  eq("both weapons print", oneHanded.weapons.length, 2);
+
+  // secondaryWeaponId is still set here — an artifact of switching burden after equipping a
+  // two-handed weapon — but weaponMode says two-handed, so it must not appear, same as
+  // derivedStats() never looks it up in that case.
+  const twoHanded = deriveSheet(sheetChar({ equipment: { weaponMode: "two-handed", primaryWeaponId: "plain", secondaryWeaponId: "modified", armorId: "gambeson" } }), SHEET_DB);
+  eq("a two-handed build prints only the primary", twoHanded.weapons.length, 1);
+}
+
+group("Sheet heritage: mixed ancestry prints only the chosen feature, pure prints them all");
+{
+  // Mirrors create.js's ancestry-mode "pure" branch, where chosenFeatures is seeded with every
+  // feature of the ancestry — so filtering by it is a no-op there.
+  const pure = deriveSheet(sheetChar(), SHEET_DB); // sheetChar()'s default heritage is pure, both Giant features chosen
+  eq("pure ancestry: filtering by chosenFeatures is a no-op", pure.ancestryFeatures.map((f) => f.name).sort(), ["Endurance", "Reach"]);
+
+  // Mixed ancestry: create.js records exactly one feature per ancestry. A Giant whose ONE pick
+  // was Reach must not also print Endurance just because it belongs to the same ancestry.
+  const mixed = deriveSheet(sheetChar({
+    heritage: {
+      ancestryMode: "mixed",
+      ancestryIds: ["anc_a", "anc_b"],
+      chosenFeatures: [{ ancestryId: "anc_a", featureName: "Reach" }, { ancestryId: "anc_b", featureName: "Nimble" }],
+      communityId: "com",
+    },
+  }), SHEET_DB);
+  eq("mixed ancestry: only the picked feature per ancestry prints", mixed.ancestryFeatures.map((f) => f.name).sort(), ["Nimble", "Reach"]);
+  check("the unpicked sibling features are gone", !mixed.ancestryFeatures.some((f) => f.name === "Endurance" || f.name === "Natural Climber"));
+}
+
+group("Sheet features: list-block description without a paragraph still prints");
+{
+  const s = deriveSheet(sheetChar({ equipment: { weaponMode: "two-handed", primaryWeaponId: "listed", armorId: "gambeson" } }), SHEET_DB);
+  const f = s.weapons[0].features[0];
+  eq("no paragraph text", f.text, "");
+  eq("the list block's bullets survive as items", f.items, ["Choose fire.", "Choose frost."]);
+}
+
+group("Sheet: a draft with no class chosen is still printable");
+{
+  const draft = deriveSheet(sheetChar({ classId: null, subclassId: null }), SHEET_DB);
+  eq("class name falls back to a dash", draft.className, "—");
+  eq("subclass name falls back to a dash", draft.subclassName, "—");
+  check("Evasion has nothing to show", draft.evasion === null);
+  check("Hit Points has nothing to show", draft.hitPoints === null);
+  check("there's no Hope feature to print", draft.hopeFeature === null);
+  eq("no class features either", draft.classFeatures, []);
+  check("Spellcast has nothing to show without a subclass", draft.spellcast === null);
+  // Thresholds and Armor Score don't depend on class at all — they're still there.
+  check("Armor Score doesn't need a class", draft.armorScore === 3);
+}
+
+group("Sheet stats agree with derivedStats() rather than re-deriving anything");
+{
+  // "Very Heavy" is keyed generically in effects.js as `armor:Very Heavy` — it resolves off the
+  // FEATURE NAME, not the armor's id, so a fixture armor picks up the real, unmodified
+  // effects.js entry (-2 Evasion, -1 Agility) the same way a real "Full Plate Armor" would.
+  // That makes this a genuine check that the sheet reads EFFECTIVE traits/Evasion (through
+  // derivedStats()), not `character.traits` / `startingEvasion + evasionBonus` directly.
+  const EFFECT_DB = {
+    ...SHEET_DB,
+    weapons: [...SHEET_DB.weapons, { id: "sword", name: { "en-US": "Broadsword" }, trait: "AGILITY", range: "MELEE", burden: "ONE_HANDED", damage: { dice: "D8", type: "PHYSICAL" }, features: [] }],
+    armors: [
+      ...SHEET_DB.armors,
+      { id: "heavy", name: { "en-US": "Full Plate" }, baseScore: 4, baseMajorThreshold: 8, baseSevereThreshold: 17, features: [{ name: { "en-US": "Very Heavy" }, description: [{ paragraph: { "en-US": "-2 to Evasion; -1 to Agility" } }] }] },
+      { id: "absurd", name: { "en-US": "Absurd Plate" }, baseScore: 40, baseMajorThreshold: 5, baseSevereThreshold: 11, features: [] },
+    ],
+  };
+  const heavy = deriveSheet(sheetChar({
+    level: 3, traits: { agility: 1, strength: 2, finesse: 0, instinct: 1, presence: 0, knowledge: -1 },
+    equipment: { weaponMode: "one-handed", primaryWeaponId: "sword", armorId: "heavy" },
+  }), EFFECT_DB);
+  eq("Evasion picks up Very Heavy's -2, not just the class baseline", heavy.evasion, 7); // 9 - 2
+  eq("the trait row shows the reduced Agility", heavy.traits.find((t) => t.key === "agility").display, "0"); // 1 - 1
+  eq("the weapon's own attack roll uses the same reduced Agility", heavy.weapons[0].attack, "0");
+  eq("thresholds are armor base plus level, same as derivedStats()", heavy.thresholds, { major: 11, severe: 20 }); // 8+3, 17+3
+
+  // Armor Score can't exceed 12 (SRD) — printing armor.baseScore directly, as the old file did,
+  // would show 40. The note is the one thing worth carrying onto a printed page even without a
+  // popover to put it in, since nothing else at the table would tell a player their number capped.
+  const capped = deriveSheet(sheetChar({ equipment: { weaponMode: "two-handed", armorId: "absurd" } }), EFFECT_DB);
+  eq("Armor Score is capped at 12, not printed as the raw baseScore of 40", capped.armorScore, 12);
+  check("and the cap is explained in a note the printed page can show", !!capped.armorScoreNote);
 }
 
 // ---------- report ----------
