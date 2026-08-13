@@ -1776,6 +1776,19 @@ const CSV_DB = {
       id: "fx_free", name: { "en-US": "Wellspring" }, domain: "SPLENDOR", type: "SPELL", level: 1, recallCost: 0,
       features: [{ description: [para("Your presence steadies those around you.")] }],
     },
+    // Vitality's shape: a lead-in, the benefits it introduces, then a closing instruction.
+    // Ten of the 189 cards are paragraph -> list -> paragraph, and joining paragraphs with a
+    // space made that last one read as part of the final bullet.
+    {
+      id: "fx_vitality", name: { "en-US": "Vitality" }, domain: "BLADE", type: "ABILITY", level: 5, recallCost: 0,
+      features: [{
+        description: [
+          para("When you choose this card, permanently gain two of the following benefits:"),
+          { list: [{ "en-US": "One Stress slot" }, { "en-US": "One Hit Point slot" }] },
+          para("Then place this card in your vault permanently."),
+        ],
+      }],
+    },
   ],
 };
 
@@ -1901,6 +1914,22 @@ group("A domain card says what it does, not just what it's called");
   eq("a card whose text introduces bullets keeps them in its own block", bulleted.length, 2);
   eq("one bullet per line", bulleted[1].split("\n").slice(1),
     ["• +1 bonus to your Spellcast Rolls", "• Once per rest, you can switch the results of your Hope and Fear Dice."]);
+
+  // featureText joined paragraphs with a space, so this closing instruction reached the CSV as
+  // "• One Hit Point slot Then place this card in your vault permanently." — one sentence
+  // reading as part of the bullet above it. It is one paragraph per line now, the same
+  // principle sheet-data.js's features() already applies to this exact data. Class and
+  // subclass feature cells are the same function and gained the same fix: Beastbound's
+  // Companion and Wizard's Strange Patterns were the two that showed it there.
+  const vitality = exportRow(csvChar({ domainCardIds: ["fx_vitality"], domainVaultIds: [] }));
+  eq("a paragraph after a bullet list starts its own line",
+    vitality["Domain Card 1"].split("\n\n")[1].split("\n"),
+    [
+      "When you choose this card, permanently gain two of the following benefits:",
+      "• One Stress slot",
+      "• One Hit Point slot",
+      "Then place this card in your vault permanently.",
+    ]);
 }
 {
   // 0 is a real Recall Cost and a common one; a falsy check would have dropped the whole piece.

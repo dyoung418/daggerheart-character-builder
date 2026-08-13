@@ -91,7 +91,15 @@ export function featureText(feature) {
   let text = "";
   for (const block of feature?.description || []) {
     const paragraph = block.paragraph?.["en-US"];
-    if (paragraph) text += (text ? " " : "") + paragraph;
+    // One paragraph per line, for the same reason sheet-data.js's features() keeps them as
+    // separate blocks: 65 of 354 features have more than one, and a space between them welds
+    // a restriction onto the rule it restricts. Vitality reads "+2 bonus to your damage
+    // thresholds Then place this card in your vault permanently" — one sentence running into
+    // the next, and after a bullet, part of the bullet.
+    //
+    // Invisible in this app: both callers escape into HTML, which collapses the newline back
+    // to a space. It is the CSV consumers that can act on it.
+    if (paragraph) text += (text ? "\n" : "") + paragraph;
     // Sixteen class and subclass features state part of their content as bullets, and for one
     // of them — Guardian's "While Unstoppable, you gain the following benefits:" — the list is
     // the whole feature. Reading only the paragraphs returned an empty string for it. One item
