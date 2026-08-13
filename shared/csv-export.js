@@ -90,6 +90,11 @@ function rowContext(ch, db, loadout) {
     primary: unarmed ? UNARMED_PROFILE : find(db?.weapons, ch.equipment?.primaryWeaponId),
     secondary: find(db?.weapons, ch.equipment?.secondaryWeaponId),
     potion: find(db?.consumables, ch.equipment?.potionChoice),
+    // Every card the character owns, in the order they collected them. The vault is a subset of
+    // the collection (history.js keeps it so), which is why one list covers both halves. The id
+    // is kept beside the card because a card this browser's data doesn't have still gets a
+    // column — see cardCell().
+    cards: (ch.domainCardIds || []).map((id) => ({ id, card: find(db?.domainCards, id) })),
   };
 }
 
@@ -120,6 +125,65 @@ function featurePair(headerPrefix, features) {
     { header: `${headerPrefix} feature name`, value: (r) => featureNamesText(features(r)) },
     { header: `${headerPrefix} feature text`, value: (r) => featuresText(features(r)) },
   ];
+}
+
+// ---------- domain cards ----------
+
+// A card gets a column to itself. Every other kind of feature prose on this sheet belongs to
+// something the character has one of — a class, a piece of armor — but a player holds a dozen
+// cards at once, and a list column would bury the very text this exists to carry.
+//
+// A cell is blocks separated by blank lines. The first block is the card's name and then its
+// details; every block after it is one of the card's features, written the way featuresText()
+// writes a feature everywhere else in this file:
+//
+//     Book of Ava
+//     Codex · Grimoire · Level 1 · Recall Cost 2
+//
+//     Power Push: Make a Spellcast Roll against a target within Melee range. …
+//
+//     Tava's Armor: Spend a Hope to give a target you can touch a +1 bonus …
+//
+// The details line is always four pieces in that order, so a consumer can read them by position
+// rather than by matching our wording. A card this browser's data doesn't have is exported as
+// its bare id — a one-line cell, which is also how a reader tells the two apart. Dropping it
+// would renumber every card after it, and it's still a card the player owns.
+//
+// Column ORDER is the collection's order, and the headers are the stable part: nothing may
+// depend on a card being in a particular column, only on `Domain Card 3` meaning what it did
+// last time. Levelling up appends, and exchanging a card replaces it in place, so a card keeps
+// its column across re-exports of the same character.
+
+// The most cards the rules can give you: 2 at creation, 1 guaranteed at each of levels 2-10, and
+// the three "extra domain card" advancement slots (one per tier, TIER_SLOT_TABLE.domainCard in
+// advancement.js).
+//
+// A floor, not a cap. It only decides how often the header varies between exports — a character
+// holding more than this gets a column each regardless, so being wrong by a column or two costs
+// nothing and loses nobody's card.
+const USUAL_MAX_CARDS = 2 + 9 + 3;
+
+function cardCell({ id, card } = {}) {
+  if (!card) return id || "";
+  const details = [
+    enumLabel(card.domain),
+    enumLabel(card.type),
+    // Not filtered for emptiness: a Recall Cost of 0 is a real answer and a common one, and the
+    // four pieces are read by position.
+    `Level ${card.level ?? ""}`.trim(),
+    `Recall Cost ${card.recallCost ?? ""}`.trim(),
+  ].join(" · ");
+  // One call per feature rather than one for the whole card, so the blank line between features
+  // is ours and the text inside each block is exactly what every other feature cell says.
+  const blocks = (card.features || []).map((feature) => featuresText([feature]));
+  return [`${name(card)}\n${details}`, ...blocks].filter(Boolean).join("\n\n");
+}
+
+function cardColumns(count) {
+  return Array.from({ length: count }, (_, i) => ({
+    header: `Domain Card ${i + 1}`,
+    value: (r) => cardCell(r.cards[i]),
+  }));
 }
 
 // ---------- the columns ----------
@@ -214,7 +278,22 @@ export const CSV_COLUMNS = [
   { header: "Background", value: (r) => r.ch.background?.description },
   { header: "Appearance", value: (r) => r.ch.background?.answers },
   { header: "Connections", value: (r) => r.ch.connectionsNotes },
+
+  // Last, so every column above keeps the position it has always had: these are wide, and there
+  // are fourteen of them.
+  ...cardColumns(USUAL_MAX_CARDS),
 ];
+
+/**
+ * The columns for one export. CSV_COLUMNS itself in the ordinary case — the rules can't give
+ * anyone more cards than it already has room for — and widened only for a character who somehow
+ * has more, so that a collection this app didn't build still exports whole.
+ */
+export function csvColumns(characters = []) {
+  const widest = characters.reduce((n, ch) => Math.max(n, (ch.domainCardIds || []).length), 0);
+  if (widest <= USUAL_MAX_CARDS) return CSV_COLUMNS;
+  return [...CSV_COLUMNS, ...cardColumns(widest).slice(USUAL_MAX_CARDS)];
+}
 
 function cardNames(ids, db) {
   return (ids || []).map((id) => name(find(db?.domainCards, id))).filter(Boolean).join("; ");
@@ -249,21 +328,28 @@ export function csvField(value) {
  * @param {object} ch a character (already through ensureLevelFields)
  * @param {object} db the loaded data
  * @param {boolean} loadout whether the cards in the loadout count toward the stats
+ * @param {Array} columns the export's columns, which buildCsv resolves once for the whole file
  */
-export function csvRowForCharacter(ch, db, loadout = true) {
+export function csvRowForCharacter(ch, db, loadout = true, columns = CSV_COLUMNS) {
   // "Permanent only" means every card is in the vault, which is already what vaulted means to
   // the rules: a vaulted card does nothing unless its entry says permanent, and the *-Touched
   // requirement counts only what's in the loadout. So the whole split is one substitution —
   // no second code path through derived-stats.js, and the card columns come out right on their
   // own. It also answers Bare Bones honestly: a base a loadout card was standing in for goes
   // with it, leaving the SRD's unarmored numbers.
+  //
+  // It substitutes the vault and never the collection, so the per-card columns come out
+  // identical under both exports: which cards you own doesn't depend on where they're sitting.
   const subject = loadout ? ch : { ...ch, domainVaultIds: ch.domainCardIds || [] };
   const r = rowContext(subject, db, loadout);
-  return CSV_COLUMNS.map((column) => csvField(column.value(r))).join(",");
+  return columns.map((column) => csvField(column.value(r))).join(",");
 }
 
 export function buildCsv(characters, db, { loadout = true } = {}) {
-  const lines = [CSV_COLUMNS.map((column) => csvField(column.header)).join(",")];
-  for (const ch of characters) lines.push(csvRowForCharacter(ch, db, loadout));
+  // Resolved once for the file: every row has to be as wide as the header, including the rows
+  // that trail blank card columns.
+  const columns = csvColumns(characters);
+  const lines = [columns.map((column) => csvField(column.header)).join(",")];
+  for (const ch of characters) lines.push(csvRowForCharacter(ch, db, loadout, columns));
   return lines.join("\r\n");
 }

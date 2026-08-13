@@ -1743,10 +1743,47 @@ const CSV_DB = {
   ],
   armors: [{ id: "gambeson", name: { "en-US": "Gambeson" }, baseScore: 3, baseMajorThreshold: 5, baseSevereThreshold: 11, features: [feat("Flexible", para("+1 to Evasion."))] }],
   consumables: [{ id: "potion", name: { "en-US": "Minor Health Potion" } }],
+  // Added to FX_DB's cards rather than replacing them: the two-exports tests below name
+  // Untouchable, Vitality and Bare Bones, which carry the effects that make those tests work.
+  domainCards: [
+    ...FX_DB.domainCards,
+    // The shape 176 of the 189 real cards have: one feature, unnamed, a paragraph.
+    {
+      id: "fx_bond", name: { "en-US": "A Soldier's Bond" }, domain: "BLADE", type: "ABILITY", level: 2, recallCost: 1,
+      features: [{ description: [para("Once per long rest, when you compliment someone, you can both gain 3 Hope.")] }],
+    },
+    // A Grimoire: three named features in one card, the case that breaks any one-line-per-card idea.
+    {
+      id: "fx_ava", name: { "en-US": "Book of Ava" }, domain: "CODEX", type: "GRIMOIRE", level: 1, recallCost: 2,
+      features: [
+        feat("Power Push", para("Make a Spellcast Roll against a target within Melee range.")),
+        feat("Tava's Armor", para("Spend a Hope to give a target a +1 bonus to their Armor Score.")),
+        feat("Ice Spike", para("Make a Spellcast Roll (12) to summon a large ice spike.")),
+      ],
+    },
+    // A paragraph introducing bullets, like every *-Touched card.
+    {
+      id: "fx_touched", name: { "en-US": "Arcana-Touched" }, domain: "ARCANA", type: "ABILITY", level: 7, recallCost: 2,
+      features: [{
+        description: [
+          para("When 4 or more of the domain cards in your loadout are from the Arcana domain, gain the following benefits:"),
+          { list: [{ "en-US": "+1 bonus to your Spellcast Rolls" }, { "en-US": "Once per rest, you can switch the results of your Hope and Fear Dice." }] },
+        ],
+      }],
+    },
+    // Recall Cost 0, which a falsy check would drop.
+    {
+      id: "fx_free", name: { "en-US": "Wellspring" }, domain: "SPLENDOR", type: "SPELL", level: 1, recallCost: 0,
+      features: [{ description: [para("Your presence steadies those around you.")] }],
+    },
+  ],
 };
 
 const csvChar = (over = {}) => statChar({
   heritage: { ancestryMode: "pure", ancestryIds: ["clank"], chosenFeatures: [{ ancestryId: "clank", featureName: "Purposeful Design" }], communityId: "com" },
+  // One of each shape, with the Grimoire vaulted — so the card columns can be shown to ignore
+  // the split that the two name-list columns exist to record.
+  domainCardIds: ["fx_bond", "fx_ava", "fx_touched"], domainVaultIds: ["fx_ava"],
   ...over,
 });
 
@@ -1833,6 +1870,68 @@ group("A weapon exports the numbers the sheet prints beside it");
   eq("and no feature", barehanded["Primary feature"], "");
   eq("choosing to wear nothing says so", barehanded["Armor name"], "Unarmored");
   eq("with no armor feature to report", barehanded["Armor feature"], "");
+}
+
+group("A domain card says what it does, not just what it's called");
+{
+  const row = exportRow(csvChar());
+  const cell = row["Domain Card 1"].split("\n");
+  eq("the card names itself first", cell[0], "A Soldier's Bond");
+  eq("then domain, type, level and recall cost, in that order", cell[1], "Blade · Ability · Level 2 · Recall Cost 1");
+  eq("a blank line separates the details from the text", cell[2], "");
+  eq("and then what the card does", cell[3], "Once per long rest, when you compliment someone, you can both gain 3 Hope.");
+
+  // The collection's order, not the loadout/vault split: Book of Ava is vaulted and still second.
+  eq("every card the character owns gets a column, in collection order",
+    [1, 2, 3].map((n) => row[`Domain Card ${n}`].split("\n")[0]),
+    ["A Soldier's Bond", "Book of Ava", "Arcana-Touched"]);
+  eq("a character with fewer cards than columns trails blanks", row["Domain Card 4"], "");
+
+  // The name-only columns say the same as they always did.
+  eq("the loadout list still names what's in the loadout", row["Domain Cards (loadout)"], "A Soldier's Bond; Arcana-Touched");
+  eq("and the vault list what's set aside", row["Domain Cards (vault)"], "Book of Ava");
+}
+{
+  const blocks = exportRow(csvChar())["Domain Card 2"].split("\n\n");
+  eq("a Grimoire's three features are three blocks after the heading", blocks.length, 4);
+  eq("each named, the way every other feature cell names them", blocks[1], "Power Push: Make a Spellcast Roll against a target within Melee range.");
+  eq("down to the last", blocks[3], "Ice Spike: Make a Spellcast Roll (12) to summon a large ice spike.");
+
+  const bulleted = exportRow(csvChar())["Domain Card 3"].split("\n\n");
+  eq("a card whose text introduces bullets keeps them in its own block", bulleted.length, 2);
+  eq("one bullet per line", bulleted[1].split("\n").slice(1),
+    ["• +1 bonus to your Spellcast Rolls", "• Once per rest, you can switch the results of your Hope and Fear Dice."]);
+}
+{
+  // 0 is a real Recall Cost and a common one; a falsy check would have dropped the whole piece.
+  const free = exportRow(csvChar({ domainCardIds: ["fx_free"], domainVaultIds: [] }));
+  eq("a Recall Cost of 0 is stated rather than left out", free["Domain Card 1"].split("\n")[1], "Splendor · Spell · Level 1 · Recall Cost 0");
+}
+{
+  // A file written by a browser whose data/ knew a card this one doesn't. Dropping it would
+  // renumber every card after it, and it's still a card the player owns.
+  const stranger = exportRow(csvChar({
+    domainCardIds: ["fx_bond", "core_domain_card_from_the_future", "fx_free"], domainVaultIds: [],
+  }));
+  eq("a card this browser doesn't have is exported as its id", stranger["Domain Card 2"], "core_domain_card_from_the_future");
+  eq("and the cards after it keep their columns", stranger["Domain Card 3"].split("\n")[0], "Wellspring");
+}
+{
+  // Which cards you own doesn't depend on where they're sitting, so the permanent-only export —
+  // which vaults every card — has to leave these columns alone.
+  const ch = csvChar();
+  eq("the card columns read the same in both exports",
+    exportRow(ch)["Domain Card 2"], exportRow(ch, { loadout: false })["Domain Card 2"]);
+}
+{
+  // Fourteen is what the rules can give you, and it's a floor rather than a width: a collection
+  // this app couldn't have built still exports whole instead of being cut off.
+  const hoarder = csvChar({ domainCardIds: Array.from({ length: 16 }, () => "fx_bond"), domainVaultIds: [] });
+  const rows = parseCsv(buildCsv([hoarder, csvChar()], CSV_DB));
+  eq("sixteen cards means sixteen card columns", rows[0].filter((h) => h.startsWith("Domain Card ")).length, 16);
+  eq("the last is named for its position", rows[0][rows[0].length - 1], "Domain Card 16");
+  eq("and every row is as wide as the header", [rows[1].length, rows[2].length], [rows[0].length, rows[0].length]);
+  eq("including the character who has three", rows[2][rows[0].length - 1], "");
 }
 
 group("Two exports, and the column that tells them apart");
