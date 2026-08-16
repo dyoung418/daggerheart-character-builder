@@ -465,7 +465,7 @@ function renderDetail() {
   const closeBtn = document.createElement("button");
   closeBtn.className = "btn-ghost";
   closeBtn.textContent = "← Back to list";
-  closeBtn.addEventListener("click", () => { openId = null; renderAll(); });
+  closeBtn.addEventListener("click", showList);
   container.appendChild(closeBtn);
 
   const cls = findClass(ch.classId);
@@ -777,7 +777,33 @@ function renderStatNotes(container, ch, stats) {
   }
 }
 
+// The heading names what you're looking at, which on this page is either the roster or one
+// character. That's what frees the words "My Characters" to mean only the nav link — before
+// this they sat in the heading on the left here and in the nav on the right everywhere else,
+// working in one place and not the other.
+function renderTitle() {
+  const ch = characters.find((c) => c.id === openId);
+  const label = ch ? (ch.name || "(unnamed)") : "My Characters";
+  document.querySelector(".topbar h1 span").textContent = label;
+  document.title = `Daggerheart — ${label}`;
+}
+
+// Back to the roster. Not a navigation: the detail view is this page with `openId` set, so this
+// clears it and re-renders rather than reloading and re-reading every content source.
+//
+// The query string has to go with it. Level up sends you back to `characters.html?id=…&history=1`
+// and nothing has cleared it since, so leaving it in place means a refresh silently reopens the
+// character you just closed.
+function showList() {
+  openId = null;
+  const url = new URL(location.href);
+  for (const key of ["id", "open", "history"]) url.searchParams.delete(key);
+  history.replaceState(null, "", url.pathname + url.search);
+  renderAll();
+}
+
 function renderAll() {
+  renderTitle();
   renderList();
   renderDetail();
   document.getElementById("characters-list").style.display = openId ? "none" : "block";
@@ -1163,6 +1189,12 @@ async function init() {
     historyOpen = params.get("history") === "1";
   }
   renderAll();
+  // A real link, intercepted: it navigates for anyone without JS and lands on the roster either
+  // way, but here it's a re-render rather than a reload of the page we're already on.
+  document.getElementById("nav-my-characters").addEventListener("click", (e) => {
+    e.preventDefault();
+    showList();
+  });
   document.getElementById("export-csv-btn").addEventListener("click", openExportPicker);
   document.getElementById("transfer-btn").addEventListener("click", () => openTransferModal());
 }
