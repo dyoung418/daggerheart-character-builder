@@ -3,7 +3,18 @@
 # Content sources. Only the SRD folder is tracked: everything else under data/ is either
 # generated (card art, extracted from a PDF nobody may redistribute) or content the DPCGL
 # re-use grant doesn't cover — playtest material and homebrew.
-data/*/
+#
+# `data/*` and not `data/*/`: a source folder may be a SYMLINK into a private content repo, and
+# git treats a symlink as a file, so the trailing slash would let it through and `git add -A`
+# would commit it. Matching everything and re-including what's tracked covers both, and names no
+# unpublished content in a public repo.
+data/*
 !data/srd/
+!data/sources.json
 data/srd/card-art/
-data/sources.local.json
+
+# Working notes, and the books they're taken from. Both are symlinks into that same private
+# repo. Ignored here rather than in .git/info/exclude so the rule travels with a fresh clone.
+TODO.md
+CLAUDE.md
+*.pdf
