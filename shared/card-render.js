@@ -106,3 +106,7 @@ export function communityCardArtPath(community) {
 export function ancestryCardArtPath(ancestry) {
   return `${artRoot(ancestry)}/ancestry/${ancestry?.id}.png`;
 }
+// No srd/ equivalent to fall back to even in principle: the SRD has no transformations at all.
+export function transformationCardArtPath(transformation) {
+  return `${artRoot(transformation)}/transformation/${transformation?.id}.png`;
+}

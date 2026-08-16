@@ -18,6 +18,7 @@ const COUNT_LABELS = {
   subclasses: ["subclass", "subclasses"],
   ancestries: ["ancestry", "ancestries"],
   communities: ["community", "communities"],
+  transformations: ["transformation", "transformations"],
   domainCards: ["card", "cards"],
   weapons: ["weapon", "weapons"],
   armors: ["armor", "armors"],

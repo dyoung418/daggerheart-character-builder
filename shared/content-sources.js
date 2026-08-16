@@ -21,11 +21,17 @@ import { EFFECT_STAT_KEYS } from "./effects.js";
 // items.json is deliberately absent. It ships in data/srd/ and is fetched by nothing — a loader
 // that enumerated filenames would silently start pulling 23 KB with no consumer, so the SRD's
 // own source.json doesn't list it either.
+//
+// transformations.json is the one kind the SRD doesn't have and can't: a transformation is an
+// optional, permanent change to what a character IS, and only a source that isn't the SRD can
+// provide one. It's listed here anyway, because a kind the loader doesn't know is a kind no
+// amount of well-formed JSON can add.
 export const CONTENT_FILES = {
   classes: "classes",
   subclasses: "subclasses",
   ancestries: "ancestries",
   communities: "communities",
+  transformations: "transformations",
   "domain-cards": "domainCards",
   weapons: "weapons",
   armors: "armors",
@@ -347,6 +353,9 @@ export function unresolvedReferences(ch, db, { sentinels = [], includeAllCards =
   check("subclass", ch?.subclassId, db?.subclasses);
   for (const chosen of ch?.heritage?.chosenFeatures || []) check("ancestry", chosen.ancestryId, db?.ancestries);
   check("community", ch?.heritage?.communityId, db?.communities);
+  // Stored beside the heritage rather than inside it: heritage's shape is ancestry-specific
+  // (a mode, a pair of ids, a feature pick each), and a transformation is one id or none.
+  check("transformation", ch?.transformationId, db?.transformations);
   check("weapon", ch?.equipment?.primaryWeaponId, db?.weapons);
   check("weapon", ch?.equipment?.secondaryWeaponId, db?.weapons);
   check("armor", ch?.equipment?.armorId, db?.armors);

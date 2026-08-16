@@ -2523,9 +2523,9 @@ group("A character says so when it refers to content this browser hasn't got");
   };
   eq("a character whose content is all here says nothing", unresolvedReferences(whole, db), []);
 
-  const orphan = { ...whole, classId: "void_class_witch", equipment: { armorId: "hb_armor_ironhide" } };
+  const orphan = { ...whole, classId: "myhomebrew_class_witch", equipment: { armorId: "hb_armor_ironhide" } };
   eq("one built on a folder you no longer have names what's missing",
-    unresolvedReferences(orphan, db), [{ kind: "class", id: "void_class_witch" }, { kind: "armor", id: "hb_armor_ironhide" }]);
+    unresolvedReferences(orphan, db), [{ kind: "class", id: "myhomebrew_class_witch" }, { kind: "armor", id: "hb_armor_ironhide" }]);
 
   // Unarmed and Unarmored are stored values with no record behind them, so they can't be missing.
   eq("the equipment sentinels aren't missing content",
@@ -2534,10 +2534,133 @@ group("A character says so when it refers to content this browser hasn't got");
 
   // The roster leaves levelled cards to history.js, which already says "that card no longer
   // exists" about them. The import review runs before any of that and wants one honest count.
-  const levelled = { ...whole, domainCardIds: ["core_card_a", "void_card_b"] };
+  const levelled = { ...whole, domainCardIds: ["core_card_a", "myhomebrew_card_b"] };
   eq("cards taken at a level up are left to the level history", unresolvedReferences(levelled, db), []);
   eq("unless it's the import review asking",
-    unresolvedReferences(levelled, db, { includeAllCards: true }), [{ kind: "domain card", id: "void_card_b" }]);
+    unresolvedReferences(levelled, db, { includeAllCards: true }), [{ kind: "domain card", id: "myhomebrew_card_b" }]);
+}
+
+// ---------- transformations ----------
+//
+// The one record kind with nothing in data/srd/ behind it: the SRD has no transformations, so
+// every one of these fixtures is invented. A transformation is an optional, permanent change to
+// what a character IS — a benefit and a drawback together, at most one per character, sitting
+// with the heritage rather than in the loadout.
+//
+// The "only one" rule has nothing to test: the character stores a single id, so there is no shape
+// for two to be written in. What IS worth pinning down is everything downstream of that id.
+
+const TF_GIFT = {
+  id: "myhomebrew_transformation_a",
+  name: { "en-US": "Tide-Marked" },
+  features: [
+    feat("The Gift", para("You breathe water as easily as air.")),
+    feat("The Price", para("A day on dry land leaves you parched.")),
+  ],
+};
+const TF_PLAIN = {
+  id: "myhomebrew_transformation_b",
+  name: { "en-US": "Emberborn" },
+  features: [feat("Kindled", para("You are never cold."))],
+};
+
+const TF_MERGED = mergeSources([
+  source("srd", { classes: [srcClass("core_class_bard", "BARD")] }),
+  source("my-homebrew", { transformations: [TF_GIFT, TF_PLAIN, { name: { "en-US": "Nameless" } }] }),
+]);
+
+const TF_DB = {
+  classes: [{ id: "cls", name: "GUARDIAN", domains: ["VALOR"], startingHitPoints: 7, startingEvasion: 9 }],
+  // The merged copies, so they carry the contentSource stamp the CSV's Content column reads.
+  transformations: TF_MERGED.db.transformations,
+  sourceLabels: { srd: "Daggerheart SRD", "my-homebrew": "My Homebrew" },
+  effects: {
+    [`${TF_GIFT.id}:The Gift`]: { evasion: 1 },
+    [`${TF_GIFT.id}:The Price`]: { excluded: ["The Price costs a Stress in play, so it isn't counted here"] },
+  },
+};
+
+const tfChar = (over = {}) => Object.assign(newCharacter(), {
+  classId: "cls",
+  heritage: { ancestryMode: "pure", ancestryIds: [], chosenFeatures: [], communityId: null },
+  equipment: { primaryWeaponId: null, secondaryWeaponId: null, armorId: null, potionChoice: null },
+  background: { description: "", answers: "" },
+  connectionsNotes: "",
+}, over);
+
+const tfRow = (ch) => {
+  const rows = parseCsv(buildCsv([ch], TF_DB));
+  return Object.fromEntries(rows[1].map((value, i) => [rows[0][i], value]));
+};
+
+group("A source can add a kind of record the SRD hasn't got");
+{
+  eq("its transformations land in db", TF_MERGED.db.transformations.map((t) => t.id), [TF_GIFT.id, TF_PLAIN.id]);
+  eq("stamped with where they came from",
+    TF_MERGED.db.transformations.map((t) => t.contentSource), ["my-homebrew", "my-homebrew"]);
+  eq("and counted, so the Content panel can say what the folder holds",
+    TF_MERGED.report.sources[1].counts.transformations, 2);
+  eq("one the panel can't show is skipped and named",
+    TF_MERGED.report.sources[1].skipped, [{ file: "transformations", id: "(no id)", reason: "missing: id" }]);
+
+  // Nothing beyond id and name is required: a transformation is prose plus, sometimes, a number.
+  eq("a transformation with no features is odd but usable",
+    validateRecord("transformations", { id: "x", name: { "en-US": "A" } }), null);
+  eq("one with no name is not, because nothing could label it",
+    validateRecord("transformations", { id: "x" }), "missing: name");
+
+  eq("switching the source off empties the picker",
+    visibleRecords(TF_MERGED.db.transformations, new Set(["my-homebrew"])), []);
+
+  eq("a character says so when its transformation isn't in this browser",
+    unresolvedReferences({ transformationId: TF_GIFT.id }, { transformations: [] }),
+    [{ kind: "transformation", id: TF_GIFT.id }]);
+  eq("and having none at all is not something missing",
+    unresolvedReferences({}, { transformations: [] }), []);
+}
+
+group("A transformation grants what it declares, and says what it doesn't");
+{
+  const marked = tfChar({ transformationId: TF_GIFT.id });
+  const stats = derivedStats(marked, TF_DB);
+  eq("the feature's bonus reaches the stat", stats.evasion.total, 10);
+  // Keyed per feature, not per card, so the breakdown can name which half of the bargain did it.
+  check("and the breakdown names the transformation and the feature",
+    stats.evasion.parts.some((p) => p.label === "Tide-Marked — The Gift"));
+  eq("a drawback that can't be counted explains itself instead",
+    stats.exclusions, ["The Price costs a Stress in play, so it isn't counted here"]);
+
+  eq("a character with no transformation is left exactly as it was",
+    derivedStats(tfChar(), TF_DB).evasion.total, 9);
+  // The field is new; every character saved before today is missing it entirely.
+  const legacy = tfChar();
+  delete legacy.transformationId;
+  eq("and so is one saved before the field existed", derivedStats(legacy, TF_DB).evasion.total, 9);
+}
+
+group("A transformation prints on the sheet and exports to the GM");
+{
+  const sheet = deriveSheet(tfChar({ transformationId: TF_GIFT.id }), TF_DB);
+  eq("the printable sheet names it", sheet.transformationName, "Tide-Marked");
+  // Both, always: unlike a mixed ancestry there is nothing to choose between, and a drawback
+  // the player never reads is a drawback that never happens at the table.
+  eq("and prints both halves of the bargain",
+    sheet.transformationFeatures.map((f) => f.name), ["The Gift", "The Price"]);
+  eq("each labelled with the transformation it came from",
+    [...new Set(sheet.transformationFeatures.map((f) => f.source))], ["Tide-Marked"]);
+
+  const none = deriveSheet(tfChar(), TF_DB);
+  eq("a character without one prints nothing, not a dash",
+    [none.transformationName, none.transformationFeatures], [null, []]);
+
+  const row = tfRow(tfChar({ transformationId: TF_GIFT.id }));
+  eq("the CSV names it", row["Transformation"], "Tide-Marked");
+  eq("with both feature names", row["Transformation feature name"], "The Gift\nThe Price");
+  check("and the drawback's text, not just the benefit's",
+    row["Transformation feature text"].includes("A day on dry land leaves you parched."));
+  // A character whose only non-SRD content is a transformation still has to report the source.
+  eq("and the source it came from", row["Content"], "My Homebrew");
+  eq("a character without one leaves the columns empty", tfRow(tfChar())["Transformation"], "");
 }
 
 // ---------- report ----------

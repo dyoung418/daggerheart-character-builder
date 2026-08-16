@@ -68,6 +68,7 @@ function rowContext(ch, db, loadout) {
     cls: find(db?.classes, ch.classId),
     sub,
     com: find(db?.communities, ch.heritage?.communityId),
+    transformation: find(db?.transformations, ch.transformationId),
     ancestries: (ch.heritage?.ancestryIds || []).map((id) => find(db?.ancestries, id)).filter(Boolean),
     // The features the player picked, not every feature the ancestries have: a mixed-ancestry
     // character takes one from each, and it isn't always the first.
@@ -191,7 +192,7 @@ function cardColumns(count) {
 function contentSourcesText(r) {
   const used = new Set();
   const note = (record) => { if (record?.contentSource) used.add(record.contentSource); };
-  note(r.cls); note(r.sub); note(r.com); note(r.armor);
+  note(r.cls); note(r.sub); note(r.com); note(r.transformation); note(r.armor);
   note(r.primary); note(r.secondary); note(r.potion);
   for (const ancestry of r.ancestries) note(ancestry);
   for (const owned of r.cards) note(owned.card);
@@ -230,6 +231,11 @@ export const CSV_COLUMNS = [
   ...featurePair("Heritage", (r) => r.heritageFeatures),
   { header: "Community", value: (r) => name(r.com) },
   ...featurePair("Community", (r) => r.com?.features),
+  // Beside the heritage, where the rules place it, and blank for the great majority of
+  // characters — no SRD content provides one. Both features export: the drawback is half of what
+  // a transformation is, and a GM reading this row needs it as much as the player does.
+  { header: "Transformation", value: (r) => name(r.transformation) },
+  ...featurePair("Transformation", (r) => r.transformation?.features),
 
   // Effective traits, matching the sheet: the GM wants the number the player rolls with, which
   // includes their armor's -1 Agility.

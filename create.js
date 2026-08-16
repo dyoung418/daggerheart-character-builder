@@ -4,6 +4,7 @@ import {
   subclassCardArtPath,
   communityCardArtPath,
   ancestryCardArtPath,
+  transformationCardArtPath,
 } from "./shared/card-render.js";
 import { MAX_HOPE, STARTING_HOPE, blankSlotsUsed, ensureLevelFields, tierForLevel } from "./shared/advancement.js";
 import { recomputeCharacter } from "./shared/history.js";
@@ -37,7 +38,9 @@ const TRAIT_ARRAY = [2, 1, 1, 0, 0, -1];
 const MINOR_HEALTH_POTION_ID = "core_consumable_minor_health_potion";
 const MINOR_STAMINA_POTION_ID = "core_consumable_minor_stamina_potion";
 
-const STEPS = [
+// The steps every character has. The optional one is spliced in by buildSteps() below, which is
+// also why the "Step N" comments further down number this list rather than what's on screen.
+const BASE_STEPS = [
   { key: "class", label: "Class" },
   { key: "heritage", label: "Ancestry & Community" },
   { key: "traits", label: "Traits" },
@@ -49,9 +52,10 @@ const STEPS = [
   { key: "connections", label: "Connections" },
 ];
 
-const db = {}; // populated by loadAllData(): classes, subclasses, ancestries, communities, domainCards, weapons, armors, consumables
+const db = {}; // populated by loadAllData(): classes, subclasses, ancestries, communities, transformations, domainCards, weapons, armors, consumables
 let content = null; // what loadContent() reported: which sources loaded, and which are switched off
 let character = null;
+let STEPS = BASE_STEPS; // the steps this character actually has — see buildSteps()
 let currentStep = 0;
 let gearFilter = ""; // the equipment step's name filter, kept across re-renders
 
@@ -107,6 +111,10 @@ function blankCharacter(id) {
     // No weaponMode: what's equipped is the truth. Older saves still carry the field;
     // nothing reads it, so there's nothing to migrate.
     equipment: { primaryWeaponId: null, secondaryWeaponId: null, armorId: null, potionChoice: null },
+    // At most one, and usually none: a transformation is optional, and the SRD provides none at
+    // all. It doesn't live in `heritage` — that field's shape is ancestry-specific — nor in
+    // domainCardIds, because a transformation card doesn't count against the loadout limit.
+    transformationId: null,
     background: { description: "", answers: "" },
     experiences: [
       { id: "exp_start1", name: "", modifier: 2, baseModifier: 2, sinceLevel: 1 },
@@ -128,13 +136,37 @@ function blankCharacter(id) {
   };
 }
 
+// Which steps this character has. Everything in BASE_STEPS, plus the optional transformation
+// step when there is anything to say about it — a source that provides transformations, or a
+// character that already has one.
+//
+// The second half matters as much as the first: switching off the source a character's
+// transformation came from must not strand them with a choice they can no longer reach and
+// clear. Runs after the character is loaded for that reason.
+function buildSteps() {
+  const relevant = (db.transformations || []).length > 0 || !!character.transformationId;
+  if (!relevant) {
+    STEPS = BASE_STEPS;
+    return;
+  }
+  const at = BASE_STEPS.findIndex((s) => s.key === "heritage");
+  STEPS = [...BASE_STEPS];
+  // Straight after the heritage, which is where the rules put it.
+  STEPS.splice(at + 1, 0, { key: "transformation", label: "Transformation" });
+}
+
+// The equipment step outlives creation, so the sheet links straight to it, and so does the
+// "Change transformation" link on the roster. Any step key works; an unknown one just starts at
+// the beginning, as a bare ?id= always has. Read after buildSteps(), because the step it names
+// may be one of the optional ones.
+function applyStepParam() {
+  const step = STEPS.findIndex((s) => s.key === new URLSearchParams(location.search).get("step"));
+  if (step >= 0) currentStep = step;
+}
+
 function initCharacter() {
   const params = new URLSearchParams(location.search);
   const id = params.get("id");
-  // The equipment step outlives creation, so the sheet links straight to it. Any step key works;
-  // an unknown one just starts at the beginning, as a bare ?id= always has.
-  const step = STEPS.findIndex((s) => s.key === params.get("step"));
-  if (step >= 0) currentStep = step;
   if (id) {
     const found = loadAllCharacters().find((c) => c.id === id);
     if (found) {
@@ -176,6 +208,10 @@ function isStepValid(stepKey) {
       return h.ancestryIds.length === 2 && h.chosenFeatures.length === 2 &&
         h.chosenFeatures[0].ancestryId !== h.chosenFeatures[1].ancestryId;
     }
+    case "transformation":
+      // Optional, so always satisfied. Having none is a complete answer, and the rules say so:
+      // a GM hands these out, they aren't part of building a character.
+      return true;
     case "traits":
       return TRAIT_KEYS.every((k) => character.traits[k] !== null);
     case "derived":
@@ -242,6 +278,7 @@ function renderStepPanel() {
   const renderers = {
     class: renderClassStep,
     heritage: renderHeritageStep,
+    transformation: renderTransformationStep,
     traits: renderTraitsStep,
     derived: renderDerivedStep,
     equipment: renderEquipmentStep,
@@ -461,6 +498,82 @@ function renderHeritageStep(panel) {
     comGrid.appendChild(tile);
   }
   panel.appendChild(comGrid);
+}
+
+// --- Optional step: Transformation ---
+//
+// A transformation is a permanent change to what a character IS, handed out by the GM as part of
+// the story or offered at creation. It's optional, and a PC can have only one — which is why the
+// character stores a single id rather than a list: the rule isn't enforced anywhere, it just has
+// no shape to be broken in.
+//
+// This whole step is absent unless something provides transformations, so a checkout holding only
+// the SRD — which has none — never sees it. See buildSteps().
+function renderTransformationStep(panel) {
+  const info = document.createElement("p");
+  info.className = "hint";
+  info.textContent = "Optional, and you can have only one. A transformation gives you a benefit " +
+    "and a drawback together, and the card doesn't count against your loadout — it sits with your " +
+    "heritage. Your GM may hand you one during play instead, and you can come back here for it.";
+  panel.appendChild(info);
+
+  const transformations = pickable(db.transformations);
+  if (transformations.length === 0) {
+    emptyPickerNote(panel, "transformations");
+    // Not a dead end: a character whose source was switched off still needs a way out of it.
+    if (character.transformationId) panel.appendChild(clearTransformationRow());
+    return;
+  }
+
+  panel.appendChild(clearTransformationRow());
+
+  const grid = document.createElement("div");
+  grid.className = "tile-grid";
+  for (const t of transformations) {
+    const card = {
+      id: t.id, name: t.name["en-US"], art: transformationCardArtPath(t),
+      type: "Transformation", features: t.features,
+    };
+    const selected = character.transformationId === t.id;
+    // Clicking the one you already have takes it off again, the same way the mixed-ancestry
+    // tiles work. Nothing else in the step can undo a pick.
+    grid.appendChild(cardTile(card, selected, () => {
+      character.transformationId = selected ? null : t.id;
+      onChange();
+    }));
+  }
+  panel.appendChild(grid);
+
+  renderTransformationChoices(panel);
+}
+
+function clearTransformationRow() {
+  const row = document.createElement("label");
+  row.className = "option-row";
+  row.innerHTML = `<input type="radio" name="transformation-none" ` +
+    `${character.transformationId ? "" : "checked"}/> <strong>No transformation</strong>`;
+  row.querySelector("input").addEventListener("change", () => {
+    character.transformationId = null;
+    onChange();
+  });
+  return row;
+}
+
+// A transformation that says "choose" gets asked here, beside the card that asked it — the same
+// principle that puts an ancestry's choice in the wizard and a card's on the level up screen.
+// Nothing here knows which transformation that is, or what it asks for.
+function renderTransformationChoices(panel) {
+  for (const entry of collectEffects(character, db)) {
+    if (entry.source !== "transformation" || !entry.effect.choice) continue;
+    const answer = (character.effectChoices[entry.key] ||= blankAnswer());
+    renderEffectChoice(panel, {
+      key: entry.key,
+      choice: entry.effect.choice,
+      answer,
+      experiences: character.experiences,
+      onChange,
+    });
+  }
 }
 
 // --- Step 3: Traits ---
@@ -883,6 +996,10 @@ async function init() {
   await loadAllData();
   mountContentSettings(content);
   initCharacter();
+  // Both after the character exists: which steps there are can depend on it, and the ?step=
+  // parameter may name one of the optional ones.
+  buildSteps();
+  applyStepParam();
   document.getElementById("prev-btn").addEventListener("click", () => goToStep(Math.max(0, currentStep - 1)));
   document.getElementById("next-btn").addEventListener("click", () => goToStep(Math.min(STEPS.length - 1, currentStep + 1)));
   document.getElementById("finish-btn").addEventListener("click", () => {

@@ -109,6 +109,7 @@ A few things worth knowing when you write content:
 - **Two joins are by name, not id.** A subclass reaches its class through `"class": "BARD"` — the class's name in uppercase — and a card reaches a class through the class's `domains` list containing the card's `domain`. Classes are also de-duplicated by name, so two sources defining `BARD` leave one.
 - **Names may be written either way.** `"name": "WITCH"` and `"name": {"en-US": "Witch"}` both work, in any file; the app normalizes to whichever shape that file's readers expect.
 - **New domains are fine.** A card in a domain the SRD doesn't have gets its own filter chip in the card browser and the default card border.
+- **Transformations are a kind the SRD doesn't have.** Write a `transformations.json` — records shaped like an ancestry — and the creation wizard grows a Transformation step just after Ancestry & Community. A character can take one or none, never two, and can come back for one later, which is how a transformation handed out mid-campaign gets onto the sheet. The step doesn't exist at all unless some source provides them, so nothing changes if you don't write one.
 - **A record missing something essential is dropped, not rendered.** The Content panel names it and says what was missing, rather than the page dying.
 - **`effects.json` is how content moves a stat.** Rules text prints on its own, but a bonus only counts if it's declared:
 
@@ -117,7 +118,7 @@ A few things worth knowing when you write content:
   ```
 
   Keys are record ids (`<subclass id>:foundation` for a subclass tier, `<ancestry id>:<feature name>` for an ancestry feature). Values may use any stat the app computes, plus `permanent` — without which a card that says its bonus is permanent stops applying once it's in the vault — `feature`, `excluded`, and a whole `choice` block for "permanently gain two of the following". Conditional bonuses can't be expressed: JSON can't carry the function they'd need, and anything unusable is reported rather than silently ignored.
-- **Art**, if you have any, goes in `data/<source>/card-art/` with the same `domain/`, `subclass/`, `community/`, `ancestry/` layout as the SRD's. There's no fallback to SRD art: those images are whole card faces including their rules text, so a card you revised would show the old wording.
+- **Art**, if you have any, goes in `data/<source>/card-art/` with the same `domain/`, `subclass/`, `community/`, `ancestry/` layout as the SRD's, plus `transformation/` if you have any. There's no fallback to SRD art: those images are whole card faces including their rules text, so a card you revised would show the old wording.
 
 ## Data source
 

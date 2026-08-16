@@ -31,10 +31,10 @@
 // SHAPE
 // -----
 // Keys are `<entityId>:<discriminator>` — the tier for subclasses, the feature name for
-// ancestries, armor and weapons. Domain cards have a single feature block, so they're keyed by
-// id alone. Armor and weapon features that mean the same thing everywhere they appear are
-// keyed `armor:<feature>` / `weapon:<feature>`; the handful whose numbers differ per item
-// (Barrier, Protective) are keyed by item id, which takes precedence.
+// ancestries, transformations, armor and weapons. Domain cards have a single feature block, so
+// they're keyed by id alone. Armor and weapon features that mean the same thing everywhere they
+// appear are keyed `armor:<feature>` / `weapon:<feature>`; the handful whose numbers differ per
+// item (Barrier, Protective) are keyed by item id, which takes precedence.
 //
 // Values are numbers, or functions of a context object:
 //   { level, proficiency, traits, armor, domainCounts, character }
@@ -382,7 +382,8 @@ function tiersUpTo(tier) {
  * Each entry is { key, label, effect, source, scope }:
  *  - `label` is what the "?" breakdown shows, so it names the thing the player chose rather
  *    than the rule id.
- *  - `source` is where it came from: "ancestry", "subclass", "armor", "weapon" or "domainCard".
+ *  - `source` is where it came from: "ancestry", "transformation", "subclass", "armor", "weapon"
+ *    or "domainCard".
  *    Pages use it to decide WHERE a choice gets asked, so that a new card with a choice lands
  *    on the level up screen and a new ancestry feature with one lands in the wizard, both
  *    without either page learning its name.
@@ -403,6 +404,18 @@ export function collectEffects(ch, db) {
     const anc = (db?.ancestries || []).find((a) => a.id === chosen.ancestryId);
     add(lookup(db, `${chosen.ancestryId}:${chosen.featureName}`), "ancestry",
       `${displayName(anc, "Ancestry")} — ${chosen.featureName}`);
+  }
+
+  // A transformation reads next, because the rules place it with the heritage: "add the card to
+  // your loadout as if it were part of your character's heritage". Keyed per FEATURE, like an
+  // ancestry rather than like a domain card — a transformation's features are a benefit and a
+  // drawback, and each may want its own entry or its own `excluded` note. Both always apply;
+  // unlike a mixed ancestry there's nothing to choose between them. There's no entry for any of
+  // this in EFFECTS below: that catalogue is the SRD, and the SRD has no transformations.
+  const transformation = (db?.transformations || []).find((t) => t.id === ch.transformationId);
+  for (const name of featureNames(transformation)) {
+    add(lookup(db, `${transformation.id}:${name}`), "transformation",
+      `${displayName(transformation, "Transformation")} — ${name}`);
   }
 
   const sub = (db?.subclasses || []).find((s) => s.id === ch.subclassId);

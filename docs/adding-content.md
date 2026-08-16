@@ -61,9 +61,9 @@ Required. A folder without a usable one is skipped, and the Content panel says s
   folder with one card file costs one request and produces no 404s in anyone's console.
 - **`label`** (optional) — what a human sees. Defaults to the folder name.
 
-Valid entries are `classes`, `subclasses`, `ancestries`, `communities`, `domain-cards`, `weapons`,
-`armors`, `consumables`, and `effects`. Each is `<name>.json` in your folder. Anything else in
-`files` is ignored.
+Valid entries are `classes`, `subclasses`, `ancestries`, `communities`, `transformations`,
+`domain-cards`, `weapons`, `armors`, `consumables`, and `effects`. Each is `<name>.json` in your
+folder. Anything else in `files` is ignored.
 
 ## 4. The record shapes
 
@@ -151,6 +151,39 @@ have a colour of its own, which affects only the border of a card with no art.
 
 Communities add `"personalities": [{ "en-US": "Meticulous" }, …]`. **Required: `id`, `name`.**
 
+### transformations.json
+
+The one record kind with **nothing in `data/srd/` to copy**: the SRD has no transformations, so
+this file only ever exists in a source of your own. A transformation is a permanent change to what
+a character *is*, granting a benefit and a drawback together.
+
+```json
+{
+  "id": "myhomebrew_transformation_tide_marked",
+  "name": { "en-US": "Tide-Marked" },
+  "description": [{ "paragraph": { "en-US": "One sentence on what these are." } }],
+  "features": [
+    { "name": { "en-US": "The Gift" },  "description": [{ "paragraph": { "en-US": "…" } }] },
+    { "name": { "en-US": "The Price" }, "description": [{ "paragraph": { "en-US": "…" } }] }
+  ]
+}
+```
+
+Shaped like an ancestry with no `personalities`: no `level`, no `domain`, no `recallCost`, and no
+`tier`. **Required: `id`, `name`.**
+
+What the app does with it:
+
+- The creation wizard grows a **Transformation** step, straight after Ancestry & Community — but
+  *only* when some loaded source provides transformations. With the SRD alone there is no such
+  step, which is why nothing changes for anyone who doesn't write this file.
+- A character has **at most one**. That isn't a rule the app enforces; it's the shape of the field
+  (one id, or none), so it can't be broken.
+- Picking one is **optional** and never blocks finishing a character. The step is reachable again
+  afterwards, because a GM usually hands a transformation out mid-campaign rather than at creation.
+- The card doesn't count against the loadout limit, and **every feature applies** — there's no
+  choosing between them the way a mixed ancestry chooses.
+
 ### weapons.json / armors.json / consumables.json
 
 ```json
@@ -202,6 +235,7 @@ what the effect belongs to**:
 | `<cardId>` | a domain card |
 | `<subclassId>:foundation` \| `:specialization` \| `:mastery` | a subclass tier |
 | `<ancestryId>:<Feature Name>` | one ancestry feature |
+| `<transformationId>:<Feature Name>` | one transformation feature |
 | `<itemId>:<Feature Name>` | one weapon's or armour's feature |
 | `armor:<Feature Name>`, `weapon:<Feature Name>` | a feature that means the same on every item that has it |
 
@@ -310,6 +344,7 @@ data/<source>/card-art/domain/<card id>.png
 data/<source>/card-art/subclass/<subclass id>-foundation.png   (…-specialization, …-mastery)
 data/<source>/card-art/ancestry/<ancestry id>.png
 data/<source>/card-art/community/<community id>.png
+data/<source>/card-art/transformation/<transformation id>.png
 ```
 
 A card with no file falls back to a readable CSS card that prints the rules text. There is

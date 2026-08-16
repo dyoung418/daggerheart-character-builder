@@ -4,6 +4,7 @@ import {
   subclassCardArtPath,
   communityCardArtPath,
   ancestryCardArtPath,
+  transformationCardArtPath,
 } from "./shared/card-render.js";
 import {
   ADVANCEMENT_LABELS,
@@ -92,6 +93,7 @@ function findClass(id) { return db.classes.find((c) => c.id === id); }
 function findSubclass(id) { return db.subclasses.find((s) => s.id === id); }
 function findAncestry(id) { return db.ancestries.find((a) => a.id === id); }
 function findCommunity(id) { return db.communities.find((c) => c.id === id); }
+function findTransformation(id) { return db.transformations.find((t) => t.id === id); }
 function findDomainCard(id) { return db.domainCards.find((c) => c.id === id); }
 function findWeapon(id) { return db.weapons.find((w) => w.id === id); }
 function findArmor(id) { return db.armors.find((a) => a.id === id); }
@@ -535,7 +537,30 @@ function renderDetail() {
     const anc = findAncestry(ancId);
     if (anc) cardsRow.appendChild(cardBlock({ id: anc.id, name: anc.name["en-US"], art: ancestryCardArtPath(anc), type: "Ancestry", features: anc.features }, `Ancestry: ${anc.name["en-US"]}`));
   }
+  // With the heritage cards, which is where the rules put it: a transformation card joins the
+  // loadout "as if it were part of your character's heritage".
+  const transformation = findTransformation(ch.transformationId);
+  if (transformation) {
+    cardsRow.appendChild(cardBlock({
+      id: transformation.id, name: transformation.name["en-US"],
+      art: transformationCardArtPath(transformation),
+      type: "Transformation", features: transformation.features,
+    }, `Transformation: ${transformation.name["en-US"]}`));
+  }
   container.appendChild(cardsRow);
+
+  // A transformation is usually handed out mid-campaign rather than chosen at creation, so the
+  // wizard step for it needs a way in from here — the same deep link the equipment block gets.
+  // Only when there's something to pick or something to clear: with no transformations loaded
+  // the wizard has no such step to link to.
+  if (db.transformations.length > 0 || ch.transformationId) {
+    const changeTransformation = button(
+      transformation ? "Change transformation" : "Add a transformation",
+      "btn-small",
+      () => { location.href = `create.html?id=${ch.id}&step=transformation`; },
+    );
+    container.appendChild(changeTransformation);
+  }
 
   const summary = document.createElement("div");
   summary.className = "detail-summary";

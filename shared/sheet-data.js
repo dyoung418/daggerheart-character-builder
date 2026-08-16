@@ -65,7 +65,12 @@ function prettyEnum(value) {
 // Nothing in derived-stats.js does this: it turns feature prose into stat contributions,
 // it never needs the prose itself, so flattening it stays entirely a sheet concern.
 function features(list) {
-  return (list || []).map((f) => ({
+  // Falsy entries are dropped rather than walked into. The caller below wraps a class's
+  // hopeFeature in an array to reuse this, and validateRecord deliberately doesn't require one
+  // — it only checks what would break a PICKER — so a source shipping a class without one used
+  // to throw here and print a blank sheet for every character of that class. Nothing downstream
+  // minds an empty list: sheet.js asks `if (s.hopeFeature)`.
+  return (list || []).filter(Boolean).map((f) => ({
     name: f.name?.["en-US"] || "",
     description: (f.description || [])
       .map((d) => {
@@ -131,6 +136,9 @@ export function deriveSheet(character, db) {
   const armor = unarmored ? null : find(db?.armors, character.equipment?.armorId);
   const community = find(db?.communities, character.heritage.communityId);
   const ancestries = character.heritage.ancestryIds.map((id) => find(db?.ancestries, id)).filter(Boolean);
+  // Optional, and null for almost every character: the SRD provides none at all. Read off a
+  // top-level field rather than out of `heritage`, though it prints beside it.
+  const transformation = find(db?.transformations, character.transformationId);
 
   // Fighting unarmed is a choice with rules of its own — [Proficiency]d4, Strength or Finesse —
   // so the sheet prints them rather than leaving the weapon block empty. The profile is a core
@@ -170,6 +178,9 @@ export function deriveSheet(character, db) {
     subclassTierLabel: SUBCLASS_TIER_LABELS[character.subclassTier] || "",
     ancestryNames: ancestries.map((a) => a.name["en-US"]),
     communityName: community ? community.name["en-US"] : "—",
+    // null rather than "—": a character without one has nothing missing, so the sheet leaves it
+    // out entirely instead of printing a dash for a slot that was never theirs to fill.
+    transformationName: transformation ? transformation.name["en-US"] : null,
 
     // Effective traits — assigned value plus whatever armor, weapons, ancestry and cards add —
     // because that's the number rolled at the table. Printing the raw assignment (the old bug)
@@ -251,6 +262,12 @@ export function deriveSheet(character, db) {
     }),
     communityFeatures: features(community?.features).map((f) => ({
       ...f, source: community ? community.name["en-US"] : "",
+    })),
+    // Both features, always — a transformation's drawback is not optional, and one the player
+    // forgets is one that never happens at the table. Nothing is chosen between them, so unlike
+    // ancestryFeatures above there's no filter here.
+    transformationFeatures: features(transformation?.features).map((f) => ({
+      ...f, source: transformation ? transformation.name["en-US"] : "",
     })),
 
     // A card like Vitality grants nothing until its choice is answered (see effects.js). A
