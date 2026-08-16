@@ -186,6 +186,28 @@ function cardColumns(count) {
   }));
 }
 
+// Which bodies of content this character is actually built from. data/ can hold several — the
+// SRD plus playtest or homebrew folders — and "everything here is SRD" stops being a safe
+// assumption the moment it does. Derived from the records themselves, never stored on the
+// character: the same character exported from a browser with different folders reports what THAT
+// browser resolved, which is the honest answer to "can I run this at my table?".
+function contentSourcesText(r) {
+  const used = new Set();
+  const note = (record) => { if (record?.contentSource) used.add(record.contentSource); };
+  note(r.cls); note(r.sub); note(r.com); note(r.armor);
+  note(r.primary); note(r.secondary); note(r.potion);
+  for (const ancestry of r.ancestries) note(ancestry);
+  for (const owned of r.cards) note(owned.card);
+
+  // Manifest order, so srd leads and the list reads the same way for every character in the file.
+  const labels = r.db?.sourceLabels || {};
+  const order = Object.keys(labels);
+  return [...used]
+    .sort((a, b) => order.indexOf(a) - order.indexOf(b))
+    .map((source) => labels[source] || source)
+    .join(", ");
+}
+
 // ---------- the columns ----------
 
 export const CSV_COLUMNS = [
@@ -278,6 +300,8 @@ export const CSV_COLUMNS = [
   { header: "Background", value: (r) => r.ch.background?.description },
   { header: "Appearance", value: (r) => r.ch.background?.answers },
   { header: "Connections", value: (r) => r.ch.connectionsNotes },
+
+  { header: "Content", value: contentSourcesText },
 
   // Last, so every column above keeps the position it has always had: these are wide, and there
   // are fourteen of them.

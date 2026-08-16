@@ -32,6 +32,9 @@ import { statLine } from "./shared/stat-line.js";
 import { ignoresBurden, unresolvedChoices } from "./shared/effects.js";
 import { UNARMED, UNARMORED, armorStats, burdenWarning, featureLine, weaponStats } from "./shared/gear.js";
 import { buildCsv } from "./shared/csv-export.js";
+import { loadContent } from "./shared/content-load.js";
+import { mountContentSettings } from "./shared/content-settings.js";
+import { unresolvedReferences } from "./shared/content-sources.js";
 import {
   DEFAULT_RESOLUTION,
   applyImport,
@@ -51,6 +54,7 @@ const TRAIT_LABELS = { agility: "Agility", strength: "Strength", finesse: "Fines
 const CIRCLED = ["", "①", "②", "③", "④", "⑤", "⑥", "⑦", "⑧", "⑨", "⑩"];
 
 const db = {};
+let content = null; // what loadContent() reported: which sources loaded, and which are switched off
 let characters = [];
 let openId = null; // id of the character open in detail view, null = list view
 let pendingDeleteId = null; // id awaiting delete confirmation (inline confirm, never window.confirm)
@@ -65,25 +69,14 @@ function titleCase(str) {
   return str.charAt(0) + str.slice(1).toLowerCase();
 }
 
-async function loadJson(name) {
-  const res = await fetch(`data/${name}.json`);
-  return res.json();
+async function loadAllData() {
+  content = await loadContent();
+  Object.assign(db, content.db);
 }
 
-async function loadAllData() {
-  const [classes, subclasses, ancestries, communities, domainCards, weapons, armors, consumables] = await Promise.all([
-    loadJson("classes"), loadJson("subclasses"), loadJson("ancestries"), loadJson("communities"),
-    loadJson("domain-cards"), loadJson("weapons"), loadJson("armors"), loadJson("consumables"),
-  ]);
-  db.classes = classes;
-  db.subclasses = subclasses;
-  db.ancestries = ancestries;
-  db.communities = communities;
-  db.domainCards = domainCards;
-  db.weapons = weapons;
-  db.armors = armors;
-  db.consumables = consumables;
-}
+// Ids a character stores that this browser can't resolve. Sentinels are stored values with no
+// record behind them, so they aren't missing content.
+const missingContent = (ch) => unresolvedReferences(ch, db, { sentinels: [UNARMED, UNARMORED] });
 
 function loadCharacters() {
   try {
@@ -495,6 +488,19 @@ function renderDetail() {
     container.appendChild(banner);
   }
 
+  // The app is deliberately quiet about data it can't find — derivedStats() returns null rather
+  // than throwing — so without this a character built on a source folder that has since been
+  // renamed prints a sheet headed "Class" with quietly wrong numbers and nothing to explain it.
+  const missing = missingContent(ch);
+  if (missing.length > 0) {
+    const banner = document.createElement("p");
+    banner.className = "warn-banner";
+    const kinds = [...new Set(missing.map((m) => m.kind))].join(", ");
+    banner.textContent = `⚠ ${plural(missing.length, "reference")} not in your content (${kinds}). ` +
+      "A source folder this character was built with may be switched off, renamed or missing.";
+    container.appendChild(banner);
+  }
+
   if (ch.level < 10) {
     const levelUpBtn = document.createElement("a");
     levelUpBtn.className = "btn-primary";
@@ -523,14 +529,14 @@ function renderDetail() {
   // on the earlier cards are still in play.
   if (sub) {
     for (const tier of subclassTiersUpTo(ch.subclassTier)) {
-      cardsRow.appendChild(cardBlock({ id: sub.id, name: `${sub.name["en-US"]} (${SUBCLASS_TIER_LABELS[tier]})`, art: subclassCardArtPath(sub.id, tier), type: "Subclass", features: sub[tier]?.features }));
+      cardsRow.appendChild(cardBlock({ id: sub.id, name: `${sub.name["en-US"]} (${SUBCLASS_TIER_LABELS[tier]})`, art: subclassCardArtPath(sub, tier), type: "Subclass", features: sub[tier]?.features }));
     }
   }
   const com = findCommunity(ch.heritage.communityId);
-  if (com) cardsRow.appendChild(cardBlock({ id: com.id, name: com.name["en-US"], art: communityCardArtPath(com.id), type: "Community", features: com.features }, `Community: ${com.name["en-US"]}`));
+  if (com) cardsRow.appendChild(cardBlock({ id: com.id, name: com.name["en-US"], art: communityCardArtPath(com), type: "Community", features: com.features }, `Community: ${com.name["en-US"]}`));
   for (const ancId of ch.heritage.ancestryIds) {
     const anc = findAncestry(ancId);
-    if (anc) cardsRow.appendChild(cardBlock({ id: anc.id, name: anc.name["en-US"], art: ancestryCardArtPath(anc.id), type: "Ancestry", features: anc.features }, `Ancestry: ${anc.name["en-US"]}`));
+    if (anc) cardsRow.appendChild(cardBlock({ id: anc.id, name: anc.name["en-US"], art: ancestryCardArtPath(anc), type: "Ancestry", features: anc.features }, `Ancestry: ${anc.name["en-US"]}`));
   }
   container.appendChild(cardsRow);
 
@@ -605,7 +611,7 @@ function renderDetail() {
       const inVault = ch.domainVaultIds.includes(cardId);
       const wrap = document.createElement("div");
       wrap.className = "card-tile";
-      wrap.appendChild(renderCardArt({ id: dc.id, name: dc.name["en-US"], art: domainCardArtPath(dc.id), level: dc.level, type: dc.type, features: dc.features }));
+      wrap.appendChild(renderCardArt({ id: dc.id, name: dc.name["en-US"], art: domainCardArtPath(dc), level: dc.level, type: dc.type, features: dc.features }));
       const label = document.createElement("div");
       label.className = "card-tile-label";
       label.textContent = dc.name["en-US"];
@@ -916,6 +922,25 @@ function startImport(parsed) {
   renderImportReview();
 }
 
+// A file can carry content this browser has never had: hand someone a character built with a
+// void folder and their ids arrive intact but resolve to nothing. Imports fine, shows as gaps.
+//
+// This goes on BOTH import screens on purpose. The review screen only renders when there are id
+// clashes to resolve — startImport() commits a clean file straight away — and a clean file from a
+// browser with different content is exactly the case worth saying something about.
+function importContentWarning() {
+  const count = (importPlan?.incoming || []).reduce(
+    (n, ch) => n + unresolvedReferences(ch, db, { sentinels: [UNARMED, UNARMORED], includeAllCards: true }).length, 0);
+  if (count === 0) return null;
+  const warn = document.createElement("p");
+  warn.className = "warn-banner";
+  const one = count === 1;
+  warn.textContent = `⚠ ${plural(count, "reference")} in that file ${one ? "isn't" : "aren't"} in your content ` +
+    `(a source folder you don't have?). ${one ? "It keeps its id" : "They keep their ids"}, ` +
+    `so adding the folder later fills ${one ? "it" : "them"} in.`;
+  return warn;
+}
+
 function clashRow(clash) {
   const row = document.createElement("div");
   row.className = "import-clash";
@@ -961,6 +986,9 @@ function renderImportReview() {
     `${clashes} already ${clashes === 1 ? "exists" : "exist"} in this browser \u2014 ` +
     "choose what to do with each.";
   body.appendChild(intro);
+
+  const warn = importContentWarning();
+  if (warn) body.appendChild(warn);
 
   for (const clash of importPlan.clashes) body.appendChild(clashRow(clash));
 
@@ -1039,6 +1067,9 @@ function renderImportSummary(result) {
   line.textContent = counts.length ? `${counts.join(", ")}.` : "Nothing was imported.";
   body.appendChild(line);
 
+  const warn = importContentWarning();
+  if (warn) body.appendChild(warn);
+
   if (result.renamed.length) {
     const renamed = document.createElement("p");
     renamed.className = "hint";
@@ -1098,6 +1129,7 @@ function clearImportState() {
 
 async function init() {
   await loadAllData();
+  mountContentSettings(content);
   loadCharacters();
   // Returning from a level edit reopens the character with the history showing, so any
   // level the edit knocked out of shape is in front of you rather than a click away.

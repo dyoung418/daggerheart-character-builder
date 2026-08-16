@@ -72,17 +72,58 @@ fall back to the system stack) if that matters to you — and tighten `style-src
 
 ## About the card art
 
-This repository does **not** include card artwork. Under the [Darrington Press Community Gaming License](https://darringtonpress.com/license/), artwork, illustrations and imagery are explicitly listed as Prohibited Content — they cannot be redistributed, even in fan projects. Only the text/mechanics of the SRD (names, stats, rules text) may be reused, which is what `data/*.json` contains.
+This repository does **not** include card artwork. Under the [Darrington Press Community Gaming License](https://darringtonpress.com/license/), artwork, illustrations and imagery are explicitly listed as Prohibited Content — they cannot be redistributed, even in fan projects. Only the text/mechanics of the SRD (names, stats, rules text) may be reused, which is what `data/srd/*.json` contains.
 
 Without art, cards render with a clean CSS-only fallback (domain-colored border, name, level, and rules text) — the app is fully usable this way.
 
 If you own the official Core Rulebook PDF, you could write your own script to crop the card art out of it for **strictly personal, local use** — the book's "full art cards" gallery pages use a fixed grid layout, so it's a fairly mechanical image-cropping job (e.g. with `pdftoppm` + `Pillow`). That's outside the scope of what's shared here.
 
+## Adding your own content
+
+`data/` holds one folder per body of content. `data/srd/` is the SRD; anything else you create is yours, and **the folder's name is the category**. Make `data/void/` and you have a category called void.
+
+To add one:
+
+1. Create the folder, e.g. `data/homebrew/`.
+2. Create `data/sources.local.json` beside it, listing the folder names you want loaded:
+
+   ```json
+   ["homebrew"]
+   ```
+
+   That file is gitignored, so your content never ends up in a commit. `data/sources.json` is the tracked one and lists only `["srd"]` — the app loads both, in order.
+3. Write `data/homebrew/source.json` saying what the folder holds:
+
+   ```json
+   { "label": "My Homebrew", "files": ["domain-cards", "classes", "effects"] }
+   ```
+
+   `files` is required and names the files you actually wrote — it's what stops the app fetching things that aren't there. `label` is optional and defaults to the folder name.
+4. Write those files, in the same shape as the ones in `data/srd/`. Every file is optional; a folder holding one `domain-cards.json` is perfectly good.
+
+The **Content** button in the top bar lists your sources with a checkbox each, and reports anything it couldn't use. Switching a source off only changes what you can *pick* — a character already built with it keeps its content and its stats, so turning void off between sessions never damages a character.
+
+A few things worth knowing when you write content:
+
+- **Ids should be your own.** Reuse an id from another source and yours replaces it — that's how you deliberately revise an SRD card. It's reported in the Content panel either way, so an accidental duplicate is visible.
+- **Two joins are by name, not id.** A subclass reaches its class through `"class": "BARD"` — the class's name in uppercase — and a card reaches a class through the class's `domains` list containing the card's `domain`. Classes are also de-duplicated by name, so two sources defining `BARD` leave one.
+- **Names may be written either way.** `"name": "WITCH"` and `"name": {"en-US": "Witch"}` both work, in any file; the app normalizes to whichever shape that file's readers expect.
+- **New domains are fine.** A card in a domain the SRD doesn't have gets its own filter chip in the card browser and the default card border.
+- **A record missing something essential is dropped, not rendered.** The Content panel names it and says what was missing, rather than the page dying.
+- **`effects.json` is how content moves a stat.** Rules text prints on its own, but a bonus only counts if it's declared:
+
+  ```json
+  { "hb_card_ironhide": { "armorScore": 1, "permanent": true } }
+  ```
+
+  Keys are record ids (`<subclass id>:foundation` for a subclass tier, `<ancestry id>:<feature name>` for an ancestry feature). Values may use any stat the app computes, plus `permanent` — without which a card that says its bonus is permanent stops applying once it's in the vault — `feature`, `excluded`, and a whole `choice` block for "permanently gain two of the following". Conditional bonuses can't be expressed: JSON can't carry the function they'd need, and anything unusable is reported rather than silently ignored.
+- **Art**, if you have any, goes in `data/<source>/card-art/` with the same `domain/`, `subclass/`, `community/`, `ancestry/` layout as the SRD's. There's no fallback to SRD art: those images are whole card faces including their rules text, so a card you revised would show the old wording.
+
 ## Data source
 
-The JSON files in `data/` are the Daggerheart System Reference Document (SRD), reused under the DPCGL. They're a re-export of the community-maintained [`daggersearch/daggerheart-data`](https://github.com/daggersearch/daggerheart-data) dataset — full credit to that project for structuring the SRD as clean JSON in the first place.
+The JSON files in `data/srd/` are the Daggerheart System Reference Document (SRD), reused under the DPCGL. They're a re-export of the community-maintained [`daggersearch/daggerheart-data`](https://github.com/daggersearch/daggerheart-data) dataset — full credit to that project for structuring the SRD as clean JSON in the first place.
 
-One deliberate divergence from upstream, in `data/classes.json`: the Guardian's *Unstoppable* was split across two `classFeatures` entries, the second of which carried the lead-in sentence "While Unstoppable, you gain the following benefits:" in its `name` field rather than its description. Anywhere feature names are listed on their own — the printable sheet's summary strip, for one — that sentence turned up as if it were the name of a second feature. The two entries are merged here into one, with the lead-in as a paragraph before the list it introduces. It's the only feature in the whole dataset whose name is a sentence, so re-exporting from upstream means re-applying this.
+One deliberate divergence from upstream, in `data/srd/classes.json`: the Guardian's *Unstoppable* was split across two `classFeatures` entries, the second of which carried the lead-in sentence "While Unstoppable, you gain the following benefits:" in its `name` field rather than its description. Anywhere feature names are listed on their own — the printable sheet's summary strip, for one — that sentence turned up as if it were the name of a second feature. The two entries are merged here into one, with the lead-in as a paragraph before the list it introduces. It's the only feature in the whole dataset whose name is a sentence, so re-exporting from upstream means re-applying this.
 
 ## License
 

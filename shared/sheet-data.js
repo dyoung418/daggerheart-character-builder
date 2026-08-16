@@ -26,6 +26,7 @@
 import { activeDomainCardIds, SUBCLASS_TIER_LABELS, subclassTiersUpTo } from "./advancement.js";
 import { UNARMED_PROFILE, derivedStats, TRAIT_KEYS, TRAIT_LABELS } from "./derived-stats.js";
 import { unresolvedChoices } from "./effects.js";
+import { unresolvedReferences } from "./content-sources.js";
 import { UNARMED, UNARMORED } from "./gear.js";
 
 function find(list, id) {
@@ -253,6 +254,13 @@ export function deriveSheet(character, db) {
     // sheet that silently shows the un-boosted total, with no hint why, would send a player to
     // the table thinking their card does nothing. This is that hint.
     unresolvedChoicePrompts: unresolvedChoices(character, db).map((c) => c.prompt),
+
+    // The same silence, from the other direction: content this browser doesn't have at all.
+    // derivedStats() returns null for what it can't find rather than throwing, so a character
+    // built on a source folder that has since been renamed prints a sheet headed "Class" with
+    // numbers that are quietly missing whatever that folder contributed.
+    missingContent: unresolvedReferences(character, db, { sentinels: [UNARMED, UNARMORED] })
+      .map((m) => `${m.kind} "${m.id}"`),
 
     background: character.background.description || "",
     appearance: character.background.answers || "",

@@ -1,10 +1,20 @@
 import { renderCardArt, domainCardArtPath } from "./shared/card-render.js";
 import { escapeHtml } from "./shared/escape.js";
+import { loadContent } from "./shared/content-load.js";
+import { mountContentSettings } from "./shared/content-settings.js";
+import { visibleRecords } from "./shared/content-sources.js";
 
-const DOMAINS = ["ARCANA", "BLADE", "BONE", "CODEX", "GRACE", "MIDNIGHT", "SAGE", "SPLENDOR", "VALOR"];
+// The nine SRD domains, in the order the book lists them. Not the whole list: content sources may
+// bring their own — Hope and Fear adds one — so the chips are these plus whatever else turns up in
+// the cards actually loaded. A domain with no CSS rule of its own simply gets the default card
+// border, which is fine; a domain with no CHIP would be unfilterable, and worse, ticking any other
+// chip would hide its cards with no way to bring them back.
+const SRD_DOMAINS = ["ARCANA", "BLADE", "BONE", "CODEX", "GRACE", "MIDNIGHT", "SAGE", "SPLENDOR", "VALOR"];
 const TYPES = ["ABILITY", "SPELL", "GRIMOIRE"];
 const MAX_LOADOUT = 5;
 const STORAGE_KEY = "dh-card-builder-state-v1";
+
+let content = null; // what loadContent() reported: which sources loaded, and which are switched off
 
 const state = {
   cards: [],
@@ -36,9 +46,11 @@ function persist() {
 }
 
 async function loadCards() {
-  const res = await fetch("data/domain-cards.json");
-  const raw = await res.json();
-  state.cards = raw.map((c) => ({
+  content = await loadContent({ files: ["domain-cards"] });
+  // The loadout and vault look cards up in this list by id, so it holds everything loaded. Only
+  // the grid is filtered (renderGrid), which is what keeps a saved loadout intact when the source
+  // one of its cards came from is switched off.
+  state.cards = content.db.domainCards.map((c) => ({
     id: c.id,
     name: c.name["en-US"],
     domain: c.domain,
@@ -46,9 +58,18 @@ async function loadCards() {
     level: c.level,
     recallCost: c.recallCost,
     features: c.features,
-    art: domainCardArtPath(c.id),
+    contentSource: c.contentSource,
+    art: domainCardArtPath(c),
   }));
 }
+
+/** The nine, plus any domain a loaded card brought with it. */
+function domainsInPlay() {
+  const extra = [...new Set(visibleCards().map((c) => c.domain))].filter((d) => !SRD_DOMAINS.includes(d));
+  return [...SRD_DOMAINS, ...extra.sort()];
+}
+
+const visibleCards = () => visibleRecords(state.cards, content.disabled);
 
 function cardMatchesFilters(card) {
   const f = state.filters;
@@ -86,7 +107,7 @@ function renderGrid() {
   const resultCount = document.getElementById("result-count");
   grid.innerHTML = "";
 
-  const filtered = state.cards.filter(cardMatchesFilters);
+  const filtered = visibleCards().filter(cardMatchesFilters);
   resultCount.textContent = `${filtered.length} cards`;
 
   for (const card of filtered) {
@@ -214,7 +235,7 @@ function renderAll() {
 }
 
 function setupFilters() {
-  buildChipGroup(document.getElementById("domain-filters"), DOMAINS, state.filters.domains);
+  buildChipGroup(document.getElementById("domain-filters"), domainsInPlay(), state.filters.domains);
   buildChipGroup(document.getElementById("type-filters"), TYPES, state.filters.types);
 
   document.getElementById("level-min").addEventListener("input", (e) => {
@@ -252,6 +273,7 @@ function setupFilters() {
 async function init() {
   loadPersisted();
   await loadCards();
+  mountContentSettings(content);
   setupFilters();
   renderAll();
 }

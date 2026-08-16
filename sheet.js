@@ -4,6 +4,7 @@
 
 import { ensureLevelFields } from "./shared/advancement.js";
 import { deriveSheet } from "./shared/sheet-data.js";
+import { loadContent } from "./shared/content-load.js";
 
 const CHAR_STORAGE_KEY = "dh-characters-v1";
 
@@ -14,20 +15,12 @@ function el(tag, className, text) {
   return node;
 }
 
-async function loadJson(name) {
-  const res = await fetch(`data/${name}.json`);
-  return res.json();
-}
-
-// Same eight files every other page loads (see create.js/level-up.js/characters.js's
-// loadAllData()); deriveSheet() only reads what it needs from this object and returns
-// null for anything it can't find, so there's no harm in always loading the full set.
+// Every source, every file: deriveSheet() reads only what it needs and returns null for anything
+// it can't find, so there's no harm in always loading the full set. This page has no Content
+// button and no picker — it looks records up unfiltered, which is exactly why a character keeps
+// printing correctly when the source it was built with is switched off.
 async function loadAllData() {
-  const [classes, subclasses, ancestries, communities, domainCards, weapons, armors, consumables] = await Promise.all([
-    loadJson("classes"), loadJson("subclasses"), loadJson("ancestries"), loadJson("communities"),
-    loadJson("domain-cards"), loadJson("weapons"), loadJson("armors"), loadJson("consumables"),
-  ]);
-  return { classes, subclasses, ancestries, communities, domainCards, weapons, armors, consumables };
+  return (await loadContent()).db;
 }
 
 // Read-only: getItem only, never setItem. ensureLevelFields() backfills the fields
@@ -84,6 +77,17 @@ function renderIdentity(s) {
 // banner goes right under the identity block, above every derived number on the page,
 // so a player reads it before trusting those numbers rather than discovering later that
 // a card "does nothing." Renders nothing at all when the list is empty.
+function renderMissingContent(s) {
+  if (s.missingContent.length === 0) return null;
+  const box = el("div", "choice-warning");
+  box.appendChild(el("strong", null,
+    "Content this browser doesn't have \u2014 these numbers are missing whatever it contributed:"));
+  const list = el("ul");
+  for (const ref of s.missingContent) list.appendChild(el("li", null, ref));
+  box.appendChild(list);
+  return box;
+}
+
 function renderUnresolvedChoices(s) {
   if (s.unresolvedChoicePrompts.length === 0) return null;
   const box = el("div", "choice-warning");
@@ -251,6 +255,9 @@ function renderPageOne(s) {
 
   const warning = renderUnresolvedChoices(s);
   if (warning) page.appendChild(warning);
+
+  const missing = renderMissingContent(s);
+  if (missing) page.appendChild(missing);
 
   const columns = el("div", "sheet-columns");
   columns.appendChild(renderTraits(s));

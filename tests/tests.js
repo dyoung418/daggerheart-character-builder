@@ -84,6 +84,17 @@ const {
   csvField,
 } = await import(`../shared/csv-export.js${RUN}`);
 const {
+  combineManifests,
+  mergeSources,
+  normalizeRecord,
+  parseManifest,
+  parseSourceInfo,
+  unresolvedReferences,
+  validateEffectEntry,
+  validateRecord,
+  visibleRecords,
+} = await import(`../shared/content-sources.js${RUN}`);
+const {
   TRANSFER_FORMAT,
   TRANSFER_VERSION,
   applyImport,
@@ -1251,11 +1262,11 @@ group("Answers are only complete when they pick everything asked for");
   eq("+2 to two needs two", isAnswered(motc, { optionId: "two", experienceIds: ["e1"] }), false);
 }
 
-group("Every id in effects.js still exists in data/");
+group("Every id in effects.js still exists in data/srd/");
 {
   // The one group that reads data/ for real. An upstream refresh that renames an id would
   // otherwise drop an effect silently: no error, just a number that quietly stops being right.
-  const load = async (name) => (await fetch(`../data/${name}.json${RUN}`)).json();
+  const load = async (name) => (await fetch(`../data/srd/${name}.json${RUN}`)).json();
   const [ancestries, subclasses, armors, weapons, cards, classes] = await Promise.all(
     ["ancestries", "subclasses", "armors", "weapons", "domain-cards", "classes"].map(load));
 
@@ -1626,7 +1637,7 @@ group("Every class carries what the detail card shows");
   // The card is page code this suite can't render, but it reads eight fields straight out of
   // classes.json — most of which nothing else in the app has ever touched. Renamed or dropped
   // upstream, they'd surface as a blank section rather than as an error.
-  const classes = await (await fetch(`../data/classes.json${RUN}`)).json();
+  const classes = await (await fetch(`../data/srd/classes.json${RUN}`)).json();
   const text = (loc) => typeof loc?.["en-US"] === "string" && loc["en-US"] !== "";
   const body = (desc) => Array.isArray(desc) && desc.length > 0 &&
     desc.every((d) => text(d.paragraph) || (Array.isArray(d.list) && d.list.every(text)));
@@ -2343,6 +2354,170 @@ group("The saved file names itself after the day it was written");
 
   // Written for a person to open, so it isn't one long line.
   check("it's indented", serializeTransferFile([newCharacter()], when).includes('\n  "format"'));
+}
+
+// ---------- several bodies of content in data/ ----------
+//
+// data/ holds a folder per source now — data/srd/ plus whatever else exists — and the merge that
+// turns them into one `db` is a pure function over already-fetched objects, so it's tested the
+// same way everything else here is: hand-written payloads, no fetching.
+
+const srcClass = (id, name, extra = {}) => ({ id, name, domains: ["BLADE"], ...extra });
+const srcCard = (id, name, extra = {}) => ({ id, name: { "en-US": name }, domain: "BLADE", level: 1, ...extra });
+const source = (name, records, effects) => ({ name, label: name, records, effects });
+
+group("The list of content folders survives a bad manifest");
+{
+  eq("a plain list is read as written", parseManifest('["srd","void"]'), ["srd", "void"]);
+  eq("junk names nothing rather than throwing", parseManifest("{oh no"), []);
+  eq("a JSON object isn't a list of folders", parseManifest('{"srd":true}'), []);
+  // The name goes straight into a fetch URL, so anything that could climb out of data/ is dropped.
+  eq("a name that could escape data/ is dropped", parseManifest('["srd","../../etc","a/b"]'), ["srd"]);
+  eq("the tracked list comes first, and repeats don't move it",
+    combineManifests(["srd"], ["void", "srd"]), ["srd", "void"]);
+
+  const info = parseSourceInfo('{"label":"Void","files":["domain-cards","effects","nope"]}', "void");
+  eq("a source says what it holds", info.files, ["domain-cards", "effects"]);
+  eq("and what to call it", info.label, "Void");
+  eq("a folder with no label is called after itself", parseSourceInfo('{"files":[]}', "homebrew").label, "homebrew");
+  eq("an unusable source.json is skipped, not guessed at", parseSourceInfo("{", "void"), null);
+}
+
+group("A class written in the shape of its neighbours still works");
+{
+  // classes.json is the one file whose name is a bare uppercase string, because that name is a
+  // relational key: subclasses[].class holds "BARD" and create.js joins on it. Writing a class the
+  // way every other file is written is therefore the most natural homebrew mistake there is.
+  eq("a localized class name becomes the key it has to be",
+    normalizeRecord("classes", { id: "c", name: { "en-US": "Witch" } }).name, "WITCH");
+  eq("a bare one is left as the key it already is",
+    normalizeRecord("classes", { id: "c", name: "WITCH" }).name, "WITCH");
+  eq("and a card written bare gets the localized shape its readers expect",
+    normalizeRecord("domain-cards", { id: "x", name: "Ironhide" }).name, { "en-US": "Ironhide" });
+  eq("normalizing never touches the record it was given",
+    (() => { const r = { id: "c", name: "WITCH" }; normalizeRecord("classes", r); return r.name; })(), "WITCH");
+}
+
+group("A record that would kill a screen never reaches db");
+{
+  eq("a class with no domains is refused", validateRecord("classes", { id: "c", name: "WITCH" }), "missing: domains");
+  eq("a card with no domain is refused", validateRecord("domain-cards", { id: "x", name: { "en-US": "A" } }), "missing: domain");
+  eq("a record with no id is refused", validateRecord("domain-cards", { name: { "en-US": "A" } }), "missing: id");
+  eq("a subclass that names no class is refused, because nothing could ever show it",
+    validateRecord("subclasses", { id: "s", name: { "en-US": "A" } }), "missing: class (the class name, uppercase)");
+  // Hope and Fear adds a domain. Rejecting one nobody has heard of would block the case this
+  // whole feature exists to be ready for.
+  eq("a domain nobody has heard of is not an error",
+    validateRecord("domain-cards", srcCard("x", "A", { domain: "DREAD" })), null);
+
+  const { db, report } = mergeSources([source("homebrew", { classes: [srcClass("hb_a", "WITCH"), { id: "hb_b", name: "SEER" }] })]);
+  eq("the usable record still lands", db.classes.map((c) => c.id), ["hb_a"]);
+  eq("and the panel can say which one didn't, and why",
+    report.sources[0].skipped, [{ file: "classes", id: "hb_b", reason: "missing: domains" }]);
+}
+
+group("A later source revises what an earlier one said");
+{
+  const { db, report } = mergeSources([
+    source("srd", { "domain-cards": [srcCard("core_a", "Untouchable"), srcCard("core_b", "Whirlwind")] }),
+    source("void", { "domain-cards": [srcCard("core_a", "Untouchable (revised)")] }),
+  ]);
+  eq("the revision wins", db.domainCards.map((c) => c.name["en-US"]), ["Untouchable (revised)", "Whirlwind"]);
+  eq("in the position the original held", db.domainCards[0].id, "core_a");
+  eq("and every record knows where it came from", db.domainCards.map((c) => c.contentSource), ["void", "srd"]);
+  eq("the panel reports it, so an accidental duplicate is visible",
+    report.collisions, [{ file: "domain-cards", id: "core_a", from: "void", over: "srd", byName: false }]);
+
+  // A class's real key is its uppercase name, not its id: create.js joins subclasses on it. Two
+  // Bards under different ids would put two identical tiles in the picker with every Bard
+  // subclass appearing under both.
+  const byName = mergeSources([
+    source("srd", { classes: [srcClass("core_class_bard", "BARD")] }),
+    source("void", { classes: [srcClass("void_class_bard", "BARD")] }),
+  ]);
+  eq("a class with the same name collapses even under a new id", byName.db.classes.length, 1);
+  eq("the later one being the survivor", byName.db.classes[0].id, "void_class_bard");
+  eq("and it's reported as the name clash it is", byName.report.collisions[0].byName, true);
+}
+
+group("What a source may say its content does");
+{
+  eq("flat numbers are the ordinary case", validateEffectEntry({ evasion: 1 }), null);
+  eq("so is a permanent bonus, which is what keeps a vaulted card applying",
+    validateEffectEntry({ armorScore: 1, permanent: true }), null);
+  eq("and a whole choice, which needs no page code at all", validateEffectEntry({
+    choice: { prompt: "Pick two", kind: "benefit", pick: 2, options: [{ id: "a", label: "A", stressSlots: 1 }] },
+  }), null);
+  check("a stat that isn't a number is refused",
+    validateEffectEntry({ evasion: "lots" }) !== null);
+  check("a stat this app doesn't compute is refused",
+    validateEffectEntry({ luck: 1 }) !== null);
+  // effect-choice.js renders anything that isn't "benefit" as an Experience picker rather than
+  // failing, so an unrecognised kind would silently ask the wrong question.
+  check("a choice of an unknown kind is refused rather than rendered as the wrong picker",
+    validateEffectEntry({ choice: { prompt: "?", kind: "vibes", options: [{ id: "a", label: "A" }] } }) !== null);
+  check("`when` is refused, because JSON can't carry the function it needs",
+    validateEffectEntry({ evasion: 1, when: true }) !== null);
+
+  const { effects, report } = mergeSources([
+    source("homebrew", { }, { hb_card: { evasion: 1 }, hb_bad: { when: true } }),
+  ]);
+  eq("the usable entry is kept", effects, { hb_card: { evasion: 1 } });
+  eq("and the panel can say what it refused", report.effectIssues.length, 1);
+}
+
+group("Switching a source off changes the pickers and nothing else");
+{
+  const { db } = mergeSources([
+    source("srd", { "domain-cards": [srcCard("core_a", "A")] }),
+    source("void", { "domain-cards": [srcCard("void_a", "B")] }),
+  ]);
+  eq("with nothing switched off, everything is offered",
+    visibleRecords(db.domainCards, new Set()).map((c) => c.id), ["core_a", "void_a"]);
+  eq("a switched-off source leaves the pickers",
+    visibleRecords(db.domainCards, new Set(["void"])).map((c) => c.id), ["core_a"]);
+  eq("the srd is a source like any other and can go too",
+    visibleRecords(db.domainCards, new Set(["srd", "void"])).map((c) => c.id), []);
+  // Every fixture in this file, and every db built by something that predates content sources,
+  // is untagged. Dropping those would break far more than it protected.
+  eq("a record with no source is always offered",
+    visibleRecords([{ id: "plain" }], new Set(["void"])).map((c) => c.id), ["plain"]);
+}
+
+group("A character says so when it refers to content this browser hasn't got");
+{
+  const db = {
+    classes: [{ id: "core_class_bard" }],
+    subclasses: [{ id: "core_subclass_troubadour" }],
+    ancestries: [{ id: "core_ancestry_human" }],
+    communities: [{ id: "core_community_loreborne" }],
+    weapons: [{ id: "core_weapon_shortsword" }],
+    armors: [{ id: "core_armor_leather" }],
+    domainCards: [{ id: "core_card_a" }],
+  };
+  const whole = {
+    classId: "core_class_bard", subclassId: "core_subclass_troubadour",
+    heritage: { communityId: "core_community_loreborne", chosenFeatures: [{ ancestryId: "core_ancestry_human" }] },
+    equipment: { primaryWeaponId: "core_weapon_shortsword", armorId: "core_armor_leather" },
+    creationDomainCardIds: ["core_card_a"],
+  };
+  eq("a character whose content is all here says nothing", unresolvedReferences(whole, db), []);
+
+  const orphan = { ...whole, classId: "void_class_witch", equipment: { armorId: "hb_armor_ironhide" } };
+  eq("one built on a folder you no longer have names what's missing",
+    unresolvedReferences(orphan, db), [{ kind: "class", id: "void_class_witch" }, { kind: "armor", id: "hb_armor_ironhide" }]);
+
+  // Unarmed and Unarmored are stored values with no record behind them, so they can't be missing.
+  eq("the equipment sentinels aren't missing content",
+    unresolvedReferences({ equipment: { primaryWeaponId: UNARMED, armorId: UNARMORED } }, db,
+      { sentinels: [UNARMED, UNARMORED] }), []);
+
+  // The roster leaves levelled cards to history.js, which already says "that card no longer
+  // exists" about them. The import review runs before any of that and wants one honest count.
+  const levelled = { ...whole, domainCardIds: ["core_card_a", "void_card_b"] };
+  eq("cards taken at a level up are left to the level history", unresolvedReferences(levelled, db), []);
+  eq("unless it's the import review asking",
+    unresolvedReferences(levelled, db, { includeAllCards: true }), [{ kind: "domain card", id: "void_card_b" }]);
 }
 
 // ---------- report ----------

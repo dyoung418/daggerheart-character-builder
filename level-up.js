@@ -26,6 +26,9 @@ import {
 } from "./shared/history.js";
 import { effectBonuses, effectExperienceBonuses, hitPointTotal, stressTotal } from "./shared/derived-stats.js";
 import { blankAnswer, choiceFor } from "./shared/effects.js";
+import { loadContent } from "./shared/content-load.js";
+import { mountContentSettings } from "./shared/content-settings.js";
+import { visibleRecords } from "./shared/content-sources.js";
 import { renderEffectChoice } from "./shared/effect-choice.js";
 import { escapeHtml } from "./shared/escape.js";
 
@@ -34,6 +37,7 @@ const TRAIT_LABELS = { agility: "Agility", strength: "Strength", finesse: "Fines
 const ORDINALS = ["first", "second", "third"];
 
 const db = {};
+let content = null; // what loadContent() reported: which sources loaded, and which are switched off
 let character = null;
 
 // UI state for the current level up (not persisted until confirmed).
@@ -61,21 +65,11 @@ let pendingSave = null; // consequences awaiting confirmation before an edit is 
 const isEditing = () => editLevel !== null;
 const workingLevel = () => (isEditing() ? editLevel : character.level + 1);
 
-async function loadJson(name) {
-  const res = await fetch(`data/${name}.json`);
-  return res.json();
-}
-
 async function loadAllData() {
   // Ancestries are here for the Hit Point and Stress slots a Giant or a Human is born with:
   // those count towards the cap of 12, so the slot gating can't be right without them.
-  const [classes, subclasses, domainCards, ancestries] = await Promise.all([
-    loadJson("classes"), loadJson("subclasses"), loadJson("domain-cards"), loadJson("ancestries"),
-  ]);
-  db.classes = classes;
-  db.subclasses = subclasses;
-  db.domainCards = domainCards;
-  db.ancestries = ancestries;
+  content = await loadContent({ files: ["classes", "subclasses", "domain-cards", "ancestries"] });
+  Object.assign(db, content.db);
 }
 
 function loadAllCharacters() {
@@ -457,7 +451,7 @@ function renderSubclassPreview(main) {
   const tile = document.createElement("div");
   tile.className = "card-tile";
   tile.appendChild(renderCardArt({
-    id: character.subclassId, name, art: subclassCardArtPath(character.subclassId, nextTier),
+    id: character.subclassId, name, art: subclassCardArtPath(sub, nextTier),
     type: "Subclass", features: sub?.[nextTier]?.features,
   }));
   preview.appendChild(tile);
@@ -467,12 +461,16 @@ function renderSubclassPreview(main) {
 // ---------- domain cards ----------
 
 function cardModel(c) {
-  return { id: c.id, name: c.name["en-US"], art: domainCardArtPath(c.id), level: c.level, type: c.type, features: c.features };
+  return { id: c.id, name: c.name["en-US"], art: domainCardArtPath(c), level: c.level, type: c.type, features: c.features };
 }
 
+// The picker, so it's the one place the source toggles reach. Every other read of db.domainCards
+// on this screen is a lookup by id and stays unfiltered — a card already taken must keep
+// resolving whether or not the source it came from is switched on.
 function eligibleDomainCards(cls, maxLevel, excludeIds) {
   if (!cls) return [];
-  return db.domainCards.filter((c) => c.level <= maxLevel && cls.domains.includes(c.domain) && !excludeIds.includes(c.id));
+  return visibleRecords(db.domainCards, content.disabled)
+    .filter((c) => c.level <= maxLevel && cls.domains.includes(c.domain) && !excludeIds.includes(c.id));
 }
 
 // Every card already owned, plus every card being taken elsewhere on this screen.
@@ -617,7 +615,7 @@ function cardsBeingTaken() {
 
 function renderCardChoices(main, newLevel) {
   const pending = cardsBeingTaken()
-    .map((id) => ({ id, choice: choiceFor(id) }))
+    .map((id) => ({ id, choice: choiceFor(id, db) }))
     .filter((x) => x.choice);
   if (pending.length === 0) return;
 
@@ -858,6 +856,7 @@ function loadPicksFrom(entry) {
 
 async function init() {
   await loadAllData();
+  mountContentSettings(content);
   const params = new URLSearchParams(location.search);
   const id = params.get("id");
   const found = loadAllCharacters().find((c) => c.id === id);

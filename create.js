@@ -9,8 +9,11 @@ import { MAX_HOPE, STARTING_HOPE, blankSlotsUsed, ensureLevelFields, tierForLeve
 import { recomputeCharacter } from "./shared/history.js";
 import { derivedStats } from "./shared/derived-stats.js";
 import { statLine } from "./shared/stat-line.js";
-import { EFFECTS, blankAnswer, collectEffects, ignoresBurden } from "./shared/effects.js";
+import { blankAnswer, collectEffects, effectFor, ignoresBurden } from "./shared/effects.js";
 import { renderEffectChoice } from "./shared/effect-choice.js";
+import { loadContent } from "./shared/content-load.js";
+import { mountContentSettings } from "./shared/content-settings.js";
+import { visibleRecords } from "./shared/content-sources.js";
 import { openClassDetail } from "./shared/class-detail.js";
 import {
   armorRowContent,
@@ -46,6 +49,7 @@ const STEPS = [
 ];
 
 const db = {}; // populated by loadAllData(): classes, subclasses, ancestries, communities, domainCards, weapons, armors, consumables
+let content = null; // what loadContent() reported: which sources loaded, and which are switched off
 let character = null;
 let currentStep = 0;
 let gearFilter = ""; // the equipment step's name filter, kept across re-renders
@@ -54,24 +58,23 @@ function titleCase(str) {
   return str.charAt(0) + str.slice(1).toLowerCase();
 }
 
-async function loadJson(name) {
-  const res = await fetch(`data/${name}.json`);
-  return res.json();
+async function loadAllData() {
+  content = await loadContent();
+  Object.assign(db, content.db);
 }
 
-async function loadAllData() {
-  const [classes, subclasses, ancestries, communities, domainCards, weapons, armors, consumables] = await Promise.all([
-    loadJson("classes"), loadJson("subclasses"), loadJson("ancestries"), loadJson("communities"),
-    loadJson("domain-cards"), loadJson("weapons"), loadJson("armors"), loadJson("consumables"),
-  ]);
-  db.classes = classes;
-  db.subclasses = subclasses;
-  db.ancestries = ancestries;
-  db.communities = communities;
-  db.domainCards = domainCards;
-  db.weapons = weapons;
-  db.armors = armors;
-  db.consumables = consumables;
+// What a picker may OFFER. Everything loaded stays in `db` and stays findable by id — switching a
+// source off must never put a hole in a character already built with it — so the toggles reach
+// exactly these lists and nothing else.
+const pickable = (list) => visibleRecords(list, content.disabled);
+
+// Every source can be switched off, srd included, so a picker can genuinely come up empty. Without
+// this the step renders a bare heading with nothing under it and no explanation.
+function emptyPickerNote(container, what) {
+  const p = document.createElement("p");
+  p.className = "hint";
+  p.textContent = `No ${what} to choose from — every content source that provides them is switched off. Open Content in the top bar to turn one back on.`;
+  container.appendChild(p);
 }
 
 function loadAllCharacters() {
@@ -298,7 +301,9 @@ function renderClassStep(panel) {
 
   const classGrid = document.createElement("div");
   classGrid.className = "tile-grid";
-  for (const cls of db.classes) {
+  const classes = pickable(db.classes);
+  if (classes.length === 0) emptyPickerNote(panel, "classes");
+  for (const cls of classes) {
     const tile = document.createElement("div");
     tile.className = "class-tile" + (character.classId === cls.id ? " selected" : "");
     tile.innerHTML = `<strong>${escapeHtml(titleCase(cls.name))}</strong><span>${escapeHtml(cls.domains.map(titleCase).join(" · "))}</span>`;
@@ -336,10 +341,10 @@ function renderClassStep(panel) {
 
     const subGrid = document.createElement("div");
     subGrid.className = "tile-grid";
-    const subsForClass = db.subclasses.filter((s) => s.class === classNameKey(cls));
+    const subsForClass = pickable(db.subclasses).filter((s) => s.class === classNameKey(cls));
     for (const sub of subsForClass) {
       const card = {
-        id: sub.id, name: sub.name["en-US"], art: subclassCardArtPath(sub.id, "foundation"),
+        id: sub.id, name: sub.name["en-US"], art: subclassCardArtPath(sub, "foundation"),
         type: "Subclass", features: sub.foundation?.features,
       };
       const tile = cardTile(card, character.subclassId === sub.id, () => {
@@ -383,8 +388,10 @@ function renderHeritageStep(panel) {
 
   const ancGrid = document.createElement("div");
   ancGrid.className = "tile-grid";
-  for (const anc of db.ancestries) {
-    const card = { id: anc.id, name: anc.name["en-US"], art: ancestryCardArtPath(anc.id), type: "Ancestry", features: anc.features };
+  const ancestries = pickable(db.ancestries);
+  if (ancestries.length === 0) emptyPickerNote(panel, "ancestries");
+  for (const anc of ancestries) {
+    const card = { id: anc.id, name: anc.name["en-US"], art: ancestryCardArtPath(anc), type: "Ancestry", features: anc.features };
     const selected = h.ancestryIds.includes(anc.id);
     const tile = cardTile(card, selected, () => {
       if (h.ancestryMode === "pure") {
@@ -446,8 +453,10 @@ function renderHeritageStep(panel) {
   panel.appendChild(h3c);
   const comGrid = document.createElement("div");
   comGrid.className = "tile-grid";
-  for (const com of db.communities) {
-    const card = { id: com.id, name: com.name["en-US"], art: communityCardArtPath(com.id), type: "Community", features: com.features };
+  const communities = pickable(db.communities);
+  if (communities.length === 0) emptyPickerNote(panel, "communities");
+  for (const com of communities) {
+    const card = { id: com.id, name: com.name["en-US"], art: communityCardArtPath(com), type: "Community", features: com.features };
     const tile = cardTile(card, h.communityId === com.id, () => {
       h.communityId = com.id;
       onChange();
@@ -583,7 +592,7 @@ function renderEquipmentStep(panel) {
 
   // The primary list is the long one — 43 or 44 weapons in each of the upper tiers, against ten
   // or fewer for the other two lists, which is why only this one is worth filtering.
-  const primaries = db.weapons.filter((w) => w.type !== "SECONDARY");
+  const primaries = pickable(db.weapons).filter((w) => w.type !== "SECONDARY");
   const search = document.createElement("input");
   search.type = "search";
   search.className = "gear-filter";
@@ -619,7 +628,7 @@ function renderEquipmentStep(panel) {
   const h3b = document.createElement("h3");
   h3b.textContent = "Secondary weapon";
   panel.appendChild(h3b);
-  panel.appendChild(gearList(db.weapons.filter((w) => w.type === "SECONDARY"), {
+  panel.appendChild(gearList(pickable(db.weapons).filter((w) => w.type === "SECONDARY"), {
     groupName: "weapon-secondary",
     selectedId: e.secondaryWeaponId,
     onSelect: (id) => { e.secondaryWeaponId = id; onChange(); },
@@ -646,7 +655,7 @@ function renderEquipmentStep(panel) {
   const h3c = document.createElement("h3");
   h3c.textContent = "Armor";
   panel.appendChild(h3c);
-  panel.appendChild(gearList(db.armors, {
+  panel.appendChild(gearList(pickable(db.armors), {
     groupName: "armor",
     selectedId: e.armorId,
     onSelect: (id) => { e.armorId = id; onChange(); },
@@ -811,11 +820,12 @@ function renderDomainCardsStep(panel) {
     (count > 2 ? " Your subclass grants one more than the usual 2." : "");
   panel.appendChild(info);
 
-  const available = db.domainCards.filter((c) => c.level === 1 && cls.domains.includes(c.domain));
+  const available = pickable(db.domainCards).filter((c) => c.level === 1 && cls.domains.includes(c.domain));
   const grid = document.createElement("div");
   grid.className = "tile-grid";
+  if (available.length === 0) emptyPickerNote(panel, "level 1 cards in this class's domains");
   for (const c of available) {
-    const card = { id: c.id, name: c.name["en-US"], art: domainCardArtPath(c.id), level: c.level, type: c.type, features: c.features };
+    const card = { id: c.id, name: c.name["en-US"], art: domainCardArtPath(c), level: c.level, type: c.type, features: c.features };
     const selected = character.creationDomainCardIds.includes(c.id);
     const tile = cardTile(card, selected, () => {
       if (selected) {
@@ -836,7 +846,7 @@ function renderDomainCardsStep(panel) {
 // character holds at creation, and the Specialization and Mastery ones arrive with the subclass
 // upgrades at level up.
 function creationCardCount() {
-  return 2 + (EFFECTS[`${character.subclassId}:foundation`]?.extraDomainCards || 0);
+  return 2 + (effectFor(db, `${character.subclassId}:foundation`)?.extraDomainCards || 0);
 }
 
 // The 2 starting cards are only part of the collection once a character has levelled up,
@@ -874,6 +884,7 @@ function renderAll() {
 
 async function init() {
   await loadAllData();
+  mountContentSettings(content);
   initCharacter();
   document.getElementById("prev-btn").addEventListener("click", () => goToStep(Math.max(0, currentStep - 1)));
   document.getElementById("next-btn").addEventListener("click", () => goToStep(Math.min(STEPS.length - 1, currentStep + 1)));

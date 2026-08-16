@@ -1,2 +1,9 @@
-data/card-art/
 .DS_Store
+
+# Content sources. Only the SRD folder is tracked: everything else under data/ is either
+# generated (card art, extracted from a PDF nobody may redistribute) or content the DPCGL
+# re-use grant doesn't cover — playtest material and homebrew.
+data/*/
+!data/srd/
+data/srd/card-art/
+data/sources.local.json

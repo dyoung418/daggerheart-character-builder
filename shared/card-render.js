@@ -82,15 +82,27 @@ export function descriptionHtml(description) {
     .join("");
 }
 
-export function domainCardArtPath(id) {
-  return `data/card-art/domain/${id}.png`;
+// Art lives with the content it belongs to: data/<source>/card-art/. These take the RECORD rather
+// than its id, because the id alone can't say which folder to look in.
+//
+// There is deliberately no fallback to the SRD's art when a source ships none. These files are
+// whole card faces lifted from the PDF, rules text included — so showing the SRD image for a
+// revised card would print superseded text as an unselectable picture while the app applied the
+// new record. The CSS fallback card below prints the revised text instead, which is plainer and
+// correct. When you do want the old art on a reprint, copy the file into the source's folder.
+function artRoot(record) {
+  return `data/${record?.contentSource || "srd"}/card-art`;
 }
-export function subclassCardArtPath(id, tier) {
-  return `data/card-art/subclass/${id}-${tier}.png`;
+
+export function domainCardArtPath(card) {
+  return `${artRoot(card)}/domain/${card?.id}.png`;
 }
-export function communityCardArtPath(id) {
-  return `data/card-art/community/${id}.png`;
+export function subclassCardArtPath(subclass, tier) {
+  return `${artRoot(subclass)}/subclass/${subclass?.id}-${tier}.png`;
 }
-export function ancestryCardArtPath(id) {
-  return `data/card-art/ancestry/${id}.png`;
+export function communityCardArtPath(community) {
+  return `${artRoot(community)}/community/${community?.id}.png`;
+}
+export function ancestryCardArtPath(ancestry) {
+  return `${artRoot(ancestry)}/ancestry/${ancestry?.id}.png`;
 }
