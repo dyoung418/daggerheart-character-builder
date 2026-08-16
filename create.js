@@ -721,8 +721,8 @@ function renderEquipmentStep(panel) {
       rowClass: (w) => (matchesSpellcast(w, spellcastTrait) ? " trait-match" : ""),
       tier,
       filterText: gearFilter,
-      // Carrying nothing is a choice the rules have an answer for, and one a Brawler will make
-      // on purpose.
+      // Carrying nothing is a choice the rules have an answer for, and one some characters make
+      // on purpose — see the note on UNARMED in gear.js.
       noneLabel: "Unarmed",
       noneValue: UNARMED,
     }));
