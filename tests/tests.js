@@ -106,6 +106,7 @@ const {
   serializeTransferFile,
   transferFilename,
 } = await import(`../shared/transfer.js${RUN}`);
+const { titleCase } = await import(`../shared/text.js${RUN}`);
 
 // ---------- tiny runner ----------
 
@@ -828,6 +829,25 @@ group("A page that didn't load every data file still gets what it asked for");
   check("equipment-based ones come back null rather than throwing", partial.armorScore === null);
   check("and so do the attacks", partial.primaryAttack === null);
 }
+
+// classes.json holds a class name as a bare uppercase string because subclasses[].class joins to
+// it. Printing one used to be a one-liner copied into seven files, in three slightly different
+// versions, and every one of them assumed the name was a single word — true of all nine SRD
+// classes, and not something a content source has to keep true. A two-word name came out as
+// "Two words" in the wizard, on the sheet's breakdown, and in the CSV's Class column, which is a
+// file that leaves the app.
+group("A class name prints as a name, however many words it has");
+eq("the SRD's single-word names are unchanged", ["BARD", "WIZARD"].map(titleCase), ["Bard", "Wizard"]);
+eq("a two-word name capitalises both", titleCase("TWO WORDS"), "Two Words");
+eq("so does a hyphenated one", titleCase("HYPHEN-JOINED"), "Hyphen-Joined");
+// The old history.js copy uppercased the first letter and left the rest alone, because it was fed
+// trait keys rather than SCREAMING_SNAKE. Both callers now share one function, so both have to work.
+eq("a lowercase trait key still reads as a word", ["agility", "knowledge"].map(titleCase), ["Agility", "Knowledge"]);
+eq("an apostrophe is not a word break", titleCase("SOLDIER'S BOND"), "Soldier's Bond");
+eq("nothing in, nothing out", [titleCase(null), titleCase(undefined), titleCase("")], ["", "", ""]);
+// Pinning the limitation rather than pretending it isn't there: this caser takes KEYS, and a
+// subclass or card name is not one — those arrive as localized text and print as written.
+eq("prose somebody already wrote is not its job", titleCase("Words of the Sentence"), "Words Of The Sentence");
 
 group("A weapon reads as prose, not as the JSON it came from");
 {
@@ -2368,19 +2388,19 @@ const source = (name, records, effects) => ({ name, label: name, records, effect
 
 group("The list of content folders survives a bad manifest");
 {
-  eq("a plain list is read as written", parseManifest('["srd","void"]'), ["srd", "void"]);
+  eq("a plain list is read as written", parseManifest('["srd","homebrew"]'), ["srd", "homebrew"]);
   eq("junk names nothing rather than throwing", parseManifest("{oh no"), []);
   eq("a JSON object isn't a list of folders", parseManifest('{"srd":true}'), []);
   // The name goes straight into a fetch URL, so anything that could climb out of data/ is dropped.
   eq("a name that could escape data/ is dropped", parseManifest('["srd","../../etc","a/b"]'), ["srd"]);
   eq("the tracked list comes first, and repeats don't move it",
-    combineManifests(["srd"], ["void", "srd"]), ["srd", "void"]);
+    combineManifests(["srd"], ["homebrew", "srd"]), ["srd", "homebrew"]);
 
-  const info = parseSourceInfo('{"label":"Void","files":["domain-cards","effects","nope"]}', "void");
+  const info = parseSourceInfo('{"label":"My Homebrew","files":["domain-cards","effects","nope"]}', "my-homebrew");
   eq("a source says what it holds", info.files, ["domain-cards", "effects"]);
-  eq("and what to call it", info.label, "Void");
+  eq("and what to call it", info.label, "My Homebrew");
   eq("a folder with no label is called after itself", parseSourceInfo('{"files":[]}', "homebrew").label, "homebrew");
-  eq("an unusable source.json is skipped, not guessed at", parseSourceInfo("{", "void"), null);
+  eq("an unusable source.json is skipped, not guessed at", parseSourceInfo("{", "my-homebrew"), null);
 }
 
 group("A class written in the shape of its neighbours still works");
@@ -2420,23 +2440,23 @@ group("A later source revises what an earlier one said");
 {
   const { db, report } = mergeSources([
     source("srd", { "domain-cards": [srcCard("core_a", "Untouchable"), srcCard("core_b", "Whirlwind")] }),
-    source("void", { "domain-cards": [srcCard("core_a", "Untouchable (revised)")] }),
+    source("homebrew", { "domain-cards": [srcCard("core_a", "Untouchable (revised)")] }),
   ]);
   eq("the revision wins", db.domainCards.map((c) => c.name["en-US"]), ["Untouchable (revised)", "Whirlwind"]);
   eq("in the position the original held", db.domainCards[0].id, "core_a");
-  eq("and every record knows where it came from", db.domainCards.map((c) => c.contentSource), ["void", "srd"]);
+  eq("and every record knows where it came from", db.domainCards.map((c) => c.contentSource), ["homebrew", "srd"]);
   eq("the panel reports it, so an accidental duplicate is visible",
-    report.collisions, [{ file: "domain-cards", id: "core_a", from: "void", over: "srd", byName: false }]);
+    report.collisions, [{ file: "domain-cards", id: "core_a", from: "homebrew", over: "srd", byName: false }]);
 
   // A class's real key is its uppercase name, not its id: create.js joins subclasses on it. Two
   // Bards under different ids would put two identical tiles in the picker with every Bard
   // subclass appearing under both.
   const byName = mergeSources([
     source("srd", { classes: [srcClass("core_class_bard", "BARD")] }),
-    source("void", { classes: [srcClass("void_class_bard", "BARD")] }),
+    source("homebrew", { classes: [srcClass("homebrew_class_bard", "BARD")] }),
   ]);
   eq("a class with the same name collapses even under a new id", byName.db.classes.length, 1);
-  eq("the later one being the survivor", byName.db.classes[0].id, "void_class_bard");
+  eq("the later one being the survivor", byName.db.classes[0].id, "homebrew_class_bard");
   eq("and it's reported as the name clash it is", byName.report.collisions[0].byName, true);
 }
 
@@ -2470,18 +2490,18 @@ group("Switching a source off changes the pickers and nothing else");
 {
   const { db } = mergeSources([
     source("srd", { "domain-cards": [srcCard("core_a", "A")] }),
-    source("void", { "domain-cards": [srcCard("void_a", "B")] }),
+    source("homebrew", { "domain-cards": [srcCard("homebrew_a", "B")] }),
   ]);
   eq("with nothing switched off, everything is offered",
-    visibleRecords(db.domainCards, new Set()).map((c) => c.id), ["core_a", "void_a"]);
+    visibleRecords(db.domainCards, new Set()).map((c) => c.id), ["core_a", "homebrew_a"]);
   eq("a switched-off source leaves the pickers",
-    visibleRecords(db.domainCards, new Set(["void"])).map((c) => c.id), ["core_a"]);
+    visibleRecords(db.domainCards, new Set(["homebrew"])).map((c) => c.id), ["core_a"]);
   eq("the srd is a source like any other and can go too",
-    visibleRecords(db.domainCards, new Set(["srd", "void"])).map((c) => c.id), []);
+    visibleRecords(db.domainCards, new Set(["srd", "homebrew"])).map((c) => c.id), []);
   // Every fixture in this file, and every db built by something that predates content sources,
   // is untagged. Dropping those would break far more than it protected.
   eq("a record with no source is always offered",
-    visibleRecords([{ id: "plain" }], new Set(["void"])).map((c) => c.id), ["plain"]);
+    visibleRecords([{ id: "plain" }], new Set(["homebrew"])).map((c) => c.id), ["plain"]);
 }
 
 group("A character says so when it refers to content this browser hasn't got");

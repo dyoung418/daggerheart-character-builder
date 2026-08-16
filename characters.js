@@ -29,6 +29,7 @@ import {
 } from "./shared/history.js";
 import { UNARMED_PROFILE, derivedStats } from "./shared/derived-stats.js";
 import { statLine } from "./shared/stat-line.js";
+import { titleCase } from "./shared/text.js";
 import { ignoresBurden, unresolvedChoices } from "./shared/effects.js";
 import { UNARMED, UNARMORED, armorStats, burdenWarning, featureLine, weaponStats } from "./shared/gear.js";
 import { buildCsv } from "./shared/csv-export.js";
@@ -64,10 +65,6 @@ let importPlan = null; // parsed file awaiting collision resolution
 let importResolutions = null; // incoming character id -> keep-both | overwrite | skip
 let importDropped = 0; // entries in the file that weren't characters
 let importUndo = null; // { characters, undoSlot } captured before the last commit
-
-function titleCase(str) {
-  return str.charAt(0) + str.slice(1).toLowerCase();
-}
 
 async function loadAllData() {
   content = await loadContent();
@@ -923,7 +920,7 @@ function startImport(parsed) {
 }
 
 // A file can carry content this browser has never had: hand someone a character built with a
-// void folder and their ids arrive intact but resolve to nothing. Imports fine, shows as gaps.
+// folder you don't have and their ids arrive intact but resolve to nothing. Imports fine, shows as gaps.
 //
 // This goes on BOTH import screens on purpose. The review screen only renders when there are id
 // clashes to resolve — startImport() commits a clean file straight away — and a clean file from a

@@ -22,6 +22,7 @@ import {
   totalSlotsForOption,
 } from "./advancement.js";
 import { effectBonuses, hitPointTotal, stressTotal } from "./derived-stats.js";
+import { titleCase } from "./text.js";
 
 // The character as it stood at some level, for the purpose of asking shared/effects.js what
 // it was granting then. Rewinding the subclass tier and the card collection matters: a cap
@@ -331,10 +332,6 @@ export function validateEntry(ch, entry, db) {
   }
 
   return errors;
-}
-
-function titleCase(str) {
-  return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
 // Every recorded level that no longer adds up, with the reasons. Levels the player has

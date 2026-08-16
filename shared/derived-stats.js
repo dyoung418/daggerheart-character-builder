@@ -21,6 +21,7 @@ import {
 } from "./advancement.js";
 import { EFFECT_STAT_KEYS, collectEffects, effectValue, loadoutDomainCounts } from "./effects.js";
 import { UNARMED, UNARMORED } from "./gear.js";
+import { titleCase } from "./text.js";
 
 export const TRAIT_KEYS = ["agility", "strength", "finesse", "instinct", "presence", "knowledge"];
 export const TRAIT_LABELS = {
@@ -448,6 +449,3 @@ function spellcastStat(sub, traits, contributions, ctx) {
   };
 }
 
-function titleCase(str) {
-  return str ? str.charAt(0) + str.slice(1).toLowerCase() : "";
-}

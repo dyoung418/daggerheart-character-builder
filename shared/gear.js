@@ -36,9 +36,9 @@ const BURDEN_LABELS = { ONE_HANDED: "One-handed", TWO_HANDED: "Two-handed" };
 // weapon (the Ghostblade) and used to be printed as "mag", which is half wrong.
 const DAMAGE_TYPE_LABELS = { PHYSICAL: "phy", MAGICAL: "mag", PHYSICAL_OR_MAGICAL: "phy/mag" };
 
-// data/ ships traits, ranges and burdens as SCREAMING_SNAKE. Everything a player sees is
-// sentence case. (Not the titleCase() the pages keep for class names — that one is single-word
-// and this has to split on the underscore.)
+// data/ ships traits, ranges and burdens as SCREAMING_SNAKE; a player sees words. (Not text.js's
+// titleCase(), which is for names and splits on whitespace and hyphens — this has to split on the
+// underscore. Both capitalise every word, so "VERY_CLOSE" comes back as "Very Close".)
 export function enumLabel(value) {
   return String(value ?? "")
     .toLowerCase()

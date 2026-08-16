@@ -344,7 +344,7 @@ export const EFFECT_STAT_KEYS = [
 // into EFFECTS above, which stays exactly the hand-audited catalogue this file documents.
 //
 // A source's entry WINS over one here, because a source that revises a record is revising what
-// that record does: a void reprint of a card is the new version of it. An override that declares
+// that record does: a source's reprint of a card is the new version of it. An override that declares
 // nothing INHERITS the entry here — including the functions and choices JSON can't express — and
 // the "?" breakdown labels it with the overriding record's own name, so the attribution stays
 // honest either way.

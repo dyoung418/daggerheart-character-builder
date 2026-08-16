@@ -2,7 +2,7 @@
 //
 // `data/` used to hold exactly one body of content: the SRD re-export. It now holds a folder per
 // SOURCE — `data/srd/` plus whatever else exists — and the folder's name IS its category. Nothing
-// here knows the name "void" or "homebrew"; a category exists because a folder does.
+// here knows the name of any source but the SRD's; a category exists because a folder does.
 //
 // Everything found on disk is always loaded and always looked up, so an id never dangles. The
 // enabled/disabled toggles filter the PICKER LISTS only (visibleRecords below). That split is the
@@ -230,7 +230,7 @@ export function validateEffectEntry(entry) {
 // with `s.class === cls.name.toUpperCase()`, which is the one relational join in this app that
 // isn't by id. Two classes sharing a name are therefore indistinguishable to that join whatever
 // their ids say — so a later source's Bard replaces an earlier one by NAME as well as by id.
-// Without this, a void Bard under a fresh id would put two identical-looking tiles in the picker
+// Without this, a revised Bard under a fresh id would put two identical-looking tiles in the picker
 // with every Bard subclass appearing under both.
 const nameKeyFor = (kind, record) => (kind === "classes" ? String(record.name).toUpperCase() : null);
 
@@ -258,7 +258,7 @@ export function mergeSources(sources) {
       const byId = new Map(list.map((r, i) => [r.id, i]));
       const byName = new Map(list.map((r, i) => [nameKeyFor(file, r), i]).filter(([k]) => k !== null));
       // What this source CONTRIBUTED, whether it added a record or revised one: the panel's
-      // "void — 11 cards" should say what the folder holds, not how much of it happened to be new.
+      // "my-homebrew — 11 cards" should say what the folder holds, not how much happened to be new.
       let merged = 0;
 
       for (const raw of incoming) {

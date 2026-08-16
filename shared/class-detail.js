@@ -9,13 +9,9 @@ import { escapeHtml } from "./escape.js";
 import { descriptionHtml, featuresHtml } from "./card-render.js";
 import { statLine } from "./stat-line.js";
 import { openModal } from "./popover.js";
-
-// classes.json ships names and domains as plain uppercase strings ("BARD", ["GRACE"]), where
-// every other data file uses localized objects — hence the same one-liner create.js and
-// characters.js each keep.
-function titleCase(str) {
-  return str.charAt(0) + str.slice(1).toLowerCase();
-}
+// classes.json ships names and domains as plain uppercase strings ("BARD", ["GRACE"]), where every
+// other data file uses localized objects.
+import { titleCase } from "./text.js";
 
 function section(heading, bodyHtml) {
   const el = document.createElement("section");

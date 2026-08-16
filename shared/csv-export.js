@@ -26,6 +26,7 @@ import {
   subclassTiersUpTo,
 } from "./advancement.js";
 import { TRAIT_KEYS, TRAIT_LABELS, UNARMED_PROFILE, derivedStats } from "./derived-stats.js";
+import { titleCase } from "./text.js";
 import {
   UNARMED,
   UNARMORED,
@@ -43,10 +44,6 @@ function find(list, id) {
 
 function name(record) {
   return record?.name?.["en-US"] || "";
-}
-
-function titleCase(str) {
-  return str ? str.charAt(0) + str.slice(1).toLowerCase() : "";
 }
 
 function names(records) {

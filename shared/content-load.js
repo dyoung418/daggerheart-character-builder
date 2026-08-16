@@ -41,7 +41,7 @@ async function readJson(path) {
 /**
  * Which sources are switched OFF. Storing the disabled list rather than the enabled one is what
  * makes a new folder appear the moment you create it: you only make one because you want it, and
- * "I added void and nothing showed up" is the bug the other way round produces. A browser with no
+ * "I added a folder and nothing showed up" is the bug the other way round produces. A browser with no
  * preference yet has everything on, srd included.
  */
 export function readDisabledSources() {

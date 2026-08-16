@@ -80,7 +80,7 @@ If you own the official Core Rulebook PDF, you could write your own script to cr
 
 ## Adding your own content
 
-`data/` holds one folder per body of content. `data/srd/` is the SRD; anything else you create is yours, and **the folder's name is the category**. Make `data/void/` and you have a category called void.
+`data/` holds one folder per body of content. `data/srd/` is the SRD; anything else you create is yours, and **the folder's name is the category**. Make `data/homebrew/` and you have a category called homebrew.
 
 To add one:
 
@@ -101,7 +101,7 @@ To add one:
    `files` is required and names the files you actually wrote — it's what stops the app fetching things that aren't there. `label` is optional and defaults to the folder name.
 4. Write those files, in the same shape as the ones in `data/srd/`. Every file is optional; a folder holding one `domain-cards.json` is perfectly good.
 
-The **Content** button in the top bar lists your sources with a checkbox each, and reports anything it couldn't use. Switching a source off only changes what you can *pick* — a character already built with it keeps its content and its stats, so turning void off between sessions never damages a character.
+The **Content** button in the top bar lists your sources with a checkbox each, and reports anything it couldn't use. Switching a source off only changes what you can *pick* — a character already built with it keeps its content and its stats, so turning a source off between sessions never damages a character.
 
 A few things worth knowing when you write content:
 

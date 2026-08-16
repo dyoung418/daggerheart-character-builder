@@ -28,13 +28,10 @@ import { UNARMED_PROFILE, derivedStats, TRAIT_KEYS, TRAIT_LABELS } from "./deriv
 import { unresolvedChoices } from "./effects.js";
 import { unresolvedReferences } from "./content-sources.js";
 import { UNARMED, UNARMORED } from "./gear.js";
+import { titleCase } from "./text.js";
 
 function find(list, id) {
   return id ? (list || []).find((x) => x.id === id) || null : null;
-}
-
-function titleCase(str) {
-  return str ? str.charAt(0) + str.slice(1).toLowerCase() : "";
 }
 
 function signed(value) {
@@ -42,9 +39,15 @@ function signed(value) {
   return value > 0 ? `+${value}` : String(value);
 }
 
+// "TWO_HANDED" -> "Two handed", "PHYSICAL" -> "Physical". Sentence case, deliberately NOT
+// titleCase(): these are enum values read as phrases, and PHYSICAL_OR_MAGICAL would come back as
+// "Physical Or Magical". (gear.js's enumLabel() capitalises each word, which is right for a range
+// like "Very Close" — the two spellings on the sheet and in the CSV are an old inconsistency, not
+// something this function should quietly settle.)
 function prettyEnum(value) {
-  // "TWO_HANDED" -> "Two handed", "PHYSICAL" -> "Physical"
-  return value ? titleCase(value.replace(/_/g, " ")) : "";
+  if (!value) return "";
+  const words = String(value).replace(/_/g, " ").toLowerCase();
+  return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
 // Feature list flattened to plain strings, so the render layer never walks the

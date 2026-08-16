@@ -9,6 +9,7 @@ import { MAX_HOPE, STARTING_HOPE, blankSlotsUsed, ensureLevelFields, tierForLeve
 import { recomputeCharacter } from "./shared/history.js";
 import { derivedStats } from "./shared/derived-stats.js";
 import { statLine } from "./shared/stat-line.js";
+import { titleCase } from "./shared/text.js";
 import { blankAnswer, collectEffects, effectFor, ignoresBurden } from "./shared/effects.js";
 import { renderEffectChoice } from "./shared/effect-choice.js";
 import { loadContent } from "./shared/content-load.js";
@@ -53,10 +54,6 @@ let content = null; // what loadContent() reported: which sources loaded, and wh
 let character = null;
 let currentStep = 0;
 let gearFilter = ""; // the equipment step's name filter, kept across re-renders
-
-function titleCase(str) {
-  return str.charAt(0) + str.slice(1).toLowerCase();
-}
 
 async function loadAllData() {
   content = await loadContent();
