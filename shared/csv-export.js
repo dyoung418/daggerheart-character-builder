@@ -25,7 +25,7 @@ import {
   activeDomainCardIds,
   subclassTiersUpTo,
 } from "./advancement.js";
-import { TRAIT_KEYS, TRAIT_LABELS, UNARMED_PROFILE, derivedStats } from "./derived-stats.js";
+import { TRAIT_KEYS, TRAIT_LABELS, derivedStats } from "./derived-stats.js";
 import { titleCase } from "./text.js";
 import {
   UNARMED,
@@ -58,13 +58,13 @@ function names(records) {
  */
 function rowContext(ch, db, loadout) {
   const unarmored = ch.equipment?.armorId === UNARMORED;
-  const unarmed = ch.equipment?.primaryWeaponId === UNARMED;
   const sub = find(db?.subclasses, ch.subclassId);
+  const stats = derivedStats(ch, db);
   return {
     ch,
     db,
     loadout,
-    stats: derivedStats(ch, db),
+    stats,
     cls: find(db?.classes, ch.classId),
     sub,
     com: find(db?.communities, ch.heritage?.communityId),
@@ -84,8 +84,9 @@ function rowContext(ch, db, loadout) {
     unarmored,
     armor: unarmored ? null : find(db?.armors, ch.equipment?.armorId),
     // An unarmed character has a weapon profile, just not one from data/ — the SRD gives bare
-    // hands a range and a damage rating like anything else.
-    primary: unarmed ? UNARMED_PROFILE : find(db?.weapons, ch.equipment?.primaryWeaponId),
+    // hands a range and a damage rating like anything else, and a class feature may put a better
+    // one in its place. derivedStats() decided which; this doesn't get to decide again.
+    primary: stats.unarmedProfile || find(db?.weapons, ch.equipment?.primaryWeaponId),
     secondary: find(db?.weapons, ch.equipment?.secondaryWeaponId),
     potion: find(db?.consumables, ch.equipment?.potionChoice),
     // Every card the character owns, in the order they collected them. The vault is a subset of

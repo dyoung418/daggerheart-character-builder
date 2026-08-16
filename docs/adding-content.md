@@ -238,6 +238,7 @@ what the effect belongs to**:
 | `<transformationId>:<Feature Name>` | one transformation feature |
 | `<itemId>:<Feature Name>` | one weapon's or armour's feature |
 | `armor:<Feature Name>`, `weapon:<Feature Name>` | a feature that means the same on every item that has it |
+| `<classId>:<Feature Name>` | one class feature, including the Hope feature |
 
 A tier implies every tier below it, so a Mastery character collects the Foundation and
 Specialization entries too.
@@ -271,9 +272,49 @@ Specialization entries too.
   They show under "bonuses you have but that aren't counted above", which is how a player learns why
   a number didn't move.
 - **`choice`** — when the player picks something (§7).
+- **`unarmedProfile`** — replaces the weapon a bare-handed character fights with (below).
 
 Anything else is rejected and reported. `extraDomainCards` is not a stat: it changes how many cards
 the character gets to pick, and the level-up screen works it out by diffing before and after.
+
+### A better pair of fists
+
+The SRD gives bare hands a profile of their own — Strength or Finesse at the GM's call, Melee,
+`[Proficiency]d4`. A class whose whole point is fighting with nothing in your hands can put its own
+profile in its place:
+
+```json
+{
+  "myhomebrew_class_scrapper:Iron Hands": {
+    "unarmedProfile": {
+      "name": { "en-US": "Iron Hands" },
+      "traits": ["AGILITY", "STRENGTH", "FINESSE", "INSTINCT", "PRESENCE", "KNOWLEDGE"],
+      "range": "MELEE",
+      "damage": { "dice": ["D8", "D6"], "type": "PHYSICAL" },
+      "note": "Iron Hands can be rolled with any trait you choose."
+    },
+    "evasion": 1
+  }
+}
+```
+
+- **`traits`** is a list, however long. Every one is offered and none is picked for the player —
+  the sheet prints "Strength +2 / Agility +1", the same way it handles the SRD's two. A feature
+  reading "a trait of your choice" therefore lists all six.
+- **`damage.dice`** may be one die or several. Proficiency multiplies **every** die in the list, so
+  the example above rolls `2d8+2d6` at Proficiency 2 — which is exactly why it's a list and not the
+  string `"D8+D6"`.
+- **`note`** (optional) is the sentence printed under the attack, saying whose choice the trait is.
+  Left out, the app names the traits instead.
+- **Other keys on the same entry apply only while the profile does.** That's how the `+1` above
+  can mean "while this weapon is active" without a condition: an entry carrying an
+  `unarmedProfile` is consulted only when the profile is in use, so it stops paying out the moment
+  the character picks something up.
+
+The profile stands in **only while both hands are empty** — no primary weapon *and* no secondary.
+Equip a shield and the character falls back to the SRD's d4, because a shield is a weapon. That
+makes a feature worded "while you have no other active weapons" come out right, and it leaves the
+SRD's own profile behaving exactly as it always has.
 
 ### Two shapes of choice
 

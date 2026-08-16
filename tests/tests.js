@@ -72,6 +72,7 @@ const {
   UNARMED,
   UNARMORED,
   burdenWarning,
+  damageDice,
   damageText,
   featureLine,
   enumLabel,
@@ -1140,6 +1141,99 @@ group("Fighting with nothing in your hands");
   check("and still gets its own attack", withShield.secondaryAttack !== null);
 }
 
+// A class feature can hand you a better pair of fists than the SRD's. Nothing in data/srd/ does,
+// so every fixture here is invented — the point is that the app can carry one at all.
+const PROFILE_DB = {
+  ...FX_DB,
+  classes: [{ ...FX_DB.classes[0], classFeatures: [{ name: { "en-US": "Bare Fists" } }] }],
+  effects: {
+    "cls:Bare Fists": {
+      unarmedProfile: {
+        name: { "en-US": "Practised Strike" },
+        // "A trait of your choice" is all six, which is more than the SRD's profile names.
+        traits: ["AGILITY", "STRENGTH", "FINESSE", "INSTINCT", "PRESENCE", "KNOWLEDGE"],
+        range: "MELEE",
+        // Two kinds of die, both scaling with Proficiency.
+        damage: { dice: ["D8", "D6"], type: "PHYSICAL" },
+      },
+      evasion: 1,
+    },
+  },
+};
+
+group("A class can put its own weapon in your empty hands");
+{
+  const bare = derivedStats(statChar({ equipment: { primaryWeaponId: UNARMED } }), PROFILE_DB);
+  eq("the declared profile stands in for the SRD's", bare.primaryAttack.weaponName, "Practised Strike");
+  eq("and it can name more than two traits",
+    bare.primaryAttack.display, "Agility +1 / Strength +2 / Finesse 0 / Instinct +1 / Presence 0 / Knowledge -1");
+  // The +1 Evasion rides on the same entry, and needs no `when` to be conditional: the entry is
+  // only consulted while the profile is in use.
+  eq("what the same feature grants alongside it counts too", bare.evasion.total, 10);
+  check("with the breakdown naming the class feature",
+    bare.evasion.parts.some((p) => p.label === "Guardian — Bare Fists"));
+
+  // "While you have no other Active Weapons" — an off-hand weapon is an active weapon.
+  const withOffhand = derivedStats(statChar({
+    equipment: { primaryWeaponId: UNARMED, secondaryWeaponId: "dagger" },
+  }), PROFILE_DB);
+  eq("carrying anything in the other hand falls back to the SRD's d4",
+    withOffhand.primaryAttack.weaponName, "Unarmed");
+  eq("and the bonus that came with it goes too", withOffhand.evasion.total, 9);
+
+  const armed = derivedStats(statChar({ equipment: { primaryWeaponId: "staff" } }), PROFILE_DB);
+  eq("a character holding a weapon has no unarmed profile at all", armed.unarmedProfile, null);
+  eq("and gets none of what the feature grants", armed.evasion.total, 9);
+
+  // A class with no such feature is exactly as it was.
+  eq("the SRD's own profile is untouched",
+    derivedStats(statChar({ equipment: { primaryWeaponId: UNARMED } }), FX_DB).primaryAttack.weaponName, "Unarmed");
+}
+
+group("Proficiency multiplies every die, not just the first");
+{
+  eq("one kind of die reads as it always has", damageDice({ dice: "D10" }), "d10");
+  eq("and at Proficiency 2 it's two of them", damageDice({ dice: "D10" }, 2), "2d10");
+  // The whole reason `dice` accepts a list: "2d8+d6" would be wrong, and silently so.
+  eq("two kinds are joined the way the books write them", damageDice({ dice: ["D8", "D6"] }), "d8+d6");
+  eq("and Proficiency applies to both", damageDice({ dice: ["D8", "D6"] }, 2), "2d8+2d6");
+  eq("a damage rating prints its dice, modifier and type",
+    damageText({ damage: { dice: ["D8", "D6"], modifier: 1, type: "PHYSICAL" } }), "d8+d6+1 phy");
+  eq("nothing in, nothing out", [damageDice({}), damageDice({ dice: [] })], ["", ""]);
+
+  // The SRD's two still print in full; a profile naming every trait says so in a word rather
+  // than listing 62 characters of them on a roster row.
+  eq("two traits are named", weaponStats(UNARMED_PROFILE), "Strength or Finesse · Melee · d4 phy");
+  eq("all six are 'any trait'", weaponStats({
+    traits: ["AGILITY", "STRENGTH", "FINESSE", "INSTINCT", "PRESENCE", "KNOWLEDGE"],
+    range: "MELEE", damage: { dice: ["D8", "D6"], type: "PHYSICAL" },
+  }), "Any trait · Melee · d8+d6 phy");
+  eq("and a weapon from data/ still names its own one trait",
+    weaponStats({ trait: "AGILITY", range: "MELEE", damage: { dice: "D8", type: "PHYSICAL" } }),
+    "Agility · Melee · d8 phy");
+}
+
+group("A weapon profile a source declares is checked before it's believed");
+{
+  const ok = {
+    name: { "en-US": "A" }, traits: ["STRENGTH"], range: "MELEE", damage: { dice: "D8", type: "PHYSICAL" },
+  };
+  eq("a complete profile is accepted", validateEffectEntry({ unarmedProfile: ok }), null);
+  eq("so is one rolling several dice",
+    validateEffectEntry({ unarmedProfile: { ...ok, damage: { dice: ["D8", "D6"] } } }), null);
+  eq("and one granting a bonus alongside itself",
+    validateEffectEntry({ unarmedProfile: ok, evasion: 1 }), null);
+  // Each of these would print a weapon row with a hole in it rather than throwing.
+  check("a profile with no name is refused",
+    validateEffectEntry({ unarmedProfile: { ...ok, name: undefined } }) !== null);
+  check("one naming no trait is refused, because there'd be nothing to roll",
+    validateEffectEntry({ unarmedProfile: { ...ok, traits: [] } }) !== null);
+  check("one naming a trait this game doesn't have is refused",
+    validateEffectEntry({ unarmedProfile: { ...ok, traits: ["CHARISMA"] } }) !== null);
+  check("and one with no dice is refused",
+    validateEffectEntry({ unarmedProfile: { ...ok, damage: { dice: [] } } }) !== null);
+}
+
 group("Bare Bones stands in for the armor you didn't wear");
 {
   // strength is +2 in the fixture. Tier 1 base thresholds are 9/19, and your level goes on top
@@ -1675,6 +1769,39 @@ group("Every class carries what the detail card shows");
 
   check(`all ${classes.length} classes carry every field the card reads`, incomplete.length === 0,
     incomplete.length ? `incomplete: ${incomplete.join(", ")}` : undefined);
+}
+
+group("Sheet: a class-granted pair of fists prints as the weapon it is");
+{
+  // The printed sheet is where a wrong die actually costs someone a session, so the profile has
+  // to survive all the way onto paper — name, dice and Proficiency together.
+  const db = {
+    ...SHEET_DB,
+    effects: {
+      "cls:Frontline Tank": {
+        unarmedProfile: {
+          name: { "en-US": "Practised Strike" },
+          traits: ["STRENGTH", "AGILITY"],
+          range: "MELEE",
+          damage: { dice: ["D8", "D6"], type: "PHYSICAL" },
+        },
+      },
+    },
+  };
+  const sheet = deriveSheet(sheetChar({
+    proficiency: 2, equipment: { primaryWeaponId: UNARMED, armorId: "gambeson" },
+  }), db);
+  eq("it prints under the profile's own name, not \"Unarmed\"", sheet.weapons[0].name, "Practised Strike");
+  eq("with Proficiency copies of every die", sheet.weapons[0].damage, "2d8+2d6");
+  eq("at the range the profile gives it", sheet.weapons[0].range, "Melee");
+  // Two traits and no single total, the same way the SRD's profile prints.
+  eq("naming every trait it can be rolled with", sheet.weapons[0].attack, "Strength +2 / Agility +1");
+  eq("and no bracketed trait after a string that already names them", sheet.weapons[0].traitLabel, "");
+
+  const plain = deriveSheet(sheetChar({
+    proficiency: 2, equipment: { primaryWeaponId: UNARMED, armorId: "gambeson" },
+  }), SHEET_DB);
+  eq("a class that declares none still prints the SRD's d4", plain.weapons[0].damage, "2d4");
 }
 
 group("Sheet: fighting unarmed and going unarmored print as the choices they are");

@@ -28,7 +28,7 @@ import {
   unresolvedProblems,
   validateLevelUps,
 } from "./shared/history.js";
-import { UNARMED_PROFILE, derivedStats } from "./shared/derived-stats.js";
+import { derivedStats } from "./shared/derived-stats.js";
 import { statLine } from "./shared/stat-line.js";
 import { titleCase } from "./shared/text.js";
 import { ignoresBurden, unresolvedChoices } from "./shared/effects.js";
@@ -659,8 +659,9 @@ function renderDetail() {
   }
 
   const eq = ch.equipment;
-  const unarmedPrimary = eq.primaryWeaponId === UNARMED;
-  const primary = unarmedPrimary ? UNARMED_PROFILE : findWeapon(eq.primaryWeaponId);
+  // stats.unarmedProfile is the profile a bare-handed character is actually swinging — the SRD's,
+  // or one a class feature put in its place — and null when they're carrying something.
+  const primary = stats.unarmedProfile || findWeapon(eq.primaryWeaponId);
   const secondary = findWeapon(eq.secondaryWeaponId);
   // A character who chose to wear nothing says so, rather than showing the same dash as one
   // who hasn't picked yet.

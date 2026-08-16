@@ -80,7 +80,33 @@ export const UNARMED_PROFILE = {
   traits: ["STRENGTH", "FINESSE"],
   range: "MELEE",
   damage: { dice: "D4", type: "PHYSICAL" },
+  note: "Unarmed attack rolls use Strength or Finesse, whichever the GM calls for.",
 };
+
+// Fighting bare-handed, in the sense a replacement profile cares about: nothing in either hand.
+//
+// The app's `unarmed` means only that the PRIMARY slot holds the sentinel — a character can be
+// unarmed and still carry a shield, whose Armor Score already counts. A class feature that hands
+// you a better bare-handed profile is conditioned on carrying no weapon at all, so it needs the
+// stricter question, and the two must not be confused: everything else in this file keeps using
+// the loose one.
+function barehanded(ch) {
+  return ch.equipment?.primaryWeaponId === UNARMED && !ch.equipment?.secondaryWeaponId;
+}
+
+// The profile a bare-handed character fights with: the SRD's d4 by default, or whatever an
+// effect declares in its place.
+//
+// A declared profile stands in only while both hands are empty. Pick up a shield and you fall
+// back to the SRD's — which is the honest reading of a feature that applies "while you have no
+// other Active Weapons", and means the default profile behaves exactly as it always has.
+// The first declaration wins; two would be a catalogue bug.
+function unarmedProfileFrom(contributions) {
+  for (const entry of contributions) {
+    if (entry.effect.unarmedProfile) return entry.effect.unarmedProfile;
+  }
+  return UNARMED_PROFILE;
+}
 
 function equippedArmor(ch, db) {
   if (ch.equipment?.armorId === UNARMORED) return null;
@@ -123,7 +149,15 @@ function gather(ch, db) {
   // `when` and the trait modifiers are settled first, against base traits. Nothing in the
   // catalogue gates on a trait, and no trait modifier is a function of another trait, so this
   // can't be circular — but it does mean everything else gets to read effective traits below.
-  const active = collectEffects(ch, db).filter((e) => !e.effect.when || e.effect.when(ctx));
+  //
+  // An entry that replaces the unarmed profile is gated on being bare-handed, and so is
+  // everything else that entry grants: a feature that reads "while this weapon is active, you
+  // gain +1 Evasion" must not keep paying out once you pick up a sword. That gate is the entry's
+  // own shape rather than a `when`, which is what lets a source declare it in JSON at all.
+  const empty = barehanded(ch);
+  const active = collectEffects(ch, db)
+    .filter((e) => !e.effect.unarmedProfile || empty)
+    .filter((e) => !e.effect.when || e.effect.when(ctx));
 
   const contributions = [];
   const exclusions = [];
@@ -228,6 +262,10 @@ export function derivedStats(ch, db) {
   const secondaryWeapon = find(db?.weapons, ch.equipment?.secondaryWeaponId);
 
   const { contributions, exclusions, experienceParts, ctx } = gather(ch, db);
+  // Resolved once here rather than in each of the three files that print a bare-handed
+  // character's weapon row, so the sheet, the roster and the CSV can't disagree about which
+  // profile is in play.
+  const barehandedProfile = unarmed ? unarmedProfileFrom(contributions) : null;
   const className = cls ? titleCase(cls.name) : "Class";
   const credits = advancementCredits(ch);
 
@@ -258,8 +296,11 @@ export function derivedStats(ch, db) {
     proficiency: stat(advancementParts(ch.proficiency, credits.proficiency, "Base")),
     armorScore: armorScoreStat(armor, db, contributions, ctx),
     ...thresholdStats(ch, armor, contributions, ctx),
+    // What a bare-handed character is actually swinging, for the pages that print a weapon row.
+    // null when they're carrying something, which is also how a caller tells the two apart.
+    unarmedProfile: barehandedProfile,
     primaryAttack: unarmed
-      ? unarmedAttackStat(traits, contributions, ctx)
+      ? unarmedAttackStat(barehandedProfile, traits, contributions, ctx)
       : attackStat(primaryWeapon, traits, contributions, ctx, "primary"),
     secondaryAttack: attackStat(secondaryWeapon, traits, contributions, ctx, "secondary"),
     spellcast: spellcastStat(sub, traits, contributions, ctx),
@@ -398,30 +439,37 @@ function attackStat(weapon, traits, contributions, ctx, scope) {
   };
 }
 
-// Two traits, and the choice between them belongs to the GM at the table rather than to the
-// sheet. So this reports both rather than quietly picking the better one — same shape as the
-// Spellcast box, which is also a stat that isn't a single number.
-function unarmedAttackStat(traits, contributions, ctx) {
+// A bare-handed profile names more than one trait, and which one applies isn't the sheet's to
+// decide — the SRD's is the GM's call per roll, and a profile a class hands you may be the
+// player's. So this reports every trait the profile names rather than quietly picking the best,
+// the same shape the Spellcast box uses for a stat that isn't a single number.
+//
+// However many there are: the SRD's names two, and a profile reading "a trait of your choice"
+// names all six.
+function unarmedAttackStat(profile, traits, contributions, ctx) {
   const bonusParts = partsFor(contributions, "attack", ctx, "primary");
   const bonus = bonusParts.reduce((sum, p) => sum + p.value, 0);
-  const keys = UNARMED_PROFILE.traits.map((t) => t.toLowerCase());
+  const name = profile.name?.["en-US"] || "Unarmed";
+  const keys = (profile.traits || []).map((t) => String(t).toLowerCase()).filter((k) => TRAIT_LABELS[k]);
   // Same rule as a weapon's attack: until the traits are assigned there's no number to show.
-  if (keys.some((key) => !traits[key] || traits[key].total === null)) return null;
+  if (!keys.length || keys.some((key) => !traits[key] || traits[key].total === null)) return null;
   const options = keys.map((key) => ({
     key, label: TRAIT_LABELS[key], total: traits[key].total + bonus,
   }));
   const display = options.map((o) => `${o.label} ${signed(o.total)}`).join(" / ");
   return {
-    weaponName: UNARMED_PROFILE.name["en-US"],
+    weaponName: name,
     unarmed: true,
     display,
-    // No total: these two aren't parts of a sum, they're alternatives, and the popover skips
-    // the Total row for a stat that doesn't have one.
+    // No total: these aren't parts of a sum, they're alternatives, and the popover skips the
+    // Total row for a stat that doesn't have one.
     parts: [
-      ...options.map((o) => ({ label: `${o.label} (unarmed)`, value: traits[o.key].total })),
+      ...options.map((o) => ({ label: `${o.label} (${name.toLowerCase()})`, value: traits[o.key].total })),
       ...bonusParts,
     ],
-    note: "Unarmed attack rolls use Strength or Finesse, whichever the GM calls for.",
+    // The profile says what its own choice means, because only it knows. Falling back to naming
+    // the traits beats saying nothing when a source leaves it out.
+    note: profile.note || `${name} attack rolls use ${options.map((o) => o.label).join(", ")}.`,
   };
 }
 

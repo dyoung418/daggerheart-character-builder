@@ -24,10 +24,10 @@
 // responsible for that, same as characters.js's loadCharacters() is.
 
 import { activeDomainCardIds, SUBCLASS_TIER_LABELS, subclassTiersUpTo } from "./advancement.js";
-import { UNARMED_PROFILE, derivedStats, TRAIT_KEYS, TRAIT_LABELS } from "./derived-stats.js";
+import { derivedStats, TRAIT_KEYS, TRAIT_LABELS } from "./derived-stats.js";
 import { unresolvedChoices } from "./effects.js";
 import { unresolvedReferences } from "./content-sources.js";
-import { UNARMED, UNARMORED } from "./gear.js";
+import { UNARMED, UNARMORED, damageDice } from "./gear.js";
 import { titleCase } from "./text.js";
 
 function find(list, id) {
@@ -92,7 +92,6 @@ function features(list) {
 // exactly the bug this rewrite exists to remove.
 function weaponEntry(weapon, attackStat, proficiencyTotal) {
   if (!weapon) return null;
-  const dice = weapon.damage.dice.toLowerCase();
   const modifier = weapon.damage.modifier || 0;
   // No "+0" for a weapon with no modifier; a negative one (none exist in data/ today, but the
   // rule doesn't promise that stays true) prints its own sign rather than a doubled one.
@@ -112,7 +111,9 @@ function weaponEntry(weapon, attackStat, proficiencyTotal) {
     // 0") and no total. That string already names its traits, so it prints alone and traitLabel
     // stays empty — the same reason the Spellcast box below drops its own traitLabel.
     attack: !attackStat ? "—" : attackStat.unarmed ? attackStat.display : signed(attackStat.total),
-    damage: `${proficiencyTotal}${dice}${modifierText}`,
+    // Proficiency copies of every die the weapon rolls — damageDice() applies the count to each,
+    // so a d8+d6 profile reads 2d8+2d6 rather than 2d8+d6.
+    damage: `${damageDice(weapon.damage, proficiencyTotal)}${modifierText}`,
     damageType: prettyEnum(weapon.damage.type),
     features: features(weapon.features),
   };
@@ -143,9 +144,11 @@ export function deriveSheet(character, db) {
   // Fighting unarmed is a choice with rules of its own — [Proficiency]d4, Strength or Finesse —
   // so the sheet prints them rather than leaving the weapon block empty. The profile is a core
   // rule rather than a data/ record, which is why it comes from derived-stats.js and not db.
-  const primaryWeapon = character.equipment?.primaryWeaponId === UNARMED
-    ? UNARMED_PROFILE
-    : find(db?.weapons, character.equipment?.primaryWeaponId);
+  // derivedStats() resolved which profile is in play — the SRD's, or one a class feature put in
+  // its place — so this takes its answer rather than reaching for the constant and getting a
+  // different one.
+  const primaryWeapon = stats.unarmedProfile
+    || find(db?.weapons, character.equipment?.primaryWeaponId);
   // Whether a secondary counts is whether one is equipped — the same question derivedStats()
   // asks. This used to be gated on a stored "weaponMode" string; nothing writes that field any
   // more, so gating on it here printed no off-hand weapon at all, and for a Warrior carrying a

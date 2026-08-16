@@ -52,25 +52,48 @@ export function burdenLabel(weapon) {
   return BURDEN_LABELS[weapon?.burden] || "";
 }
 
+// A damage rating's dice, as written. Every weapon in data/srd/ rolls ONE kind of die, so `dice`
+// is normally a bare string ("D10") — but the rules don't promise that, and a profile that rolls
+// two kinds has to say so. A list is therefore accepted anywhere a string is, and joined the way
+// the books write it: "d8+d6".
+//
+// `copies` is what Proficiency multiplies the dice by, and it applies to EVERY die in the list —
+// at Proficiency 2 a d8+d6 weapon rolls 2d8+2d6, not 2d8+d6. Left empty for the rating as the
+// book states it, so two weapons can be compared without doing arithmetic first.
+export function damageDice(damage, copies = "") {
+  const dice = Array.isArray(damage?.dice) ? damage.dice : [damage?.dice];
+  return dice.filter(Boolean).map((die) => `${copies}${String(die).toLowerCase()}`).join("+");
+}
+
 // The modifier is part of the weapon's damage, not a footnote to it: 20 of the 32 tier 1
-// weapons have one. Proficiency multiplies the dice at the table, but this prints the rating as
-// the book states it, so two weapons can be compared without doing arithmetic first.
+// weapons have one.
 export function damageText(weapon) {
   const d = weapon?.damage;
   if (!d?.dice) return "";
   const mod = d.modifier ? (d.modifier > 0 ? `+${d.modifier}` : String(d.modifier)) : "";
   const type = DAMAGE_TYPE_LABELS[d.type] || "";
-  return `${String(d.dice).toLowerCase()}${mod}${type ? ` ${type}` : ""}`;
+  return `${damageDice(d)}${mod}${type ? ` ${type}` : ""}`;
 }
 
 // Every part is optional. The test fixtures carry only the fields the check under test needs,
 // and an unarmed profile has no burden at all, so a missing field is left out rather than
 // printed as "undefined".
+const TRAIT_COUNT = 6;
+
+// A profile that names every trait is saying "any trait", and says it in 9 characters instead of
+// 62. Only ever reached by an unarmed profile — a weapon from data/ names one `trait`, not a list
+// — and only when the list is genuinely all of them, so nothing is hidden by the shorthand.
+function traitsLabel(weapon) {
+  const traits = weapon?.traits || [];
+  if (traits.length >= TRAIT_COUNT) return "Any trait";
+  return traits.map(enumLabel).join(" or ");
+}
+
 export function weaponStats(weapon) {
   return [
-    // An unarmed profile offers a choice of two traits rather than naming one, because the SRD
-    // hands that pick to the GM per roll.
-    (weapon?.traits || []).map(enumLabel).join(" or ") || enumLabel(weapon?.trait),
+    // An unarmed profile offers a choice of traits rather than naming one, because the SRD hands
+    // that pick to the GM per roll — and a profile a class grants may hand it to the player.
+    traitsLabel(weapon) || enumLabel(weapon?.trait),
     enumLabel(weapon?.range),
     damageText(weapon),
     burdenLabel(weapon),

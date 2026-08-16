@@ -76,6 +76,7 @@
 
 import { SUBCLASS_TIER_ORDER, tierForLevel } from "./advancement.js";
 import { UNARMED, UNARMORED } from "./gear.js";
+import { titleCase } from "./text.js";
 
 // Requirement shared by the *-Touched cards: "When 4 or more of the domain cards in your
 // loadout are from the X domain". The card is itself an X card, so it counts toward its own 4.
@@ -382,8 +383,8 @@ function tiersUpTo(tier) {
  * Each entry is { key, label, effect, source, scope }:
  *  - `label` is what the "?" breakdown shows, so it names the thing the player chose rather
  *    than the rule id.
- *  - `source` is where it came from: "ancestry", "transformation", "subclass", "armor", "weapon"
- *    or "domainCard".
+ *  - `source` is where it came from: "class", "ancestry", "transformation", "subclass", "armor",
+ *    "weapon" or "domainCard".
  *    Pages use it to decide WHERE a choice gets asked, so that a new card with a choice lands
  *    on the level up screen and a new ancestry feature with one lands in the wizard, both
  *    without either page learning its name.
@@ -399,6 +400,21 @@ export function collectEffects(ch, db) {
   const add = (hit, source, label, scope = "character") => {
     if (hit) found.push({ key: hit.key, label, effect: hit.effect, source, scope });
   };
+
+  // A class's own features read first, because they're the first thing a player chose. Keyed
+  // `<classId>:<Feature Name>` like an ancestry's — a class carries several features and they
+  // don't all do the same kind of thing. hopeFeature is included because it's a feature like any
+  // other; it just happens to sit in a field of its own rather than in the array.
+  //
+  // Nothing in the SRD needs an entry here (the one class rule the app applies, Combat Training's
+  // burden exemption, moves no stat and is answered by ignoresBurden below). It exists so a class
+  // whose feature DOES move a number can say so without a page learning its name.
+  const cls = (db?.classes || []).find((c) => c.id === ch.classId);
+  for (const feature of [...(cls?.classFeatures || []), cls?.hopeFeature].filter(Boolean)) {
+    const featureName = feature.name?.["en-US"];
+    if (!featureName) continue;
+    add(lookup(db, `${cls.id}:${featureName}`), "class", `${titleCase(cls.name)} — ${featureName}`);
+  }
 
   for (const chosen of ch.heritage?.chosenFeatures || []) {
     const anc = (db?.ancestries || []).find((a) => a.id === chosen.ancestryId);

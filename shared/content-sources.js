@@ -207,7 +207,42 @@ function validateChoice(choice) {
   return null;
 }
 
-const ALLOWED_EFFECT_KEYS = new Set([...EFFECT_STAT_KEYS, "permanent", "feature", "excluded", "choice"]);
+// A weapon profile that stands in for the SRD's bare-handed d4 while a character carries nothing
+// at all. Validated rather than trusted, because a half-formed one wouldn't throw — it would
+// quietly print a weapon row with no name and no dice.
+//
+// `dice` may be one die or several: a profile that rolls two kinds says so as a list, and
+// Proficiency multiplies every one of them.
+const TRAIT_NAMES = new Set(["AGILITY", "STRENGTH", "FINESSE", "INSTINCT", "PRESENCE", "KNOWLEDGE"]);
+
+function validateUnarmedProfile(profile) {
+  if (!profile || typeof profile !== "object" || Array.isArray(profile)) return "unarmedProfile must be an object";
+  if (!profile.name?.["en-US"]) return "unarmedProfile: missing name";
+  if (!Array.isArray(profile.traits) || profile.traits.length === 0) {
+    return "unarmedProfile: traits must list at least one trait";
+  }
+  for (const trait of profile.traits) {
+    if (typeof trait !== "string" || !TRAIT_NAMES.has(trait.toUpperCase())) {
+      return `unarmedProfile: "${trait}" isn't one of the six traits`;
+    }
+  }
+  if (typeof profile.range !== "string" || !profile.range) return "unarmedProfile: missing range";
+  const damage = profile.damage;
+  if (!damage || typeof damage !== "object") return "unarmedProfile: missing damage";
+  const dice = Array.isArray(damage.dice) ? damage.dice : [damage.dice];
+  if (dice.length === 0 || dice.some((d) => typeof d !== "string" || !d)) {
+    return "unarmedProfile: damage.dice must be a die, or a list of them";
+  }
+  if ("modifier" in damage && typeof damage.modifier !== "number") {
+    return "unarmedProfile: damage.modifier must be a number";
+  }
+  if ("note" in profile && typeof profile.note !== "string") return "unarmedProfile: note must be a sentence";
+  return null;
+}
+
+const ALLOWED_EFFECT_KEYS = new Set([
+  ...EFFECT_STAT_KEYS, "permanent", "feature", "excluded", "choice", "unarmedProfile",
+]);
 
 /** null if the entry is usable, else why not. */
 export function validateEffectEntry(entry) {
@@ -225,6 +260,10 @@ export function validateEffectEntry(entry) {
   if ("feature" in entry && typeof entry.feature !== "string") return "feature must be a string";
   if ("excluded" in entry && !(Array.isArray(entry.excluded) && entry.excluded.every((x) => typeof x === "string"))) {
     return "excluded must be a list of sentences";
+  }
+  if ("unarmedProfile" in entry) {
+    const bad = validateUnarmedProfile(entry.unarmedProfile);
+    if (bad) return bad;
   }
   if ("choice" in entry) return validateChoice(entry.choice);
   return null;
