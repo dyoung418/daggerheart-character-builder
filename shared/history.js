@@ -11,6 +11,7 @@
 import {
   MAX_HIT_POINT_SLOTS,
   MAX_STRESS_SLOTS,
+  domainAccess,
   extraCardLevelCap,
   isLevelAchievement,
   nextSubclassTier,
@@ -366,13 +367,28 @@ export function validateEntry(ch, entry, db) {
   // Cards: owned so far, plus everything this level adds, so duplicates surface wherever
   // they come from.
   const owned = new Set(state.cardIds);
+  // What the character's second class is once this level's picks are counted, so the card the
+  // level GRANTS may already come from the new domain — the sheet's step order puts advancements
+  // before the domain card.
+  const mcAfterPicks = state.multiclass
+    || picks.filter((p) => p.key === "multiclass").map((p) => ({ domain: p.domain }))[0]
+    || null;
   const check = (id, cap, what) => {
     if (!id) { errors.push(`${what}: no card chosen.`); return; }
     const card = byId.get(id);
     if (!card) { errors.push(`${what}: that card no longer exists.`); return; }
     if (owned.has(id)) errors.push(`${what}: ${cardName(card)} is already in the collection.`);
-    if (card.level > cap) errors.push(`${what}: ${cardName(card)} is level ${card.level}, above the limit of ${cap}.`);
-    if (cls_ && !cls_.domains.includes(card.domain)) errors.push(`${what}: ${cardName(card)} isn't in a domain this class has access to.`);
+    // The cap and the domain are one question now: your own domains take the caller's limit, the
+    // multiclass domain takes half your level. `cap` is a base rather than the answer. With no
+    // class record to read, neither test can be made, exactly as before.
+    if (cls_) {
+      const allowed = domainAccess(cls_.domains, mcAfterPicks, level, cap).capFor(card.domain);
+      if (allowed === null) errors.push(`${what}: ${cardName(card)} isn't in a domain this character has access to.`);
+      // Wording pinned by the suite's staleness probe, which reads the number back out of it.
+      else if (card.level > allowed) errors.push(`${what}: ${cardName(card)} is level ${card.level}, above the limit of ${allowed}.`);
+    } else if (card.level > cap) {
+      errors.push(`${what}: ${cardName(card)} is level ${card.level}, above the limit of ${cap}.`);
+    }
     owned.add(id);
   };
 
@@ -386,7 +402,10 @@ export function validateEntry(ch, entry, db) {
     // the character's effects grant before this level's picks and after them, so the rule lives
     // in effects.js rather than here; only your level caps these, since they aren't slots.
     const before = granted.extraDomainCards;
-    const after = effectBonuses({ ...characterAtLevel(ch, state), subclassTier: tierAfterPicks }, db).extraDomainCards;
+    const after = effectBonuses(
+      { ...characterAtLevel(ch, state), subclassTier: tierAfterPicks, multiclass: mcAfterPicks },
+      db,
+    ).extraDomainCards;
     const expected = Math.max(0, after - before);
     const grantedCards = entry.grantedCardIds || [];
     if (grantedCards.length !== expected) {

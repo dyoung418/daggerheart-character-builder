@@ -95,6 +95,41 @@ export function extraCardLevelCap(level, slotTier) {
   return Math.min(level, TIER_CARD_CAP[slotTier] ?? level);
 }
 
+// "Whenever you have the option to acquire a new domain card, you can choose from cards at or
+// below half your current level (rounded up) from the domain you chose when you selected the
+// multiclass advancement." Rounded up because the SRD rounds up unless it says otherwise.
+export function halfLevelCap(level) {
+  return Math.ceil((level || 0) / 2);
+}
+
+/**
+ * Which domains this character may take cards from, and the highest card level allowed in each.
+ * The single statement of it, read by the picker on the level up screen and by the validation
+ * that judges what it recorded — so the two cannot disagree about a card.
+ *
+ * `baseCap` is whatever limit the caller already had: your level for the card every level grants,
+ * extraCardLevelCap for an advancement slot, the given-up card's level for an exchange. Your own
+ * class's domains take it as-is; the multiclass domain takes the lower of it and half your level.
+ *
+ * A domain reachable both ways keeps the BETTER cap. Multiclassing into a class that shares one of
+ * your domains must never make a card you could already take illegal.
+ *
+ * Nothing here needs `db`: the multiclass stores its domain as a plain string, so a character
+ * imported into a browser without that class keeps every card they legally took.
+ *
+ * @returns {{ domains: string[], capFor: (domain: string) => number|null }} null = no access
+ */
+export function domainAccess(classDomains, multiclass, level, baseCap) {
+  const caps = {};
+  for (const domain of classDomains || []) caps[domain] = baseCap;
+  const extra = multiclass?.domain;
+  if (extra) {
+    const capped = Math.min(baseCap, halfLevelCap(level));
+    caps[extra] = caps[extra] == null ? capped : Math.max(caps[extra], capped);
+  }
+  return { domains: Object.keys(caps), capFor: (domain) => caps[domain] ?? null };
+}
+
 // Hit Point and Stress slots are both capped at 12. In practice only Hit Points can reach
 // it (Stress starts at 6, and the 6 slots available across all tiers land exactly on 12).
 export const MAX_HIT_POINT_SLOTS = 12;

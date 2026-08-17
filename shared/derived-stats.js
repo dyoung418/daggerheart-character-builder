@@ -126,6 +126,21 @@ function equippedArmor(ch, db) {
   return find(db?.armors, ch.equipment?.armorId);
 }
 
+// Which traits this character can cast with: their own subclass's, then the one a multiclass
+// foundation card brought. Two only when both name one and they differ — "if your foundation
+// cards specify different Spellcast traits, you can choose which one to apply when making a
+// Spellcast roll", which is a choice per roll rather than a thing to store.
+export function spellcastTraitKeys(ch, db) {
+  const ids = [ch?.subclassId, ch?.multiclass?.subclassId].filter(Boolean);
+  const keys = [];
+  for (const id of ids) {
+    const sub = (db?.subclasses || []).find((s) => s.id === id);
+    const key = String(sub?.spellcastTrait || "").toLowerCase();
+    if (key && TRAIT_LABELS[key] && !keys.includes(key)) keys.push(key);
+  }
+  return keys;
+}
+
 function baseTraitTotals(ch) {
   const out = {};
   for (const key of TRAIT_KEYS) out[key] = ch.traits?.[key] ?? 0;
@@ -161,7 +176,11 @@ function gather(ch, db) {
     // Which trait "equal to your Spellcast trait" means. Only the subclass knows, and the thing
     // granting such a bonus — a piece of armour — can't name it, so it's resolved here once.
     // Null for the Guardian and the Warrior, whose subclasses have no Spellcast trait at all.
-    spellcastTrait: String(sub?.spellcastTrait || "").toLowerCase() || null,
+    //
+    // A multiclassed character may have two and picks between them per roll; a number printed on
+    // a sheet can't. It takes the higher, because that's the one the player would roll with, and
+    // the breakdown row names which. (SRD, Additional Rules: resolve ambiguity in the PCs' favour.)
+    spellcastTrait: spellcastKeyFor(ch, db, baseTraitTotals(ch)),
   };
 
   // `when` and the trait modifiers are settled first, against base traits. Nothing in the
@@ -435,7 +454,7 @@ export function derivedStats(ch, db) {
       ? unarmedAttackStat(barehandedProfile, traits, contributions, ctx)
       : attackStat(primaryWeapon, traits, contributions, ctx, "primary"),
     secondaryAttack: attackStat(secondaryWeapon, traits, contributions, ctx, "secondary"),
-    spellcast: spellcastStat(sub, traits, contributions, ctx),
+    spellcast: spellcastStat(spellcastTraitKeys(ch, db), traits, contributions, ctx),
     // A second pass over the effects, and an empty array for almost every character — worth it
     // because a die a class rolls is a value the sheet had no way to state at all before.
     tracks: characterTracks(ch, db),
@@ -608,27 +627,37 @@ function unarmedAttackStat(profile, traits, contributions, ctx) {
   };
 }
 
+// The one a scaled bonus resolves against: the higher, when a multiclass brought a second.
+function spellcastKeyFor(ch, db, traitTotals) {
+  const keys = spellcastTraitKeys(ch, db);
+  if (keys.length === 0) return null;
+  return keys.reduce((best, key) => ((traitTotals[key] ?? 0) > (traitTotals[best] ?? 0) ? key : best));
+}
+
 // Deliberately NOT a number: the modifier is already on show in the trait box, so this answers
 // "which trait do I roll?". A bonus that applies to Spellcast Rolls specifically is appended
 // rather than folded into the trait, because a plain roll of that trait doesn't get it.
-function spellcastStat(sub, traits, contributions, ctx) {
-  const key = String(sub?.spellcastTrait || "").toLowerCase();
-  if (!key || !TRAIT_LABELS[key]) return null; // Guardian and Warrior have no Spellcast trait
-  const trait = traits[key];
+//
+// Two traits are alternatives rather than a sum, so it takes the shape an unarmed attack already
+// has: both named, a part each, no total for the popover to print.
+function spellcastStat(keys, traits, contributions, ctx) {
+  if (!keys.length) return null; // Guardian and Warrior have no Spellcast trait
   const bonusParts = partsFor(contributions, "spellcast", ctx);
   const bonus = bonusParts.reduce((sum, p) => sum + p.value, 0);
+  const named = (key) => (bonus ? `${TRAIT_LABELS[key]} ${signed(bonus)}` : TRAIT_LABELS[key]);
+  const bonusNote = "This bonus applies to Spellcast Rolls only — a plain roll of that trait doesn't get it.";
   return {
-    traitKey: key,
-    traitLabel: TRAIT_LABELS[key],
+    traitKey: keys[0],
+    traitLabel: keys.length === 1 ? TRAIT_LABELS[keys[0]] : undefined,
     bonus,
-    display: bonus ? `${TRAIT_LABELS[key]} ${bonus > 0 ? "+" : ""}${bonus}` : TRAIT_LABELS[key],
+    display: keys.map(named).join(" / "),
     parts: [
-      { label: `Spellcast trait: ${TRAIT_LABELS[key]}`, value: trait?.total ?? 0 },
+      ...keys.map((key) => ({ label: `Spellcast trait: ${TRAIT_LABELS[key]}`, value: traits[key]?.total ?? 0 })),
       ...bonusParts,
     ],
-    note: bonus
-      ? "This bonus applies to Spellcast Rolls only — a plain roll of that trait doesn't get it."
-      : undefined,
+    note: keys.length > 1
+      ? `Your foundation cards name different Spellcast traits: choose which to use on each roll.${bonus ? ` ${bonusNote}` : ""}`
+      : (bonus ? bonusNote : undefined),
   };
 }
 

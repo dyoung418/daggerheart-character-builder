@@ -4,6 +4,7 @@ import {
   MAX_STRESS_SLOTS,
   SLOT_TIERS,
   SUBCLASS_TIER_LABELS,
+  domainAccess,
   ensureLevelFields,
   extraCardLevelCap,
   isLevelAchievement,
@@ -265,6 +266,7 @@ function render() {
     level: newLevel,
     used: usedWithPicks(context.slotsUsed, picks),
   });
+  dropIneligibleCards();
   // An author fixing a typo in a label should see it here rather than the one recorded months ago.
   for (const pick of picks) {
     const option = optionFor(options, pick.key);
@@ -603,10 +605,51 @@ function cardModel(c) {
 // The picker, so it's the one place the source toggles reach. Every other read of db.domainCards
 // on this screen is a lookup by id and stays unfiltered — a card already taken must keep
 // resolving whether or not the source it came from is switched on.
-function eligibleDomainCards(cls, maxLevel, excludeIds) {
-  if (!cls) return [];
-  return visibleRecords(db.domainCards, content.disabled)
-    .filter((c) => c.level <= maxLevel && cls.domains.includes(c.domain) && !excludeIds.includes(c.id));
+function eligibleDomainCards(access, excludeIds) {
+  return visibleRecords(db.domainCards, content.disabled).filter((c) => {
+    const cap = access.capFor(c.domain);
+    return cap !== null && c.level <= cap && !excludeIds.includes(c.id);
+  });
+}
+
+// The domains this character may pick from right now, at whatever limit the caller already had.
+// "Right now" includes a multiclass being taken on this very screen, which is why the guaranteed
+// card of the level you multiclass at may already come from the new domain.
+function accessFor(baseCap) {
+  return domainAccess(selectedClass()?.domains || [], multiclassAfterPicks(), workingLevel(), baseCap);
+}
+
+// The sibling of subclassTierAfterPicks(): what the character's second class is, counting the
+// pick on screen. Null until one is chosen.
+function multiclassAfterPicks() {
+  if (context.multiclass) return context.multiclass;
+  const pick = picksFor("multiclass").find((p) => p.classId && p.domain && p.subclassId);
+  return pick ? { classId: pick.classId, subclassId: pick.subclassId, domain: pick.domain } : null;
+}
+
+// Eligibility is a function of the picks, so it's re-asked on every render: change the multiclass
+// domain, or take the pick back, and a card that's no longer legal is dropped rather than quietly
+// confirmed into a level that flags itself the moment it's saved.
+//
+// Judged against the WHOLE card list, never the picker's — that one drops cards whose source is
+// switched off, and sweeping with it would delete a recorded card for no better reason than a
+// checkbox in the content panel.
+function dropIneligibleCards() {
+  const allowed = (id, baseCap) => {
+    if (!id) return true;
+    const card = findDomainCard(id);
+    if (!card) return true; // a card this browser can't resolve is reported, never silently dropped
+    const cap = accessFor(baseCap).capFor(card.domain);
+    return cap !== null && card.level <= cap;
+  };
+  const level = workingLevel();
+  if (!allowed(mandatoryCardId, level)) mandatoryCardId = null;
+  for (const pick of picksFor("domainCard")) {
+    if (!allowed(pick.cardId, extraCardLevelCap(level, pick.slotTier))) pick.cardId = null;
+  }
+  grantedCardIds = grantedCardIds.map((id) => (allowed(id, level) ? id : null));
+  const out = exchange?.outCardId ? findDomainCard(exchange.outCardId) : null;
+  if (exchange?.inCardId && !allowed(exchange.inCardId, out?.level ?? level)) exchange.inCardId = null;
 }
 
 // Every card already owned, plus every card being taken elsewhere on this screen.
@@ -644,7 +687,7 @@ function renderCardGrid(main, cards, selectedId, onSelect) {
 function renderExtraCardPicker(main, pick, index, ordinal, cls, newLevel) {
   const cap = extraCardLevelCap(newLevel, pick.slotTier);
   subHeading(main, `Extra domain card${ordinal}: level ≤ ${cap} (tier ${pick.slotTier} slot, capped at ${extraCardLevelCap(10, pick.slotTier)}; your level is ${newLevel}).`);
-  const cards = eligibleDomainCards(cls, cap, claimedCardIds(pick));
+  const cards = eligibleDomainCards(accessFor(cap), claimedCardIds(pick));
   renderCardGrid(main, cards, pick.cardId, (id) => { pick.cardId = id; });
 }
 
@@ -652,7 +695,7 @@ function renderMandatoryCardStep(main, cls, newLevel) {
   const h = document.createElement("h3");
   h.textContent = "New domain card (guaranteed every level)";
   main.appendChild(h);
-  const cards = eligibleDomainCards(cls, newLevel, claimedCardIds("mandatory"));
+  const cards = eligibleDomainCards(accessFor(newLevel), claimedCardIds("mandatory"));
   renderCardGrid(main, cards, mandatoryCardId, (id) => { mandatoryCardId = id; });
 }
 
@@ -664,10 +707,22 @@ function renderMandatoryCardStep(main, cls, newLevel) {
 // picks and what they'd grant after, and taking the difference. So a feature that starts
 // granting cards partway through a career is picked up by being catalogued, with no code here
 // naming it. Unlike the advancement option, this isn't a slot, so only your level caps it.
+// The character as this level's picks would leave them. One projection, not two sequential ones,
+// so nothing can be counted twice.
+function characterAfterPicks() {
+  return {
+    ...characterAtLevel(character, context),
+    subclassTier: subclassTierAfterPicks(),
+    multiclass: multiclassAfterPicks(),
+  };
+}
+
+// Cards a feature gained at this level hands over — the School of Knowledge's "take an additional
+// domain card". Multiclassing into one grants it too: you took its foundation card, so you have
+// the feature, whichever way you came by it.
 function grantedCardCount() {
-  const at = characterAtLevel(character, context);
-  const before = effectBonuses(at, db).extraDomainCards;
-  const after = effectBonuses({ ...at, subclassTier: subclassTierAfterPicks() }, db).extraDomainCards;
+  const before = effectBonuses(characterAtLevel(character, context), db).extraDomainCards;
+  const after = effectBonuses(characterAfterPicks(), db).extraDomainCards;
   return Math.max(0, after - before);
 }
 
@@ -680,13 +735,13 @@ function renderGrantedCardStep(main, cls, newLevel) {
   if (count === 0) return;
 
   const h = document.createElement("h3");
-  h.textContent = count === 1 ? "Extra domain card from your subclass" : "Extra domain cards from your subclass";
+  h.textContent = count === 1 ? "Extra domain card from a feature gained this level" : "Extra domain cards from features gained this level";
   main.appendChild(h);
 
   for (let i = 0; i < count; i++) {
     const ordinal = count > 1 ? ` (${ORDINALS[i]})` : "";
-    subHeading(main, `Granted card${ordinal}: any card of level ${newLevel} or lower from your domains.`);
-    const cards = eligibleDomainCards(cls, newLevel, claimedCardIds(`granted${i}`));
+    subHeading(main, `Granted card${ordinal}: any card of level ${newLevel} or lower from a domain you have access to.`);
+    const cards = eligibleDomainCards(accessFor(newLevel), claimedCardIds(`granted${i}`));
     renderCardGrid(main, cards, grantedCardIds[i] || null, (id) => { grantedCardIds[i] = id; });
   }
 }
@@ -730,7 +785,7 @@ function renderExchangeSection(main, cls) {
     pickHint.className = "hint";
     pickHint.textContent = `Take instead (level ≤ ${cap}):`;
     details.appendChild(pickHint);
-    const cards = eligibleDomainCards(cls, cap, claimedCardIds("exchange"));
+    const cards = eligibleDomainCards(accessFor(cap), claimedCardIds("exchange"));
     renderCardGrid(details, cards, exchange.inCardId, (id) => { exchange.inCardId = id; });
   }
 

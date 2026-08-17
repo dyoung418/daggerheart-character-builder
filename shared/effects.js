@@ -490,6 +490,16 @@ export function collectEffects(ch, db) {
     add(lookup(db, `${cls.id}:${featureName}`), "class", `${titleCase(cls.name)} — ${featureName}`);
   }
 
+  // A second class read the same way, minus its Hope feature: multiclassing hands over "its class
+  // feature", and the Hope feature is a thing of its own — the sheet has one box for it, filled
+  // from the class you started as.
+  const second = (db?.classes || []).find((c) => c.id === ch.multiclass?.classId);
+  for (const feature of second?.classFeatures || []) {
+    const featureName = feature.name?.["en-US"];
+    if (!featureName) continue;
+    add(lookup(db, `${second.id}:${featureName}`), "class", `${titleCase(second.name)} — ${featureName}`);
+  }
+
   for (const chosen of ch.heritage?.chosenFeatures || []) {
     const anc = (db?.ancestries || []).find((a) => a.id === chosen.ancestryId);
     add(lookup(db, `${chosen.ancestryId}:${chosen.featureName}`), "ancestry",
@@ -517,6 +527,14 @@ export function collectEffects(ch, db) {
       // AND Iron Will; only Unwavering moves a stat).
       add(hit, "subclass", `${displayName(sub, "Subclass")}${hit?.effect.feature ? ` — ${hit.effect.feature}` : ""}`);
     }
+  }
+
+  // The foundation card a multiclass took, and only ever that one: the upgrade advancement takes
+  // the next card for YOUR subclass, so the second one never ladders.
+  const secondSub = (db?.subclasses || []).find((s) => s.id === ch.multiclass?.subclassId);
+  if (secondSub) {
+    const hit = lookup(db, `${secondSub.id}:foundation`);
+    add(hit, "subclass", `${displayName(secondSub, "Subclass")}${hit?.effect.feature ? ` — ${hit.effect.feature}` : ""}`);
   }
 
   // A character who chose to wear nothing has no armor features; the sentinel matches no id,
@@ -688,6 +706,10 @@ export function unresolvedChoices(ch, db) {
 // is a rule, not a presentation detail. The burden advice in the wizard asks this before it
 // says anything.
 export function ignoresBurden(ch, db) {
-  const cls = (db?.classes || []).find((c) => c.id === ch?.classId);
-  return (cls?.classFeatures || []).some((f) => f.name?.["en-US"] === "Combat Training");
+  // Either class: multiclassing hands over the second one's class features, and Combat Training
+  // is one of them.
+  const ids = [ch?.classId, ch?.multiclass?.classId].filter(Boolean);
+  return (db?.classes || [])
+    .filter((c) => ids.includes(c.id))
+    .some((c) => (c.classFeatures || []).some((f) => f.name?.["en-US"] === "Combat Training"));
 }

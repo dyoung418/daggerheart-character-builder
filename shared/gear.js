@@ -185,8 +185,12 @@ export function spellcastBadge() {
   return `<span class="badge-spellcast" title="Spellcasting trait">★ spellcasting</span>`;
 }
 
+// A trait, or several: a multiclassed character can cast with either of two, and the badge
+// should light up for both.
+const spellcastList = (traits) => [].concat(traits ?? []).filter(Boolean);
+
 export function matchesSpellcast(weapon, spellcastTrait) {
-  return !!spellcastTrait && weapon?.trait === spellcastTrait;
+  return spellcastList(spellcastTrait).includes(weapon?.trait);
 }
 
 // The innards of one row, without the element around it: the wizard puts a radio in front of
@@ -229,7 +233,7 @@ export function burdenWarning(primary, secondary, ignoresBurden) {
 // says you *choose* which you deal — so a character with no Spellcast trait can carry one and
 // only ever deal the physical half.
 export function magicWeaponWarning(primary, secondary, spellcastTrait) {
-  if (spellcastTrait) return null;
+  if (spellcastList(spellcastTrait).length > 0) return null;
   const magic = [primary, secondary].filter((w) => w?.damage?.type === "MAGICAL");
   if (!magic.length) return null;
   const names = magic.map((w) => w.name["en-US"]).join(" and ");

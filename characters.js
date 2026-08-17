@@ -24,7 +24,7 @@ import {
   unresolvedProblems,
   validateLevelUps,
 } from "./shared/history.js";
-import { advancementOptionsFor, derivedStats } from "./shared/derived-stats.js";
+import { advancementOptionsFor, derivedStats, spellcastTraitKeys } from "./shared/derived-stats.js";
 import { statLine } from "./shared/stat-line.js";
 import { titleCase } from "./shared/text.js";
 import { ignoresBurden, unresolvedChoices } from "./shared/effects.js";
@@ -729,7 +729,7 @@ function renderDetail() {
     // The magic-weapon rule is about what you EQUIPPED, so a bare-handed character is judged on
     // nothing rather than on the profile a class feature handed them: a class that grants you
     // magic fists is the same class that says you may use them.
-    magicWeaponWarning(stats.unarmedProfile ? null : primary, secondary, sub?.spellcastTrait),
+    magicWeaponWarning(stats.unarmedProfile ? null : primary, secondary, spellcastTraitKeys(ch, db)),
   ]) {
     if (!warning) continue;
     const p = document.createElement("p");

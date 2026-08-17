@@ -26,6 +26,8 @@ const {
   advancementCredits,
   advancementOptions,
   blankSlotsUsed,
+  domainAccess,
+  halfLevelCap,
   ensureLevelFields,
   extraCardLevelCap,
   isLevelAchievement,
@@ -58,6 +60,7 @@ const {
   advancementOptionsFor,
   characterTracks,
   derivedStats,
+  spellcastTraitKeys,
   effectBonuses,
   effectExperienceBonuses,
   evasionTotal,
@@ -67,6 +70,7 @@ const {
 const {
   EFFECTS,
   blankAnswer,
+  collectEffects,
   ignoresBurden,
   isAnswered,
   unresolvedChoices,
@@ -600,6 +604,125 @@ group("Being at Mastery doesn't stand in the way of multiclassing");
   ch.subclassTier = "mastery";
   recomputeCharacter(ch);
   eq("no complaint about the subclass", validateEntry(ch, entry(5, [MULTICLASS], "c2"), MC_DB), []);
+}
+
+group("The second class's domain, at half your level");
+{
+  eq("half of an odd level rounds up", [5, 6, 7, 9].map(halfLevelCap), [3, 3, 4, 5]);
+
+  const access = (level, baseCap, mc = { domain: "ARCANA" }) => domainAccess(["VALOR"], mc, level, baseCap);
+  eq("your own domains keep the caller's limit", access(7, 7).capFor("VALOR"), 7);
+  eq("the new one is halved", access(7, 7).capFor("ARCANA"), 4);
+  eq("a lower limit still binds — a tier 2 slot caps at 4 whatever your level",
+    access(9, extraCardLevelCap(9, 2)).capFor("ARCANA"), 4);
+  eq("a domain neither class has is no access at all", access(7, 7).capFor("MIDNIGHT"), null);
+  eq("and with no second class, only your own", access(7, 7, null).domains, ["VALOR"]);
+  // Multiclassing must never make a card you could already take illegal.
+  eq("a domain reachable both ways keeps the better cap",
+    domainAccess(["VALOR"], { domain: "VALOR" }, 7, 7).capFor("VALOR"), 7);
+}
+
+group("Cards from the second domain are judged by that cap");
+{
+  const ch = newCharacter();
+  ch.level = 4;
+  record(ch, 5, [MULTICLASS], "c2");
+  const cardDb = {
+    ...MC_DB,
+    domainCards: [
+      ...MC_DB.domainCards,
+      { id: "a3", level: 3, domain: "ARCANA", name: { "en-US": "Arcana Three" } },
+      { id: "a5", level: 5, domain: "ARCANA", name: { "en-US": "Arcana Five" } },
+      { id: "m1", level: 1, domain: "MIDNIGHT", name: { "en-US": "Midnight One" } },
+    ],
+  };
+  const at6 = (card) => validateEntry(ch, entry(6, [{ key: "evasion", slotTier: 2 }, { key: "stress", slotTier: 2 }], card), cardDb);
+  eq("a level 3 card from the new domain is fine at level 6", at6("a3"), []);
+  has("a level 5 one is not, half of 6 being 3", at6("a5"), "above the limit of 3");
+  has("and a domain neither class has is still refused", at6("m1"), "isn't in a domain");
+  // The sheet takes the advancements before the card, so the level you multiclass at already has it.
+  eq("the card granted by the very level that multiclassed may come from the new domain",
+    validateEntry(ch, entry(5, [MULTICLASS], "a3"), cardDb), []);
+
+  // The domain is stored as a plain string precisely so this keeps working.
+  const noClass = { ...cardDb, classes: cardDb.classes.filter((c) => c.id !== "cls2") };
+  eq("and stays legal when the second class record has gone missing", at6("a3"), []);
+  eq("even with the class removed from the catalogue", validateEntry(ch, entry(6, [{ key: "evasion", slotTier: 2 }, { key: "stress", slotTier: 2 }], "a3"), noClass), []);
+}
+
+group("A second class brings its features, and its foundation card");
+{
+  const featureDb = {
+    ...MC_DB,
+    classes: MC_DB.classes.map((c) => (c.id !== "cls2" ? c : {
+      ...c,
+      classFeatures: [{ name: { "en-US": "Gizmo" } }],
+      hopeFeature: { name: { "en-US": "Hopeful" } },
+    })),
+    subclasses: MC_DB.subclasses.map((s) => (s.id !== "sub2" ? s : {
+      ...s, foundation: { features: [{ name: { "en-US": "Groundwork" } }] },
+      specialization: { features: [{ name: { "en-US": "Later" } }] },
+    })),
+    effects: {
+      ...MC_DB.effects,
+      "cls2:Gizmo": { evasion: 1 },
+      "cls2:Hopeful": { evasion: 100 },
+      "sub2:foundation": { stressSlots: 1 },
+      "sub2:specialization": { stressSlots: 100 },
+    },
+  };
+  const ch = newCharacter();
+  ch.level = 4;
+  record(ch, 5, [MULTICLASS], "c2");
+  const keys = collectEffects(ch, featureDb).map((e) => e.key);
+  check("its class feature applies", keys.includes("cls2:Gizmo"));
+  check("its Hope feature does not — the module doesn't hand one over", !keys.includes("cls2:Hopeful"));
+  check("the foundation card you took applies", keys.includes("sub2:foundation"));
+  check("and never the tiers above it: only your own subclass ladders", !keys.includes("sub2:specialization"));
+  eq("so the numbers reach the sheet", effectBonuses(ch, featureDb).evasion, 1);
+
+  const before = newCharacter();
+  eq("a character without a second class collects none of it", effectBonuses(before, featureDb).evasion, 0);
+
+  // Combat Training is a class feature, so multiclassing into the class that has it brings it.
+  const trained = {
+    ...featureDb,
+    classes: featureDb.classes.map((c) => (c.id !== "cls2" ? c : { ...c, classFeatures: [{ name: { "en-US": "Combat Training" } }] })),
+  };
+  check("burden exemption comes from either class", ignoresBurden(ch, trained));
+  check("but not from a class you didn't take", !ignoresBurden(newCharacter(), trained));
+}
+
+group("Two Spellcast traits are alternatives, not a sum");
+{
+  const castDb = {
+    ...MC_DB,
+    subclasses: [
+      { id: "sub", name: { "en-US": "First" }, class: "TINKER", spellcastTrait: "KNOWLEDGE" },
+      { id: "sub2", name: { "en-US": "Spark Sub" }, class: "SPARK", spellcastTrait: "INSTINCT" },
+      { id: "sub_mute", name: { "en-US": "Mute" }, class: "TINKER" },
+    ],
+  };
+  const ch = newCharacter();
+  ch.level = 4;
+  record(ch, 5, [MULTICLASS], "c2");
+
+  eq("both are offered, in the order they were gained", spellcastTraitKeys(ch, castDb), ["knowledge", "instinct"]);
+  eq("one class, one trait", spellcastTraitKeys(newCharacter(), castDb), ["knowledge"]);
+
+  const one = derivedStats(newCharacter(), castDb).spellcast;
+  eq("a single trait prints exactly as it always did", one.display, "Knowledge");
+  const two = derivedStats(ch, castDb).spellcast;
+  eq("two print as alternatives", two.display, "Knowledge / Instinct");
+  eq("with a part each", two.parts.map((p) => p.label),
+    ["Spellcast trait: Knowledge", "Spellcast trait: Instinct"]);
+  eq("and no total, the popover having nothing to sum", two.total, undefined);
+  has("the note says the choice is per roll", [two.note], "each roll");
+
+  // A Guardian or Warrior who multiclasses into a caster gains their first, with nothing to choose.
+  const mute = { ...ch, subclassId: "sub_mute" };
+  eq("a class with no Spellcast trait borrows the one it multiclassed into",
+    derivedStats(mute, castDb).spellcast.display, "Instinct");
 }
 
 group("Hit Point and Stress cap at 12");

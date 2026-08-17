@@ -8,7 +8,7 @@ import {
 } from "./shared/card-render.js";
 import { MAX_HOPE, STARTING_HOPE, blankSlotsUsed, ensureLevelFields, tierForLevel } from "./shared/advancement.js";
 import { recomputeCharacter } from "./shared/history.js";
-import { derivedStats } from "./shared/derived-stats.js";
+import { derivedStats, spellcastTraitKeys } from "./shared/derived-stats.js";
 import { statLine } from "./shared/stat-line.js";
 import { titleCase } from "./shared/text.js";
 import { blankAnswer, collectEffects, effectFor, ignoresBurden } from "./shared/effects.js";
@@ -694,7 +694,9 @@ function renderDerivedStep(panel) {
 // exactly what creation used to show.
 function renderEquipmentStep(panel) {
   const e = character.equipment;
-  const spellcastTrait = selectedSubclass()?.spellcastTrait ?? null;
+  // Both, for a multiclassed character: the equipment step is deep-linked from the sheet, so it
+  // has to answer for a character who gained a second Spellcast trait five levels after creation.
+  const spellcastTrait = spellcastTraitKeys(character, db);
   const tier = tierForLevel(character.level);
 
   const h3a = document.createElement("h3");
