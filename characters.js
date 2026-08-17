@@ -46,6 +46,7 @@ import {
   transferFilename,
 } from "./shared/transfer.js";
 import { closePopover, openModal } from "./shared/popover.js";
+import { classFeatureSections } from "./shared/class-detail.js";
 import { escapeHtml } from "./shared/escape.js";
 
 const signed = (n) => (n > 0 ? `+${n}` : String(n));
@@ -569,6 +570,26 @@ function renderDetail() {
     <p><strong>Heritage:</strong> ${ch.heritage.ancestryMode === "mixed" ? "Mixed ancestry" : "Pure ancestry"} — features: ${escapeHtml(ch.heritage.chosenFeatures.map((f) => f.featureName).join(", ")) || "—"}</p>
   `;
   container.appendChild(summary);
+
+  // What the class actually does, in full, right under the line naming it.
+  //
+  // Every other source of features on this screen has a card above: the subclass, the community,
+  // the ancestry, the transformation, each printing its own text either in its art or in the CSS
+  // fallback. The class has no card, so until this its features were the one part of a character
+  // with nowhere to appear — a Brawler could read their Evasion here without ever meeting the
+  // feature that set it.
+  //
+  // Inline rather than behind the wizard's ⓘ popover: this is the screen you read at the table,
+  // and something you have to know to open is how these went unnoticed in the first place. The
+  // popover is untouched and still the right thing where it is, comparing classes you haven't
+  // chosen yet.
+  const classFeatures = classFeatureSections(cls);
+  if (classFeatures.length > 0) {
+    const box = document.createElement("div");
+    box.className = "class-detail detail-class-features";
+    for (const section of classFeatures) box.appendChild(section);
+    container.appendChild(box);
+  }
 
   const stats = derivedStats(ch, db);
 

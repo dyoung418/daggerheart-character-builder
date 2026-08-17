@@ -44,14 +44,37 @@ function classDetailCard(cls) {
     .join("");
   if (items) card.appendChild(section("Class Items", `<ul class="class-detail-items">${items}</ul>`));
 
-  if (cls.hopeFeature) {
-    card.appendChild(section("Hope Feature", `<div class="fallback-features">${featuresHtml([cls.hopeFeature])}</div>`));
-  }
-  if ((cls.classFeatures || []).length > 0) {
-    card.appendChild(section("Class Features", `<div class="fallback-features">${featuresHtml(cls.classFeatures)}</div>`));
-  }
+  for (const el of classFeatureSections(cls)) card.appendChild(el);
 
   return card;
+}
+
+/**
+ * A class's Hope feature and class features, as ready-made sections.
+ *
+ * Shared by the two places that show them: this popover, where a player compares classes before
+ * choosing one, and the roster's character sheet, where they read what the class they already
+ * chose actually does. The class is the only thing on that sheet with no card of its own — every
+ * other source of features has one, printing them either in its art or in the CSS fallback — so
+ * without this its features are the one part of a character with nowhere to appear.
+ *
+ * Returned as elements rather than rendered in place so the sheet can put them where it likes,
+ * and kept here rather than copied so the two can't drift.
+ *
+ * @param {object} cls a record from classes.json
+ * @returns {HTMLElement[]} empty when the class declares neither
+ */
+export function classFeatureSections(cls) {
+  const out = [];
+  if (cls?.hopeFeature) {
+    out.push(section("Hope Feature",
+      `<div class="fallback-features">${featuresHtml([cls.hopeFeature])}</div>`));
+  }
+  if ((cls?.classFeatures || []).length > 0) {
+    out.push(section("Class Features",
+      `<div class="fallback-features">${featuresHtml(cls.classFeatures)}</div>`));
+  }
+  return out;
 }
 
 /**

@@ -574,6 +574,17 @@ h1, h2, h3, .btn-primary, .btn-ghost, .btn-small, .top-nav a {
 .detail-summary p { margin: 0.3rem 0; }
 .detail-summary strong { color: var(--accent-bright); font-family: var(--font-display); letter-spacing: 0.01em; }
 
+/* The class's Hope feature and class features on the character sheet. Same markup as the
+   wizard's class popover — shared/class-detail.js builds both — but on the page rather than in
+   a modal, so it needs the panel around it the modal was already providing. */
+.detail-class-features {
+  margin: 0.75rem 0 1rem;
+  padding: 0.75rem 0.9rem;
+  background: var(--panel-alt);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
 /* The detail view's Print sheet link: .btn-ghost is width: 100% by default (it doubles as
    the full-width "Back to list" bar above), so this override sits it next to Level Up
    instead of dropping onto its own full-width line. .detail-print-link--spaced adds the
