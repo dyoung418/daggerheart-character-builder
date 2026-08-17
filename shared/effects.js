@@ -37,8 +37,13 @@
 // item (Barrier, Protective) are keyed by item id, which takes precedence.
 //
 // Values are numbers, or functions of a context object:
-//   { level, proficiency, traits, armor, domainCounts, character }
-// `traits` holds effective trait totals. `when` is an optional predicate on the same context.
+//   { level, proficiency, traits, spellcastTrait, armor, domainCounts, character }
+// `traits` holds effective trait totals; `spellcastTrait` names which of them the character's
+// subclass casts with, or is null for the Guardian and the Warrior, who have none. `when` is an
+// optional predicate on the same context.
+//
+// A value may also be `{ equalTo: <word> }` — the declarative form of the commonest function,
+// for the subset effects.json can carry. See EFFECT_SCALE_KEYS below.
 //
 // ADDING A CARD
 // -------------
@@ -346,6 +351,21 @@ export const EFFECT_STAT_KEYS = [
   "armorScore", "attack", "spellcast", "extraDomainCards",
 ];
 
+// What a value may scale with, when it's written as `{ equalTo: <word> }` instead of a number.
+//
+// The SRD states this shape over and over — "equal to your Proficiency" (Galapa's Shell, Rise
+// Up), "equal to your Presence", "equal to your Spellcast trait" — and every one of them is a
+// function here, which is exactly what JSON can't carry. This is the declarative form of that
+// one shape, so a source can state it instead of writing an `excluded` note apologising for it.
+//
+// `spellcast` earns its place beside the six traits because the thing declaring the bonus can't
+// name the trait: a piece of armour doesn't know what the wearer's subclass casts with.
+//
+// Anything more involved stays a function, which only this file can hold. Notably "half your
+// Agility, round up" (Untouchable) is not expressible, deliberately: one word after `equalTo` is
+// the whole vocabulary, and a fraction would be the first step towards a small language.
+export const EFFECT_SCALE_KEYS = [...TRAIT_KEYS, "spellcast", "proficiency", "level"];
+
 // A content source may declare its own effects, and they arrive on `db.effects` — never merged
 // into EFFECTS above, which stays exactly the hand-audited catalogue this file documents.
 //
@@ -505,8 +525,29 @@ export function loadoutDomainCounts(ch, db) {
   return counts;
 }
 
+// "Your Spellcast trait" means the trait itself, not the Spellcast roll: Channeling armor's +1
+// is a bonus to the ROLL and must never be counted here. A subclass with no Spellcast trait
+// scales to nothing, which is the honest answer — a Guardian in enchanted robes gains 0, and
+// partsFor drops a zero part rather than printing "+0" in the breakdown.
+function scaledValue({ equalTo }, ctx) {
+  if (equalTo === "proficiency") return ctx.proficiency ?? 0;
+  if (equalTo === "level") return ctx.level ?? 0;
+  const key = equalTo === "spellcast" ? ctx.spellcastTrait : equalTo;
+  if (!key) return 0;
+  return ctx.traits?.[key] ?? 0;
+}
+
+/**
+ * A declared value, resolved against the character: a plain number, a function (this file only),
+ * or the `{ equalTo }` form a source's effects.json can carry.
+ *
+ * The one place values are evaluated, which is why partsFor(), baseOverride() and
+ * effectiveTraits() all understand every shape without knowing about any of them.
+ */
 export function effectValue(value, ctx) {
-  return typeof value === "function" ? value(ctx) : value;
+  if (typeof value === "function") return value(ctx);
+  if (value && typeof value === "object" && "equalTo" in value) return scaledValue(value, ctx);
+  return value;
 }
 
 /** A blank answer, or a copy of one already recorded so re-opening a screen shows it. */

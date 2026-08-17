@@ -13,7 +13,7 @@
 // read and returns the merged result, which is what makes the merge rules testable in
 // tests/tests.js the same way every other rule in this app is.
 
-import { EFFECT_STAT_KEYS, TRAIT_KEYS } from "./effects.js";
+import { EFFECT_SCALE_KEYS, EFFECT_STAT_KEYS, TRAIT_KEYS } from "./effects.js";
 
 // Filename under a source folder -> the key it lands on in `db`. The single statement of that
 // mapping; pages that want fewer files pass a subset of these keys.
@@ -164,21 +164,41 @@ export function validateRecord(kind, record) {
 // ---------- effects declared by a source ----------
 //
 // shared/effects.js is hand-maintained and can hold functions and predicates. A source's
-// effects.json is JSON, so it holds the declarative subset — which is most of it: flat stat
-// numbers, `traits`, `permanent` (without which a card whose text says the bonus is permanent
-// silently stops applying the moment it goes to the vault), `feature`, `excluded`, and a whole
-// `choice` block, which shared/effect-choice.js renders with no page code at all.
+// effects.json is JSON, so it holds the declarative subset — which is most of it: stat numbers
+// and the `equalTo` form of the ones that scale, `traits`, `permanent` (without which a card
+// whose text says the bonus is permanent silently stops applying the moment it goes to the
+// vault), `feature`, `excluded`, and a whole `choice` block, which shared/effect-choice.js
+// renders with no page code at all.
 //
 // `when` is rejected rather than ignored: JSON cannot carry a predicate, and silently dropping a
 // condition would make a bonus apply when it shouldn't.
 
 const CHOICE_KINDS = new Set(["benefit", "experience"]);
 const STAT_KEYS = new Set(EFFECT_STAT_KEYS);
+const SCALE_KEYS = new Set(EFFECT_SCALE_KEYS);
+
+// A stat is a flat number, or `{ "equalTo": <word> }` for the one that the character's own stats
+// decide. The word is checked against the catalogue's own list rather than a copy, so a new one
+// there is usable from JSON the moment it exists.
+//
+// `equalTo` is the whole value, not a modifier on one: `{ "equalTo": "presence", "plus": 2 }`
+// would be a small language, and the extra key is refused instead of ignored so nobody ships an
+// entry believing the +2 counted.
+function statValue(value, where, key) {
+  if (typeof value === "number" && Number.isFinite(value)) return null;
+  if (value && typeof value === "object" && !Array.isArray(value) && "equalTo" in value) {
+    if (Object.keys(value).length > 1) return `${where}: ${key} — equalTo takes no other keys`;
+    if (!SCALE_KEYS.has(value.equalTo)) return `${where}: ${key} — a value can't scale with "${value.equalTo}"`;
+    return null;
+  }
+  return `${where}: ${key} must be a number, or { "equalTo": … }`;
+}
 
 function statEntries(obj, where) {
   for (const [key, value] of Object.entries(obj)) {
     if (!STAT_KEYS.has(key)) continue;
-    if (typeof value !== "number" || !Number.isFinite(value)) return `${where}: ${key} must be a number`;
+    const bad = statValue(value, where, key);
+    if (bad) return bad;
   }
   return null;
 }
