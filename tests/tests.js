@@ -1745,6 +1745,14 @@ group("Every id in effects.js still exists in data/srd/");
   for (const s of subclasses) for (const tier of ["foundation", "specialization", "mastery"]) {
     if (s[tier]) known.add(`${s.id}:${tier}`);
   }
+  // Class features, keyed the way collectEffects keys them. Only reachable since a class started
+  // declaring something (the dice), and it's the same guarantee: rename "Rally" upstream and the
+  // Bard's die would quietly stop printing rather than fail.
+  for (const c of classes) {
+    for (const f of [...(c.classFeatures || []), c.hopeFeature].filter(Boolean)) {
+      if (f.name?.["en-US"]) known.add(`${c.id}:${f.name["en-US"]}`);
+    }
+  }
   for (const c of cards) known.add(c.id);
 
   const missing = Object.keys(EFFECTS).filter((k) => !known.has(k));

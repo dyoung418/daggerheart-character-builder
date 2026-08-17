@@ -103,6 +103,42 @@ const BARE_BONES_THRESHOLDS = {
 };
 
 export const EFFECTS = {
+  // ===================== Class dice =====================
+  // Two classes own a value with a ladder, stated in the middle of a feature's prose and printed
+  // nowhere until these existed: a player reading their own sheet couldn't find out what they
+  // rolled without reading the whole feature again.
+  //
+  // Neither moves a stat, so neither is a bonus — see `track` in the doc, and ignoresBurden below
+  // for the older precedent of a rule this file states without a number attached.
+
+  // Bard, Rally — "At level 1, your Rally Die is a d6… At level 5, your Rally Die increases to a d8."
+  "core_class_bard:Rally": {
+    track: { id: "rally_die", label: "Rally Die", byLevel: { 1: "d6", 5: "d8" } },
+  },
+  // Wordsmith, Epic Poetry — "Your Rally Die increases to a d10."
+  //
+  // The same id as the Bard's, which is what makes it an override: this is read after the class's
+  // features, so it replaces the ladder above for as long as the character holds the Mastery card.
+  // It can't be a level threshold — Mastery is chosen, not reached.
+  "core_subclass_wordsmith:mastery": {
+    feature: "Epic Poetry",
+    track: { id: "rally_die", label: "Rally Die", value: "d10" },
+  },
+  // Guardian, Unstoppable — "At level 1, your Unstoppable Die is a d4… At level 5, your
+  // Unstoppable Die increases to a d6."
+  //
+  // The SIZE of the die, which is permanent. What it currently reads while you're Unstoppable is
+  // a value the player tracks in play, and the sheet has no business claiming to know it — hence
+  // the note, and hence "d4" rather than "4".
+  "core_class_guardian:Unstoppable": {
+    track: {
+      id: "unstoppable_die",
+      label: "Unstoppable Die",
+      byLevel: { 1: "d4", 5: "d6" },
+      note: "The size of the die. It starts at 1 when you become Unstoppable.",
+    },
+  },
+
   // ===================== Ancestries =====================
   // Keyed by feature name, not ancestry id alone: with a mixed ancestry the player picks ONE
   // feature per ancestry, and it isn't always the first one. A mixed-ancestry Giant who took
@@ -444,9 +480,9 @@ export function collectEffects(ch, db) {
   // don't all do the same kind of thing. hopeFeature is included because it's a feature like any
   // other; it just happens to sit in a field of its own rather than in the array.
   //
-  // Nothing in the SRD needs an entry here (the one class rule the app applies, Combat Training's
-  // burden exemption, moves no stat and is answered by ignoresBurden below). It exists so a class
-  // whose feature DOES move a number can say so without a page learning its name.
+  // No SRD class feature moves a STAT — the two entries above declare dice, and the one class rule
+  // the app applies, Combat Training's burden exemption, is answered by ignoresBurden below. This
+  // exists so a class whose feature does move a number can say so without a page learning its name.
   const cls = (db?.classes || []).find((c) => c.id === ch.classId);
   for (const feature of [...(cls?.classFeatures || []), cls?.hopeFeature].filter(Boolean)) {
     const featureName = feature.name?.["en-US"];
