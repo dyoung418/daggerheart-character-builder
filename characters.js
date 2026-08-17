@@ -240,10 +240,18 @@ function renderHistoryGrid(ch) {
       // plain filled box rather than pretending to a level they can't know.
       const levels = markedAt[key]?.[tier] || [];
       const unattributed = Math.max(0, (ch.baseline?.slotsUsed?.[key]?.[tier] || 0));
+      // Struck through from the end of the row: a slot the rules took away, because you
+      // multiclassed or upgraded your subclass in this tier.
+      const crossedFrom = total - (option.crossedOut?.[tier] || 0);
       for (let i = 0; i < total; i++) {
         const box = document.createElement("span");
         box.className = "slot-box";
-        if (i < unattributed) {
+        if (i >= crossedFrom) {
+          box.classList.add("crossed");
+          box.title = option.crossedBy?.[tier] === "multiclass"
+            ? "Crossed out: this character multiclassed"
+            : "Crossed out: the subclass upgrade for this tier is taken";
+        } else if (i < unattributed) {
           box.classList.add("filled");
           box.title = "Marked before level history was recorded";
         } else if (i - unattributed < levels.length) {

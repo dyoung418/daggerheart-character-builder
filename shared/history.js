@@ -25,9 +25,19 @@ import { titleCase } from "./text.js";
 // The character as it stood at some level, for the purpose of asking shared/effects.js what
 // it was granting then. Rewinding the subclass tier and the card collection matters: a cap
 // check on level 4 must not count a Vitality card the character only picked up at level 7.
-// Everything else an effect can key on — ancestry, equipment — can't change on a level up.
+//
+// The multiclass is rewound for the same reason and is easier to get wrong: this spreads the
+// character, so without the override a second class taken at level 9 would be in hand while
+// validating level 5, and every card from its domain would read as legal three levels early.
+// Ancestry and equipment are the only things left that a level up can't change.
 export function characterAtLevel(ch, state) {
-  return { ...ch, subclassTier: state.subclassTier, domainCardIds: state.cardIds, domainVaultIds: [] };
+  return {
+    ...ch,
+    subclassTier: state.subclassTier,
+    multiclass: state.multiclass ?? null,
+    domainCardIds: state.cardIds,
+    domainVaultIds: [],
+  };
 }
 
 const TRAIT_KEYS = ["agility", "strength", "finesse", "instinct", "presence", "knowledge"];
@@ -53,6 +63,10 @@ function blankState(ch) {
     stressSlotsBonus: b.stressSlotsBonus,
     evasionBonus: b.evasionBonus,
     subclassTier: b.subclassTier,
+    // `?? null` is the whole back-compat story: captureBaseline runs once per character, so every
+    // save written before this existed has a baseline with no such key and nothing will ever add
+    // one. Reading it as undefined would round-trip through JSON as a missing field instead.
+    multiclass: b.multiclass ?? null,
     slotsUsed: JSON.parse(JSON.stringify(b.slotsUsed)),
     cardIds: baselineCardIds(ch),
     expBonus: {}, // experience id -> how many +1s it has picked up
@@ -95,6 +109,14 @@ function applyEntry(state, entry) {
         if (state.subclassTier !== "mastery") state.subclassTier = nextSubclassTier(state.subclassTier);
         break;
       case "proficiency": state.proficiency += 1; break;
+      // The earliest one wins, replay being level-ordered. A hand-edited file holding two keeps
+      // the first, so the cards taken between them stay legal; the later level is refused by the
+      // cross-out check rather than silently rewriting what the character had access to.
+      case "multiclass":
+        state.multiclass ||= {
+          classId: pick.classId, subclassId: pick.subclassId, domain: pick.domain, level: entry.level,
+        };
+        break;
       case "domainCard":
         if (pick.cardId) extraCardIds.push(pick.cardId);
         break;
@@ -149,6 +171,7 @@ export function recomputeCharacter(ch) {
   ch.stressSlotsBonus = state.stressSlotsBonus;
   ch.evasionBonus = state.evasionBonus;
   ch.subclassTier = state.subclassTier;
+  ch.multiclass = state.multiclass;
   ch.advancementSlotsUsed = state.slotsUsed;
   ch.domainCardIds = state.cardIds;
 
@@ -253,6 +276,14 @@ export function validateEntry(ch, entry, db) {
         errors.push(`${name}: a tier ${t} slot isn't available at level ${level}.`);
         continue;
       }
+      // Struck through by an option taken at an earlier level — you may upgrade your subclass or
+      // multiclass in a tier, never both, and you may multiclass once. Read off the rows, so no
+      // key is named here. A conflict WITHIN one level can't arise: the two together cost three of
+      // the level's two points, which the budget check above has already refused.
+      if (option.crossedOut?.[t] > 0) {
+        errors.push(`${name}: that tier ${t} slot is crossed out.`);
+        continue;
+      }
       const already = state.slotsUsed?.[key]?.[t] || 0;
       if (already + count > option.slots[t]) {
         errors.push(`${name}: no tier ${t} slot left to mark.`);
@@ -299,6 +330,37 @@ export function validateEntry(ch, entry, db) {
   for (const _ of picks.filter((p) => p.key === "subclass")) {
     if (state.subclassTier === "mastery") errors.push("The subclass is already at Mastery.");
     tierAfterPicks = nextSubclassTier(tierAfterPicks);
+  }
+
+  // Multiclass: the payload has to name a class this character could actually have taken. The
+  // "already multiclassed" case is caught by the cross-out above, so this is about the choice
+  // itself rather than about the slot.
+  for (const pick of picks.filter((p) => p.key === "multiclass")) {
+    const into = (db?.classes || []).find((c) => c.id === pick.classId);
+    if (!pick.classId || !pick.domain || !pick.subclassId) {
+      errors.push("Multiclass: choose a class, one of its domains, and a subclass.");
+      continue;
+    }
+    // Worth its own message rather than falling through the domain test: the wizard lets you
+    // change a character's class after the fact, which can turn a legal multiclass into this.
+    if (pick.classId === ch.classId) {
+      errors.push("Multiclass: that's the class this character already has.");
+      continue;
+    }
+    if (!into) {
+      errors.push("Multiclass: that class isn't in the catalogue any more.");
+      continue;
+    }
+    if (!(into.domains || []).includes(pick.domain)) {
+      errors.push(`Multiclass: ${titleCase(into.name)} has no ${titleCase(pick.domain)} domain.`);
+    } else if ((cls_?.domains || []).includes(pick.domain)) {
+      errors.push(`Multiclass: this character already has access to ${titleCase(pick.domain)}.`);
+    }
+    const sub = (db?.subclasses || []).find((s) => s.id === pick.subclassId);
+    if (!sub) errors.push("Multiclass: that subclass isn't in the catalogue any more.");
+    else if (sub.class !== String(into.name || "").toUpperCase()) {
+      errors.push(`Multiclass: that subclass isn't one of ${titleCase(into.name)}'s.`);
+    }
   }
 
   // Cards: owned so far, plus everything this level adds, so duplicates surface wherever
@@ -369,6 +431,7 @@ const SHORT_LABELS = {
   evasion: "+1 Evasion",
   subclass: "Subclass upgrade",
   proficiency: "+1 Proficiency",
+  multiclass: "Multiclass",
 };
 
 // A one-line summary of what was chosen at a level, for the history list.
@@ -383,6 +446,12 @@ export function describeLevelUp(ch, entry, db) {
       parts.push(`+1 to ${names.join(" & ")}`);
     } else if (pick.key === "domainCard") {
       parts.push(`${SHORT_LABELS.domainCard}: ${cardName(byId.get(pick.cardId))}`);
+    } else if (pick.key === "multiclass") {
+      // Named the way the extra card is: the choice is the interesting part, not the option.
+      const into = (db?.classes || []).find((c) => c.id === pick.classId);
+      const sub = (db?.subclasses || []).find((s) => s.id === pick.subclassId);
+      const detail = [sub?.name?.["en-US"], pick.domain && titleCase(pick.domain)].filter(Boolean).join(", ");
+      parts.push(`${SHORT_LABELS.multiclass}: ${into ? titleCase(into.name) : pick.classId}${detail ? ` (${detail})` : ""}`);
     } else {
       // A declared row's pick carries its own label, which is why this needs neither the content
       // nor the option table to stay readable — see the note on optionLabel in level-up.js.

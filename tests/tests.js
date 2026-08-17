@@ -30,6 +30,7 @@ const {
   extraCardLevelCap,
   isLevelAchievement,
   nextSubclassTier,
+  optionCost,
   optionFor,
   recordedOptionLabels,
   remainingSlots,
@@ -41,6 +42,7 @@ const {
   usedSlotsForOption,
 } = await import(`../shared/advancement.js${RUN}`);
 const {
+  characterAtLevel,
   describeLevelUp,
   experiencesAtLevel,
   recomputeCharacter,
@@ -240,9 +242,9 @@ eq("Proficiency: 2 joined slots, tiers 3 and 4 only", [2, 3, 4].map((t) => slots
 eq("tier 2 offers exactly the six options printed there",
   advancementOptions(3).map((o) => o.key).sort(),
   ["domainCard", "evasion", "experience", "hitPoint", "stress", "traits"]);
-eq("tier 3 adds subclass and proficiency",
+eq("tier 3 adds subclass, proficiency and multiclass",
   advancementOptions(5).map((o) => o.key).sort(),
-  ["domainCard", "evasion", "experience", "hitPoint", "proficiency", "stress", "subclass", "traits"]);
+  ["domainCard", "evasion", "experience", "hitPoint", "multiclass", "proficiency", "stress", "subclass", "traits"]);
 eq("and level 1 offers nothing at all", advancementOptions(1), []);
 eq("proficiency costs both of a level's picks", slotsPerPick("proficiency"), 2);
 
@@ -317,15 +319,15 @@ group("A class can add a row to the advancement table without the code knowing i
   ch.level = 5;
   const rows = rowsFor(ch);
   eq("the printed table comes first, in its printed order",
-    rows.slice(0, 8).map((o) => o.key),
-    ["traits", "hitPoint", "stress", "experience", "domainCard", "evasion", "subclass", "proficiency"]);
-  eq("the declared row is appended, never inserted", rows[8].key, GADGET_KEY);
-  eq("it carries the label the source wrote", rows[8].label, "Improve your gadget");
-  eq("and its own per-tier slots", rows[8].slots, { 2: 1, 3: 1, 4: 1 });
-  eq("it is marked as declared", rows[8].source, "declared");
+    rows.slice(0, 9).map((o) => o.key),
+    ["traits", "hitPoint", "stress", "experience", "domainCard", "evasion", "subclass", "proficiency", "multiclass"]);
+  eq("the declared row is appended, never inserted", rows[9].key, GADGET_KEY);
+  eq("it carries the label the source wrote", rows[9].label, "Improve your gadget");
+  eq("and its own per-tier slots", rows[9].slots, { 2: 1, 3: 1, 4: 1 });
+  eq("it is marked as declared", rows[9].source, "declared");
   // Not declarable, because the replay resolves picks with no content in hand.
-  eq("it costs one of the level's two points", rows[8].cost, 1);
-  eq("and marks exactly one slot", rows[8].slotsPerPick, 1);
+  eq("it costs one of the level's two points", rows[9].cost, 1);
+  eq("and marks exactly one slot", rows[9].slotsPerPick, 1);
   eq("no row appears twice", rows.length, new Set(rows.map((o) => o.key)).size);
 
   const later = { ...ADV_DB, effects: { [GADGET_KEY]: { advancementOption: { ...GADGET_OPTION, slots: { 3: 1 } } } } };
@@ -475,6 +477,129 @@ group("A track can climb by level, or be replaced outright");
   const master = { ...ch, subclassTier: "mastery" };
   eq("at mastery the subclass's value replaces it", trackOn(master, overridden).value, "d12");
   eq("and only one row is shown, not two", characterTracks(master, overridden).length, 1);
+}
+
+// A second class to multiclass into. Its subclass joins by NAME, the way data/ does it.
+const MC_DB = {
+  ...ADV_DB,
+  classes: [
+    ...ADV_DB.classes,
+    { id: "cls2", name: "SPARK", domains: ["ARCANA", "MIDNIGHT"], startingHitPoints: 5, startingEvasion: 10 },
+    // Shares one of the first class's domains, to prove the other one is still offered.
+    { id: "cls3", name: "EMBER", domains: ["VALOR", "MIDNIGHT"] },
+  ],
+  subclasses: [...ADV_DB.subclasses, { id: "sub2", name: { "en-US": "Spark Sub" }, class: "SPARK" }],
+};
+const MULTICLASS = { key: "multiclass", slotTier: 3, classId: "cls2", subclassId: "sub2", domain: "ARCANA" };
+const usedWith = (over) => ({ ...blankSlotsUsed(), ...over });
+const rowIn = (level, used, key) => optionFor(advancementOptions(level, { used }), key);
+
+group("Multiclass is a printed row that takes the whole level, from tier 3");
+{
+  eq("two slots in tiers 3 and 4, none in tier 2", [2, 3, 4].map((t) => slotsInTier("multiclass", t)), [0, 2, 2]);
+  eq("it costs both of a level's choice points", optionCost("multiclass"), 2);
+  eq("and marks both of its tier's boxes", slotsPerPick("multiclass"), 2);
+  check("so it isn't offered before level 5", !optionFor(advancementOptions(4), "multiclass"));
+  check("and is from level 5 on", !!optionFor(advancementOptions(5), "multiclass"));
+}
+
+group("Taking one of them crosses out the other, per tier");
+{
+  const mcAt3 = usedWith({ multiclass: { 2: 0, 3: 2, 4: 0 } });
+  eq("multiclassing crosses that tier's subclass slot", rowIn(9, mcAt3, "subclass").crossedOut, { 2: 0, 3: 1, 4: 0 });
+  eq("and every multiclass slot in the other tier", rowIn(9, mcAt3, "multiclass").crossedOut, { 2: 0, 3: 0, 4: 2 });
+  eq("the tier it was taken in is marked, not crossed", rowIn(9, mcAt3, "multiclass").crossedOut[3], 0);
+  eq("and says which option did it", rowIn(9, mcAt3, "subclass").crossedBy[3], "multiclass");
+  // The other direction, which is also why an already-spent subclass slot needs no rule of its
+  // own: spending it is what crossed out that tier's multiclass.
+  const subAt3 = usedWith({ subclass: { 2: 0, 3: 1, 4: 0 } });
+  eq("upgrading a subclass crosses that tier's multiclass", rowIn(9, subAt3, "multiclass").crossedOut, { 2: 0, 3: 2, 4: 0 });
+  check("but leaves the other tier's alone", rowIn(9, subAt3, "multiclass").crossedOut[4] === 0);
+  eq("a character who took neither has nothing crossed", rowIn(9, blankSlotsUsed(), "multiclass").crossedTotal, 0);
+  // Without this the level up screen believes there are points left for boxes nobody can mark.
+  eq("a crossed slot isn't a slot you have left",
+    remainingSlots(rowIn(9, mcAt3, "multiclass"), mcAt3), 0);
+  eq("nor on the row it crossed", remainingSlots(rowIn(9, mcAt3, "subclass"), mcAt3), 1);
+}
+
+group("A multiclass is recorded on the pick and derived by the replay");
+{
+  const fresh = newCharacter();
+  eq("a character who never took it reads null, not undefined", fresh.multiclass, null);
+
+  const ch = newCharacter();
+  ch.level = 4;
+  record(ch, 5, [MULTICLASS], "c2");
+  eq("the replay derives it, with the level it was taken at",
+    ch.multiclass, { classId: "cls2", subclassId: "sub2", domain: "ARCANA", level: 5 });
+  eq("both of the tier's boxes are marked", ch.advancementSlotsUsed.multiclass, { 2: 0, 3: 2, 4: 0 });
+  eq("it moves no stat", [ch.hitPointSlotsBonus, ch.stressSlotsBonus, ch.evasionBonus], [0, 0, 0]);
+  eq("and is credited with nothing", advancementCredits(ch).evasion, []);
+  eq("the history line names the class and what was chosen",
+    describeLevelUp(ch, ch.levelUps[0], MC_DB), ["Multiclass: Spark (Spark Sub, Arcana)"]);
+
+  // The rewind is the easy one to get wrong: characterAtLevel spreads the character, so without
+  // an override the class taken at 5 would be in hand while validating level 3.
+  eq("the character as they stood before it has no second class",
+    characterAtLevel(ch, stateAtLevel(ch, 5)).multiclass, null);
+  eq("and after it, does", characterAtLevel(ch, stateAtLevel(ch, 6)).multiclass.classId, "cls2");
+
+  ch.levelUps = [];
+  recomputeCharacter(ch);
+  eq("removing the level takes the second class away again", ch.multiclass, null);
+
+  // captureBaseline runs once per character, so every save written before this existed has a
+  // baseline with no such key and nothing will ever add one.
+  const legacy = newCharacter();
+  delete legacy.baseline.multiclass;
+  legacy.level = 3;
+  recomputeCharacter(legacy);
+  eq("a baseline saved before this field existed still replays", legacy.multiclass, null);
+
+  const twice = newCharacter();
+  twice.level = 4;
+  record(twice, 5, [MULTICLASS], "c2");
+  record(twice, 8, [{ ...MULTICLASS, slotTier: 4, classId: "cls3", domain: "MIDNIGHT" }], "c3");
+  eq("two recorded picks keep the earlier one, so nothing it allowed becomes illegal",
+    twice.multiclass.classId, "cls2");
+}
+
+group("What a multiclass pick has to say for itself");
+{
+  const ch = newCharacter();
+  ch.level = 4;
+  record(ch, 5, [MULTICLASS], "c2");
+  const at = (level, picks, card) => validateEntry(ch, entry(level, picks, card), MC_DB);
+  eq("a legal one is silent", validateEntry(ch, ch.levelUps[0], MC_DB), []);
+
+  has("a second multiclass is refused, its slots being crossed out",
+    at(8, [{ ...MULTICLASS, slotTier: 4 }], "c3"), "crossed out");
+  has("and so is a subclass upgrade in the tier it was taken in",
+    at(6, [{ key: "subclass", slotTier: 3 }, { key: "stress", slotTier: 2 }], "c3"), "crossed out");
+  check("but not one in the other tier",
+    !at(8, [{ key: "subclass", slotTier: 4 }, { key: "stress", slotTier: 2 }], "c3").some((e) => e.includes("crossed")));
+
+  const plain = newCharacter();
+  plain.level = 4;
+  const at5 = (pick) => validateEntry(plain, entry(5, [{ ...MULTICLASS, ...pick }], "c2"), MC_DB);
+  has("half a payload is refused", at5({ subclassId: null }), "choose a class");
+  has("your own class isn't an additional class", at5({ classId: "cls", subclassId: "sub" }), "already has");
+  has("a class that isn't in the catalogue", at5({ classId: "gone" }), "catalogue");
+  has("a domain that class hasn't got", at5({ domain: "VALOR" }), "no Valor domain");
+  has("a domain you already have", at5({ classId: "cls3", domain: "VALOR" }), "already has access to");
+  has("a subclass belonging to another class", at5({ subclassId: "sub" }), "isn't one of Spark's");
+}
+
+group("Being at Mastery doesn't stand in the way of multiclassing");
+{
+  // The subclass row is blocked at Mastery, but its SLOT is unused — so there's something to
+  // cross out, and multiclassing is exactly what a character with nowhere left to spend it does.
+  const ch = newCharacter();
+  ch.level = 4;
+  ch.baseline.subclassTier = "mastery";
+  ch.subclassTier = "mastery";
+  recomputeCharacter(ch);
+  eq("no complaint about the subclass", validateEntry(ch, entry(5, [MULTICLASS], "c2"), MC_DB), []);
 }
 
 group("Hit Point and Stress cap at 12");

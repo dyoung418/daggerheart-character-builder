@@ -678,6 +678,8 @@ h1, h2, h3, .btn-primary, .btn-ghost, .btn-small, .top-nav a {
 .slot-box.filled { background: var(--text-dim); border-color: var(--text-dim); cursor: default; }
 .slot-box.marking { background: var(--accent); border-color: var(--accent-bright); box-shadow: 0 0 0 1px rgba(217, 164, 65, 0.35); }
 .slot-box.blocked { opacity: 0.3; cursor: not-allowed; }
+/* Un segno di spunta cancellato: la regola ha tolto lo slot (multiclasse o carta di sottoclasse). */
+.slot-box.crossed { cursor: not-allowed; opacity: 0.55; border-style: dashed; background: linear-gradient(to top left, transparent calc(50% - 0.5px), var(--text-dim) calc(50% - 0.5px), var(--text-dim) calc(50% + 0.5px), transparent calc(50% + 0.5px)); }
 .slot-legend { margin-top: 0; }
 .sub-pick-heading { margin-bottom: 0.35rem; }
 

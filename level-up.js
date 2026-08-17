@@ -35,6 +35,7 @@ import { mountContentSettings } from "./shared/content-settings.js";
 import { visibleRecords } from "./shared/content-sources.js";
 import { renderEffectChoice } from "./shared/effect-choice.js";
 import { escapeHtml } from "./shared/escape.js";
+import { titleCase } from "./shared/text.js";
 
 const CHAR_STORAGE_KEY = "dh-characters-v1";
 const TRAIT_LABELS = { agility: "Agility", strength: "Strength", finesse: "Finesse", instinct: "Instinct", presence: "Presence", knowledge: "Knowledge" };
@@ -172,12 +173,20 @@ function stressAfterPicks() {
   return stressTotal(context.stressSlotsBonus + picksFor("stress").length, grantedSlots().stressSlots);
 }
 
-// Why a given slot can't be marked right now (null when it can). The three key tests below are
-// core rules about core rows, so they match the key exactly — a declared row is never one of them.
+// The two options that take a whole level, by the name a sentence wants to use. Core keys, like
+// the three tests below — a declared row is never one of these.
+const WHOLE_LEVEL_NAMES = { proficiency: "Proficiency", multiclass: "Multiclass" };
+
+// Why a given slot can't be marked right now (null when it can). The key tests below are core
+// rules about core rows, so they match the key exactly.
 function markBlockedReason(option, tier) {
   const key = option.key;
-  if (picksFor("proficiency").length > 0) return "Proficiency uses both picks for this level.";
-  if (key === "proficiency" && picks.length > 0) return "Proficiency needs both picks: clear the other one first.";
+  // Asked of the cost rather than of the key: Proficiency and Multiclass both take the whole
+  // level, and a literal here would let you mark one of each and then be turned away by the
+  // budget check with a message that doesn't explain why.
+  const wholeLevel = picks.find((p) => optionCost(p.key) === 2);
+  if (wholeLevel) return `${WHOLE_LEVEL_NAMES[wholeLevel.key]} uses both picks for this level.`;
+  if (option.cost === 2 && picks.length > 0) return `${WHOLE_LEVEL_NAMES[key]} needs both picks: clear the other one first.`;
   if (budgetSpent() + option.cost > 2) return "No choice points left this level.";
   if (slotsTakenInTier(key, tier) + option.slotsPerPick > option.slots[tier]) return "No slots left in this tier.";
   if (key === "subclass" && subclassTierAfterPicks() === "mastery") return "Subclass is already at Mastery.";
@@ -197,6 +206,12 @@ function addPick(option, slotTier) {
     traits: [],
     experienceIds: [],
     cardId: null,
+    // The multiclass payload: which class, which of its domains, which of its subclasses. Null
+    // until the picker below fills them in, and stepValidation won't let the level confirm until
+    // all three are set.
+    classId: null,
+    domain: null,
+    subclassId: null,
     optionLabel: option.source === "core" ? null : option.label,
   });
 }
@@ -330,7 +345,8 @@ function renderAdvancementGrid(main, newLevel) {
   const info = document.createElement("p");
   info.className = "hint";
   info.textContent = `Choice points used: ${spent}/2. You can mark any unmarked slot from your tier or below, ` +
-    `including two in the same row. Proficiency marks both of its slots and uses the whole level.`;
+    `including two in the same row. Proficiency and Multiclass each mark both of their slots and use ` +
+    `the whole level; per tier you may upgrade your subclass or multiclass, never both.`;
   main.appendChild(info);
 
   const maxTier = tierForLevel(newLevel);
@@ -363,7 +379,7 @@ function renderAdvancementGrid(main, newLevel) {
 
   const legend = document.createElement("p");
   legend.className = "hint slot-legend";
-  legend.textContent = "■ spent at an earlier level · ☒ marking now · □ available";
+  legend.textContent = "■ spent at an earlier level · ☒ marking now · □ available · ⊘ crossed out";
   main.appendChild(legend);
 }
 
@@ -388,6 +404,8 @@ function tierGroupCell(option, tier) {
   const alreadyUsed = context.slotsUsed?.[key]?.[tier] || 0;
   const markingNow = picksFor(key, tier).length * option.slotsPerPick;
   const blocked = markBlockedReason(option, tier);
+  // Struck through from the end of the row, so a box is never both marked and crossed.
+  const crossedFrom = total - (option.crossedOut?.[tier] || 0);
 
   for (let i = 0; i < total; i++) {
     const box = document.createElement("button");
@@ -397,6 +415,12 @@ function tierGroupCell(option, tier) {
       box.classList.add("filled");
       box.disabled = true;
       box.title = "Marked at an earlier level";
+    } else if (i >= crossedFrom) {
+      box.classList.add("crossed");
+      box.disabled = true;
+      box.title = option.crossedBy?.[tier] === "multiclass"
+        ? "Crossed out: this character multiclassed"
+        : "Crossed out: the subclass upgrade for this tier is taken";
     } else if (i < alreadyUsed + markingNow) {
       box.classList.add("marking");
       box.title = "Marking now — click to undo";
@@ -427,6 +451,7 @@ function renderSubPickers(main, cls, newLevel) {
     if (pick.key === "experience") renderExperienceSubPicker(main, pick, ordinal, newLevel);
     if (pick.key === "domainCard") renderExtraCardPicker(main, pick, index, ordinal, cls, newLevel);
     if (pick.key === "subclass") renderSubclassPreview(main);
+    if (pick.key === "multiclass") renderMulticlassPicker(main, pick);
   });
 }
 
@@ -500,6 +525,72 @@ function renderSubclassPreview(main) {
   }));
   preview.appendChild(tile);
   main.appendChild(preview);
+}
+
+// The one pick that asks three questions. Each answer narrows the next, and changing an earlier
+// one clears what it made impossible — picking a different class must not leave a domain and a
+// subclass from the one before it on the pick.
+function renderMulticlassPicker(main, pick) {
+  const own = selectedClass();
+  // Your own class is not an "additional class". Excluded here as well as refused by the
+  // validator, because the wizard can change a character's class after the fact.
+  const classes = visibleRecords(db.classes, content.disabled).filter((c) => c.id !== character.classId);
+
+  subHeading(main, "Multiclass: choose an additional class.");
+  const classRow = document.createElement("div");
+  classRow.className = "tile-grid";
+  for (const cls of classes) {
+    const tile = document.createElement("div");
+    tile.className = "card-tile mc-class-tile" + (pick.classId === cls.id ? " selected" : "");
+    tile.innerHTML = `<div class="card-tile-label">${escapeHtml(titleCase(cls.name))}</div>` +
+      `<div class="option-feature">${escapeHtml((cls.domains || []).map(titleCase).join(" / "))}</div>`;
+    tile.addEventListener("click", () => {
+      if (pick.classId !== cls.id) { pick.classId = cls.id; pick.domain = null; pick.subclassId = null; }
+      render();
+    });
+    classRow.appendChild(tile);
+  }
+  main.appendChild(classRow);
+  if (!pick.classId) return;
+
+  const into = db.classes.find((c) => c.id === pick.classId);
+  // "A domain you don't already have access to" — a class sharing one of yours offers the other.
+  const domains = (into?.domains || []).filter((d) => !(own?.domains || []).includes(d));
+  subHeading(main, domains.length
+    ? `Choose one of ${titleCase(into.name)}'s domains. Cards from it are chosen at half your level, rounded up.`
+    : `${titleCase(into.name)} has no domain this character doesn't already have.`);
+  const domainRow = document.createElement("div");
+  domainRow.className = "field-row";
+  for (const domain of domains) {
+    const label = document.createElement("label");
+    label.innerHTML = `<input type="radio" name="mc-domain" ${pick.domain === domain ? "checked" : ""}/> ${escapeHtml(titleCase(domain))}`;
+    label.querySelector("input").addEventListener("change", () => { pick.domain = domain; render(); });
+    domainRow.appendChild(label);
+  }
+  main.appendChild(domainRow);
+
+  // Subclasses join to classes by NAME, not by id — the one relational join in this app that
+  // isn't an id, and the same one the creation wizard makes.
+  const subs = visibleRecords(db.subclasses, content.disabled)
+    .filter((s) => s.class === String(into?.name || "").toUpperCase());
+  subHeading(main, "Take the foundation card from one of its subclasses. It never upgrades: only your own subclass ladders.");
+  const grid = document.createElement("div");
+  grid.className = "tile-grid";
+  for (const sub of subs) {
+    const tile = document.createElement("div");
+    tile.className = "card-tile" + (pick.subclassId === sub.id ? " selected" : "");
+    tile.appendChild(renderCardArt({
+      id: sub.id, name: `${sub.name["en-US"]} (${SUBCLASS_TIER_LABELS.foundation})`,
+      art: subclassCardArtPath(sub, "foundation"), type: "Subclass", features: sub.foundation?.features,
+    }));
+    const label = document.createElement("div");
+    label.className = "card-tile-label";
+    label.textContent = sub.name["en-US"];
+    tile.appendChild(label);
+    tile.addEventListener("click", () => { pick.subclassId = sub.id; render(); });
+    grid.appendChild(tile);
+  }
+  main.appendChild(grid);
 }
 
 // ---------- domain cards ----------
@@ -703,6 +794,7 @@ function stepValidation(newLevel) {
     if (pick.key === "traits" && pick.traits.length !== 2) return false;
     if (pick.key === "experience" && new Set(pick.experienceIds).size !== 2) return false;
     if (pick.key === "domainCard" && !pick.cardId) return false;
+    if (pick.key === "multiclass" && !(pick.classId && pick.domain && pick.subclassId)) return false;
   }
   // Taking the trait option twice needs four DIFFERENT unmarked traits.
   const allTraits = traitsPickedThisLevel();
@@ -732,6 +824,11 @@ function currentEntry(level) {
       if (p.key === "traits") entry.traits = [...p.traits];
       if (p.key === "experience") entry.experienceIds = [...p.experienceIds];
       if (p.key === "domainCard") entry.cardId = p.cardId;
+      if (p.key === "multiclass") {
+        entry.classId = p.classId;
+        entry.domain = p.domain;
+        entry.subclassId = p.subclassId;
+      }
       // Only ever set for a declared row, so every entry written before this existed — and every
       // one written since for a core row — serialises byte for byte as it always did.
       if (p.optionLabel) entry.optionLabel = p.optionLabel;
@@ -893,6 +990,9 @@ function loadPicksFrom(entry) {
     traits: [...(p.traits || [])],
     experienceIds: [...(p.experienceIds || [])],
     cardId: p.cardId || null,
+    classId: p.classId || null,
+    domain: p.domain || null,
+    subclassId: p.subclassId || null,
     optionLabel: p.optionLabel || null,
   }));
   mandatoryCardId = entry.mandatoryCardId || null;

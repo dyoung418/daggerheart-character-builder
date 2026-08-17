@@ -8,10 +8,9 @@
 // (it's the file allowed to know content) and hands them in, which is also why the dependency
 // runs that way: effects.js imports tierForLevel from here, so here can't import effects.js.
 //
-// Multiclassing is NOT implemented (deliberate scope cut: rare in practice, adds
-// disproportionate data/UI complexity for a personal-scale tool). When it lands it belongs in
-// the table below rather than in a declaration: it costs both of a level's points, and
-// optionCost/slotsPerPick answer by key alone because the replay has no content in hand.
+// Multiclassing is one of the printed rows below rather than something a source declares, for
+// the reason stated there: it costs both of a level's points, and optionCost/slotsPerPick answer
+// by key alone because the replay resolves a recorded pick with no content in hand.
 
 // NEW slots that unlock starting at each tier (cumulative, not replaced: at tier 3
 // you have tier 2's slots plus the new tier 3 ones, and so on).
@@ -24,6 +23,30 @@ export const TIER_SLOT_TABLE = {
   evasion: { 2: 1, 3: 1, 4: 1 },
   subclass: { 3: 1, 4: 1 },
   proficiency: { 3: 2, 4: 2 }, // requires marking both slots together: costs the entire level up's 2 "points"
+  // Drawn on the sheet exactly like Proficiency — two boxes inside a black box — and it costs the
+  // whole level for the same reason. Available from level 5, which is why it starts at tier 3.
+  multiclass: { 3: 2, 4: 2 },
+};
+
+// Options that cross each other out, and where. The sheet says it twice, once from each side:
+// "Take an upgraded subclass card. Then cross out the multiclass option for this tier", and
+// "Multiclass … then cross out an unused 'Take an upgraded subclass card' and the other multiclass
+// option on this sheet."
+//
+// So: per tier you may upgrade your subclass OR multiclass, never both; and multiclassing anywhere
+// crosses out every other multiclass slot, which is what makes it once per career. A tier whose
+// subclass slot is already spent needs no rule of its own — spending it is what crossed out that
+// tier's multiclass in the first place.
+//
+// Consequence worth knowing, and the designers': having multiclassed you can still upgrade a
+// subclass in the OTHER tier, taking whatever card is next — so Specialization is reachable and
+// Mastery never is.
+//
+// This lives here, beside optionCost, on the same footing: a cross-out is a rule about printed
+// rows, decided from the marked-slot counts alone. No content, no db.
+export const CROSS_OUTS = {
+  multiclass: [{ key: "subclass", scope: "tier" }, { key: "multiclass", scope: "otherTiers" }],
+  subclass: [{ key: "multiclass", scope: "tier" }],
 };
 
 // Tiers that have advancement slots at all (tier 1 is level 1: no level ups yet).
@@ -40,12 +63,17 @@ const ADVANCEMENT_LABELS = {
   evasion: "+1 permanent Evasion",
   subclass: "Upgrade subclass card (Foundation → Specialization → Mastery)",
   proficiency: "+1 Proficiency — uses both picks for this level",
+  multiclass: "Multiclass — a second class, one of its domains, and a foundation card",
 };
 
-// Cost in "choice points": every level up grants 2 points; a normal option costs 1,
-// Proficiency (and Multiclass, not implemented) costs 2 together.
+// The options that take the whole level: two of its two choice points, and both of that tier's
+// slots for the row. Answered by key alone, because the replay reads a recorded pick with no
+// content in hand — which is also why a source can't declare an option that costs two.
+const TWO_POINT_OPTIONS = new Set(["proficiency", "multiclass"]);
+
+// Cost in "choice points": every level up grants 2 points; a normal option costs 1.
 export function optionCost(key) {
-  return key === "proficiency" ? 2 : 1;
+  return TWO_POINT_OPTIONS.has(key) ? 2 : 1;
 }
 
 export function tierForLevel(level) {
@@ -89,9 +117,9 @@ export function slotsInTier(key, tier) {
   return TIER_SLOT_TABLE[key]?.[tier] || 0;
 }
 
-// Proficiency is the one option that marks both of its tier's slots at once.
+// Proficiency and Multiclass mark both of their tier's slots at once.
 export function slotsPerPick(key) {
-  return key === "proficiency" ? 2 : 1;
+  return TWO_POINT_OPTIONS.has(key) ? 2 : 1;
 }
 
 export function totalSlotsForOption(key, tier) {
@@ -116,8 +144,35 @@ export function usedSlotsForOption(slotsUsed, key) {
   return SLOT_TIERS.reduce((sum, tier) => sum + (perTier[tier] || 0), 0);
 }
 
+// Slots still free on a row: what it has, less what's been marked, less what's been struck through.
+// The crossed part matters beyond the grid — it's what stops the level up screen believing a
+// character has points left to spend on boxes nobody can ever mark.
 export function remainingSlots(option, slotsUsed) {
-  return option.total - usedSlotsForOption(slotsUsed, option.key);
+  return option.total - usedSlotsForOption(slotsUsed, option.key) - (option.crossedTotal ?? 0);
+}
+
+/**
+ * Which rows are struck through in which tiers, given the slots marked so far — `key -> tier ->
+ * the key that struck it out`.
+ *
+ * Derived, never stored. Remove the level that multiclassed and the mark goes with it, so the
+ * cross-out goes too; and because the level up screen builds its rows from the marks made plus
+ * the ones on screen, striking through happens the moment a box is clicked and unwinds the moment
+ * it's clicked again.
+ */
+export function crossedOutTiers(used) {
+  const crossed = {};
+  const strike = (key, tier, by) => ((crossed[key] ||= {})[tier] = by);
+  for (const [key, rules] of Object.entries(CROSS_OUTS)) {
+    for (const tier of SLOT_TIERS) {
+      if (!(used?.[key]?.[tier] > 0)) continue;
+      for (const rule of rules) {
+        if (rule.scope === "tier") strike(rule.key, tier, key);
+        else for (const other of SLOT_TIERS) if (other !== tier) strike(rule.key, other, key);
+      }
+    }
+  }
+  return crossed;
 }
 
 // The one option row that says what it gets you rather than just what it is: the extra card's
@@ -148,16 +203,24 @@ function coreLabel(key, tiers) {
 export function advancementOptions(level, { declared = [], used = null, labels = null } = {}) {
   const tiers = SLOT_TIERS.filter((tier) => tier <= tierForLevel(level));
   const rows = new Map();
+  const struck = crossedOutTiers(used);
 
   const push = (key, label, declaredSlots, source, extra = {}) => {
     // First writer wins, and the printed table is written first: a source can add a row, never
     // redefine one. (A card whose id is literally "traits" is cheap to rule out here.)
     if (rows.has(key)) return;
     const slots = {};
+    const crossedOut = {};
+    const crossedBy = {};
     for (const tier of SLOT_TIERS) {
       // A marked slot is drawn whatever the table now says. Same instinct as splitFlatSlotTotals:
       // keep an over-count rather than quietly hand back a slot somebody already spent.
       slots[tier] = Math.max(declaredSlots?.[tier] || 0, used?.[key]?.[tier] || 0);
+      // A cross-out takes whatever is left of the row in that tier — never a box already marked,
+      // which is what keeps used + crossed within the row and remainingSlots off negative numbers.
+      const by = struck[key]?.[tier] || null;
+      crossedOut[tier] = by ? Math.max(0, slots[tier] - (used?.[key]?.[tier] || 0)) : 0;
+      crossedBy[tier] = crossedOut[tier] > 0 ? by : null;
     }
     const total = tiers.reduce((sum, tier) => sum + slots[tier], 0);
     if (total <= 0) return; // nothing at this level: tier 1, or a row that starts higher up
@@ -166,6 +229,9 @@ export function advancementOptions(level, { declared = [], used = null, labels =
       label,
       slots,
       total,
+      crossedOut,
+      crossedBy,
+      crossedTotal: tiers.reduce((sum, tier) => sum + crossedOut[tier], 0),
       // Both answered by key, never declared — see the note at the top of this file.
       cost: optionCost(key),
       slotsPerPick: slotsPerPick(key),
@@ -257,6 +323,10 @@ function captureBaseline(ch) {
     stressSlotsBonus: ch.stressSlotsBonus,
     evasionBonus: ch.evasionBonus,
     subclassTier: ch.subclassTier,
+    // A character baselined above level 1 may already have a second class, and there are no
+    // recorded levels to replay it out of. Null on every character saved before this existed,
+    // which is exactly what it should read as.
+    multiclass: ch.multiclass ?? null,
     slotsUsed: JSON.parse(JSON.stringify(ch.advancementSlotsUsed)),
     domainCardIds: [...(ch.domainCardIds || [])],
   };
@@ -339,6 +409,9 @@ export function ensureLevelFields(ch) {
   if (ch.stressSlotsBonus === undefined) ch.stressSlotsBonus = 0;
   if (ch.evasionBonus === undefined) ch.evasionBonus = 0;
   if (!ch.subclassTier) ch.subclassTier = "foundation";
+  // Derived by the replay from the level that took it; null until then, and null forever for the
+  // characters this app has built so far.
+  if (ch.multiclass === undefined) ch.multiclass = null;
   if (!hasPerTierSlots(ch.advancementSlotsUsed)) ch.advancementSlotsUsed = splitFlatSlotTotals(ch.advancementSlotsUsed);
   if (!ch.domainVaultIds) ch.domainVaultIds = [];
   // Answers to the few features that say "choose": Clank's Purposeful Design, Vitality, Master
