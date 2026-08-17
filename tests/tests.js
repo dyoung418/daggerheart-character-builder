@@ -1082,6 +1082,38 @@ group("Equipment changes traits, Evasion, Armor Score and attacks");
   eq("but never on the trait itself", chan.traits.knowledge.total, -1);
 }
 
+// What a SOURCE can declare, as opposed to what the hand-written catalogue can hold. Every
+// record here is invented, the same way PROFILE_DB's is: the shapes are the point, and no
+// non-SRD content belongs in this repo. `effects` is the overlay a source's effects.json lands
+// on, so these entries take the JSON path rather than the EFFECTS one.
+const SRC_DB = {
+  ...FX_DB,
+  armors: [
+    ...FX_DB.armors,
+    {
+      id: "src_armor", name: { "en-US": "Sourced Mail" },
+      baseScore: 2, baseMajorThreshold: 5, baseSevereThreshold: 11,
+      features: [{ name: { "en-US": "Awkward" } }],
+    },
+  ],
+  effects: {
+    "armor:Awkward": { traits: { finesse: -1 } },
+  },
+};
+
+group("A source can declare a trait penalty in JSON");
+{
+  const ch = derivedStats(statChar({
+    equipment: { primaryWeaponId: "dagger", armorId: "src_armor" },
+  }), SRC_DB);
+  eq("the trait tile drops", ch.traits.finesse.total, -1);
+  eq("with the armour named in its breakdown",
+    ch.traits.finesse.parts.map((p) => p.label), ["Assigned at creation", "Sourced Mail (Awkward)"]);
+  // A Finesse weapon rolls the effective trait, so a penalty that stopped at the tile would
+  // leave the attack a point too high — the same path armor:Very Heavy's -1 Agility takes.
+  eq("and the attack roll drops with it", ch.primaryAttack.total, -1);
+}
+
 group("Choosing to wear nothing");
 {
   // The SRD's plain unarmored rule, reachable at last: Armor Score 0, Major threshold equal to
@@ -2599,6 +2631,17 @@ group("What a source may say its content does");
     validateEffectEntry({ evasion: "lots" }) !== null);
   check("a stat this app doesn't compute is refused",
     validateEffectEntry({ luck: 1 }) !== null);
+  eq("a trait penalty is an ordinary entry, the same shape armor:Very Heavy has",
+    validateEffectEntry({ traits: { finesse: -1 } }), null);
+  // data/ writes traits uppercase everywhere else (a weapon's "trait": "STRENGTH"), so this is
+  // the mistake an author actually makes — and effectiveTraits indexes with lowercase, so an
+  // accepted uppercase key would validate and then silently do nothing.
+  has("a trait named in the case the rest of data/ uses is refused, and told why",
+    [validateEffectEntry({ traits: { FINESSE: -1 } }) || ""], "lowercase");
+  check("a trait this app hasn't got is refused",
+    validateEffectEntry({ traits: { luck: 1 } }) !== null);
+  check("and a penalty that isn't a number",
+    validateEffectEntry({ traits: { finesse: "a lot" } }) !== null);
   // effect-choice.js renders anything that isn't "benefit" as an Experience picker rather than
   // failing, so an unrecognised kind would silently ask the wrong question.
   check("a choice of an unknown kind is refused rather than rendered as the wrong picker",
