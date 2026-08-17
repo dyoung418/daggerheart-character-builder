@@ -24,6 +24,7 @@ import {
   featureText,
   UNARMED,
   UNARMORED,
+  magicWeaponWarning,
   matchesSpellcast,
   spellcastBadge,
   weaponRowContent,
@@ -750,12 +751,15 @@ function renderEquipmentStep(panel) {
     noneLabel: "No secondary weapon",
   }));
 
-  const warning = burdenWarning(
-    db.weapons.find((w) => w.id === e.primaryWeaponId),
-    db.weapons.find((w) => w.id === e.secondaryWeaponId),
-    ignoresBurden(character, db),
-  );
-  if (warning) {
+  const primary = db.weapons.find((w) => w.id === e.primaryWeaponId);
+  const secondary = db.weapons.find((w) => w.id === e.secondaryWeaponId);
+  // Both weapon rules read as the same kind of advice, so they're printed the same way. Either
+  // can fire on its own, and a two-handed magic staff plus a shield fires both.
+  for (const warning of [
+    burdenWarning(primary, secondary, ignoresBurden(character, db)),
+    magicWeaponWarning(primary, secondary, spellcastTrait),
+  ]) {
+    if (!warning) continue;
     const p = document.createElement("p");
     p.className = "hint";
     p.textContent = `⚠ ${warning}`;

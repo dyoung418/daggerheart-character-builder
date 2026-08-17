@@ -32,7 +32,15 @@ import { derivedStats } from "./shared/derived-stats.js";
 import { statLine } from "./shared/stat-line.js";
 import { titleCase } from "./shared/text.js";
 import { ignoresBurden, unresolvedChoices } from "./shared/effects.js";
-import { UNARMED, UNARMORED, armorStats, burdenWarning, featureLine, weaponStats } from "./shared/gear.js";
+import {
+  UNARMED,
+  UNARMORED,
+  armorStats,
+  burdenWarning,
+  featureLine,
+  magicWeaponWarning,
+  weaponStats,
+} from "./shared/gear.js";
 import { buildCsv } from "./shared/csv-export.js";
 import { loadContent } from "./shared/content-load.js";
 import { mountContentSettings } from "./shared/content-settings.js";
@@ -705,8 +713,14 @@ function renderDetail() {
     gearLine("Armor", armor, armorStats(armor)) +
     gearLine("Potion", potion, "");
 
-  const warning = burdenWarning(primary, secondary, ignoresBurden(ch, db));
-  if (warning) {
+  for (const warning of [
+    burdenWarning(primary, secondary, ignoresBurden(ch, db)),
+    // The magic-weapon rule is about what you EQUIPPED, so a bare-handed character is judged on
+    // nothing rather than on the profile a class feature handed them: a class that grants you
+    // magic fists is the same class that says you may use them.
+    magicWeaponWarning(stats.unarmedProfile ? null : primary, secondary, sub?.spellcastTrait),
+  ]) {
+    if (!warning) continue;
     const p = document.createElement("p");
     p.className = "hint";
     p.textContent = `⚠ ${warning}`;

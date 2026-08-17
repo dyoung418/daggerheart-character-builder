@@ -77,6 +77,7 @@ const {
   featureLine,
   enumLabel,
   groupByTier,
+  magicWeaponWarning,
   weaponStats,
 } = await import(`../shared/gear.js${RUN}`);
 const {
@@ -906,6 +907,29 @@ group("Burden is advice, and the Warrior doesn't even get the advice");
     ignoresBurden({ classId: "core_class_warrior" }, { classes: [WARRIOR, GUARDIAN] }));
   check("and no other class does", !ignoresBurden({ classId: "cls" }, { classes: [WARRIOR, GUARDIAN] }));
   check("a page that didn't load classes doesn't throw", !ignoresBurden({ classId: "cls" }, {}));
+}
+
+group("A magic weapon in a non-caster's hands is advice too");
+{
+  const staff = { name: { "en-US": "Hallowed Axe" }, type: "PRIMARY_MAGIC", damage: { dice: "D10", type: "MAGICAL" } };
+  const sword = { name: { "en-US": "Broadsword" }, type: "PRIMARY_PHYSICAL", damage: { dice: "D8", type: "PHYSICAL" } };
+  const shield = { name: { "en-US": "Tower Shield" }, type: "SECONDARY", damage: { dice: "D4", type: "PHYSICAL" } };
+  // Hope and Fear has fourteen of these: magic damage on a weapon typed SECONDARY. A check
+  // written against `type` instead of `damage.type` passes every one of them through.
+  const wand = { name: { "en-US": "Hand Runes" }, type: "SECONDARY", damage: { dice: "D4", type: "MAGICAL" } };
+  const ghostblade = { name: { "en-US": "Ghostblade" }, type: "PRIMARY_MAGIC", damage: { dice: "D10", type: "PHYSICAL_OR_MAGICAL" } };
+
+  check("a Guardian carrying a magic weapon is flagged", !!magicWeaponWarning(staff, null, null));
+  check("and the warning names it", magicWeaponWarning(staff, null, null).startsWith("Hallowed Axe is a magic weapon"));
+  check("a caster is never flagged", magicWeaponWarning(staff, wand, "KNOWLEDGE") === null);
+  check("nor is a non-caster carrying steel", magicWeaponWarning(sword, shield, null) === null);
+  check("a magic SECONDARY counts, whatever its type says", !!magicWeaponWarning(sword, wand, null));
+  check("both hands full of magic reads as one sentence",
+    magicWeaponWarning(staff, wand, null).startsWith("Hallowed Axe and Hand Runes are magic weapons"));
+  // Otherworldly: "On a successful attack, you can deal physical or magic damage." You can
+  // simply never choose the second half.
+  check("the both-kinds weapon is left alone", magicWeaponWarning(ghostblade, null, null) === null);
+  check("and empty hands are not a crash", magicWeaponWarning(null, null, null) === null);
 }
 
 group("A picker opens the tiers worth reading");

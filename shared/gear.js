@@ -214,6 +214,31 @@ export function burdenWarning(primary, secondary, ignoresBurden) {
     `weapon. Nothing here stops you — it's your GM's call.`;
 }
 
+// The other equipment rule the wizard used to know nothing about: wielding a magic weapon takes
+// a Spellcast trait, and four of the eighteen subclasses — the Warrior's two and the Guardian's
+// two — have none. Advice rather than enforcement, for the same reason burden is: tables
+// houserule it, and this app's job is to say what the book says, not to hold the door shut.
+//
+// "Magic" is read off the DAMAGE, not off the weapon's `type`. Every PRIMARY_MAGIC weapon deals
+// MAGICAL damage, so on the SRD alone the two agree — but 14 of Hope and Fear's secondaries deal
+// magic damage while typed SECONDARY, and a check keyed on `type` would wave every one of them
+// past a Guardian.
+//
+// PHYSICAL_OR_MAGICAL is deliberately not flagged. There is one such weapon in the SRD (the
+// Ghostblade) and four more in Hope and Fear, and the feature that gives them the second kind
+// says you *choose* which you deal — so a character with no Spellcast trait can carry one and
+// only ever deal the physical half.
+export function magicWeaponWarning(primary, secondary, spellcastTrait) {
+  if (spellcastTrait) return null;
+  const magic = [primary, secondary].filter((w) => w?.damage?.type === "MAGICAL");
+  if (!magic.length) return null;
+  const names = magic.map((w) => w.name["en-US"]).join(" and ");
+  const plural = magic.length > 1;
+  return `${names} ${plural ? "are magic weapons" : "is a magic weapon"}, which normally ` +
+    `${plural ? "take" : "takes"} a Spellcast trait to wield — and this character has none. ` +
+    `Nothing here stops you — it's your GM's call.`;
+}
+
 // Gear grouped for a picker: every tier in the book, ascending, with the groups worth reading
 // already open. That's the character's own tier, plus whichever group holds what they're
 // carrying — a shield handed out at level 1 is still theirs at level 8, and a picker that hides
