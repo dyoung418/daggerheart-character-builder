@@ -283,8 +283,11 @@ function validateTraits(traits) {
   return null;
 }
 
+const SCOPES = new Set(["primary", "secondary", "character"]);
+
 const ALLOWED_EFFECT_KEYS = new Set([
   ...EFFECT_STAT_KEYS, "permanent", "feature", "excluded", "choice", "unarmedProfile", "traits",
+  "scope",
 ]);
 
 /** null if the entry is usable, else why not. */
@@ -303,6 +306,9 @@ export function validateEffectEntry(entry) {
   if ("feature" in entry && typeof entry.feature !== "string") return "feature must be a string";
   if ("excluded" in entry && !(Array.isArray(entry.excluded) && entry.excluded.every((x) => typeof x === "string"))) {
     return "excluded must be a list of sentences";
+  }
+  if ("scope" in entry && !SCOPES.has(entry.scope)) {
+    return `scope must be "primary", "secondary" or "character"`;
   }
   if ("traits" in entry) {
     const bad = validateTraits(entry.traits);

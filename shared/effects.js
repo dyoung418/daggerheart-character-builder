@@ -414,6 +414,10 @@ function tiersUpTo(tier) {
  *    on the level up screen and a new ancestry feature with one lands in the wizard, both
  *    without either page learning its name.
  *  - `scope` is "primary"/"secondary" for a weapon's own attack bonus, "character" otherwise.
+ *    It decides one thing only — which weapon an `attack` bonus lands on — because that's the
+ *    single stat derived-stats.js asks for by scope; a weapon's Evasion or Armor Score is
+ *    collected unscoped and applies to the character whatever this says. An entry may override
+ *    it, which is the only way a feature on one weapon can boost the other.
  *
  * @param {object} ch a character (already through ensureLevelFields)
  * @param {object} db whatever data the calling page loaded; sources whose data is missing are
@@ -422,8 +426,12 @@ function tiersUpTo(tier) {
  */
 export function collectEffects(ch, db) {
   const found = [];
+  // An entry may name its own scope, which is how a SECONDARY weapon says "+1 to attack rolls
+  // made with your primary weapon" — a real feature, and one that comes out backwards without
+  // this: declared on the off-hand, the bonus would land on the off-hand's own attacks, wrong in
+  // the player's favour. The slot the effect hangs off is only the default.
   const add = (hit, source, label, scope = "character") => {
-    if (hit) found.push({ key: hit.key, label, effect: hit.effect, source, scope });
+    if (hit) found.push({ key: hit.key, label, effect: hit.effect, source, scope: hit.effect.scope || scope });
   };
 
   // A class's own features read first, because they're the first thing a player chose. Keyed

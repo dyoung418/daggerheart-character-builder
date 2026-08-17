@@ -280,6 +280,10 @@ Specialization entries too.
 - **`excluded`** (list of sentences) — bonuses the thing grants that deliberately *aren't* counted.
   They show under "bonuses you have but that aren't counted above", which is how a player learns why
   a number didn't move.
+- **`scope`** — `"primary"`, `"secondary"` or `"character"`. Which weapon an `attack` bonus lands
+  on, and nothing else: everything a weapon grants besides `attack` applies to the character
+  whatever this says. Default is the slot the feature's weapon is in, so you only write it for
+  the feature that reaches across (below).
 - **`choice`** — when the player picks something (§7).
 - **`unarmedProfile`** — replaces the weapon a bare-handed character fights with (below).
 
@@ -314,6 +318,26 @@ The whole vocabulary after `equalTo`: the six traits (`agility`, `strength`, `fi
 - **`equalTo` is the whole value.** `{ "equalTo": "presence", "plus": 2 }` is refused rather than
   half-applied. If you need arithmetic, the bonus isn't declarative — write an `excluded` note.
 - `traits` values stay plain numbers; nothing scales a trait penalty.
+
+### A weapon that boosts the other hand
+
+An `attack` bonus applies to the weapon that grants it — that's `weapon:Reliable`, and it's the
+default because it's nearly always what the text means. A feature that says otherwise needs
+`scope`:
+
+```json
+"myhomebrew_weapon_hammer:Trusty": { "attack": 1, "scope": "primary" }
+```
+
+on a **secondary** weapon whose text reads "+1 to attack rolls made with your primary weapon".
+Leave `scope` out and the bonus lands on the off-hand's own attacks instead — wrong in the
+player's favour, and it looks entirely correct on the sheet, which is why the key exists.
+
+The breakdown still names the weapon that granted it, so the primary attack's "?" reads
+`Sourced Hammer (Trusty) +1` and the number is explained by the hand it didn't come from.
+
+A character fighting bare-handed still has a primary slot, so the bonus reaches their unarmed
+attack too.
 
 ### A better pair of fists
 

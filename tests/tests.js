@@ -1111,12 +1111,21 @@ const SRC_DB = {
       features: [{ name: { "en-US": "Gilded" } }, { name: { "en-US": "Resplendent" } }],
     },
   ],
+  weapons: [
+    ...FX_DB.weapons,
+    {
+      id: "src_offhand", name: { "en-US": "Sourced Hammer" },
+      trait: "STRENGTH", burden: "ONE_HANDED",
+      features: [{ name: { "en-US": "Steadfast" } }],
+    },
+  ],
   domainCards: [
     ...FX_DB.domainCards,
     { id: "src_card", name: { "en-US": "Sourced Card" }, domain: "VALOR", level: 1 },
   ],
   effects: {
     "armor:Awkward": { traits: { finesse: -1 } },
+    "src_offhand:Steadfast": { attack: 1, scope: "primary" },
     "src_robes:Ensorcelled": {
       majorThreshold: { equalTo: "spellcast" },
       severeThreshold: { equalTo: "spellcast" },
@@ -1166,6 +1175,26 @@ group("A source can declare a value the character's own stats decide");
   const card = derivedStats(statChar({ proficiency: 2, domainCardIds: ["src_card"] }), SRC_DB);
   eq("Proficiency scales a threshold", card.severeThreshold.total, 2 + 2);
   eq("and level scales Evasion", card.evasion.total, 9 + 1);
+}
+
+group("A weapon can boost the OTHER hand's attacks");
+{
+  // "+1 to attack rolls made with your primary weapon", on a secondary weapon. Without a declared
+  // scope this is the exact inversion of Reliable: the bonus would land on the off-hand's own
+  // attacks, which is wrong in the player's favour and looks right on the sheet.
+  const ch = derivedStats(statChar({
+    equipment: { primaryWeaponId: "dagger", secondaryWeaponId: "src_offhand" },
+  }), SRC_DB);
+  eq("the off-hand's bonus lands on the primary attack", ch.primaryAttack.total, 0 + 1);
+  eq("named as what granted it, so the breakdown explains an off-hand number in the main hand",
+    ch.primaryAttack.parts.map((p) => p.label), ["Finesse (Dagger)", "Sourced Hammer (Steadfast)"]);
+  eq("and not on the attacks of the weapon carrying it", ch.secondaryAttack.total, 2);
+
+  // The app's primary slot is the primary slot whether or not it holds a weapon.
+  const fists = derivedStats(statChar({
+    equipment: { primaryWeaponId: UNARMED, secondaryWeaponId: "src_offhand" },
+  }), SRC_DB);
+  eq("bare hands are in the primary slot too", fists.primaryAttack.display, "Strength +3 / Finesse +1");
 }
 
 group("Choosing to wear nothing");
@@ -2709,6 +2738,10 @@ group("What a source may say its content does");
   eq("a benefit option can scale too, since it's checked by the same code", validateEffectEntry({
     choice: { prompt: "Pick one", kind: "benefit", pick: 1, options: [{ id: "a", label: "A", armorScore: { equalTo: "strength" } }] },
   }), null);
+  eq("an entry can say which weapon its attack bonus lands on",
+    validateEffectEntry({ attack: 1, scope: "primary" }), null);
+  check("but not a slot this app hasn't got",
+    validateEffectEntry({ attack: 1, scope: "offhand" }) !== null);
   // effect-choice.js renders anything that isn't "benefit" as an Experience picker rather than
   // failing, so an unrecognised kind would silently ask the wrong question.
   check("a choice of an unknown kind is refused rather than rendered as the wrong picker",
