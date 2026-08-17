@@ -284,9 +284,9 @@ export function advancementOptionsFor(ch, db, { level = ch?.level, used = ch?.ad
   const tracks = characterTracks(ch, db, { level, used });
   return advancementOptions(level, {
     // A row that climbs a ladder says which rung it buys you — "Improve your gadget (d6 → d8)" —
-    // the same instinct as the extra card row printing its level caps. Appended here rather than
-    // in advancement.js, which is not allowed to know what a track is.
-    declared: declared.map((option) => ({ ...option, label: option.label + nextStepSuffix(option, tracks) })),
+    // the same instinct as the extra card row printing its level caps. A separate field, not part
+    // of the label, because the label is what a pick records and this is true only right now.
+    declared: declared.map((option) => ({ ...option, hint: nextStepSuffix(option, tracks) })),
     used,
     labels: recordedOptionLabels(ch),
   });

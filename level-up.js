@@ -353,7 +353,7 @@ function renderAdvancementGrid(main, newLevel) {
   for (const option of options) {
     const row = document.createElement("div");
     row.className = "adv-row";
-    row.appendChild(labelCell(option.label));
+    row.appendChild(labelCell(option.label + (option.hint || "")));
     for (const tier of tiers) {
       row.appendChild(tierGroupCell(option, tier));
     }

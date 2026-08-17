@@ -436,9 +436,13 @@ group("A track counts how many times its option was taken");
   const atTwo = newCharacter();
   atTwo.level = 2;
   eq("the option's row says which rung it buys",
-    optionFor(advancementOptionsFor(atTwo, TRACK_DB), GADGET_KEY).label, "Improve your gadget (d4 → d6)");
+    optionFor(advancementOptionsFor(atTwo, TRACK_DB), GADGET_KEY).hint, " (d4 → d6)");
   eq("and follows the marks already made",
-    optionFor(advancementOptionsFor(ch, TRACK_DB), GADGET_KEY).label, "Improve your gadget (d8 → d10)");
+    optionFor(advancementOptionsFor(ch, TRACK_DB), GADGET_KEY).hint, " (d8 → d10)");
+  // Display only. A pick records the label, and a transition is true at the moment it's shown —
+  // baked into the label it would read as a claim about a step that may since have moved.
+  eq("but the label itself stays the sentence the source wrote",
+    optionFor(advancementOptionsFor(atTwo, TRACK_DB), GADGET_KEY).label, "Improve your gadget");
 }
 
 group("A track can climb by level, or be replaced outright");

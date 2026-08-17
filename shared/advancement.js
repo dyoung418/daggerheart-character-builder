@@ -175,7 +175,11 @@ export function advancementOptions(level, { declared = [], used = null, labels =
   };
 
   for (const key of Object.keys(TIER_SLOT_TABLE)) push(key, coreLabel(key, tiers), TIER_SLOT_TABLE[key], "core");
-  for (const row of declared) push(row.key, row.label, row.slots, "declared", { advances: row.advances || null });
+  // `hint` is display-only and deliberately NOT part of the label: the label is what a pick
+  // records, and a transition is true at the moment it's shown, not forever.
+  for (const row of declared) {
+    push(row.key, row.label, row.slots, "declared", { advances: row.advances || null, hint: row.hint || "" });
+  }
   for (const key of Object.keys(used || {})) push(key, labels?.[key] || key, null, "orphan");
 
   return [...rows.values()];
