@@ -54,6 +54,7 @@ const {
   TRAIT_KEYS,
   UNARMED_PROFILE,
   advancementOptionsFor,
+  characterTracks,
   derivedStats,
   effectBonuses,
   effectExperienceBonuses,
@@ -303,6 +304,7 @@ const ADV_DB = {
   domainCards: [
     { id: "c1", level: 1, domain: "VALOR", name: { "en-US": "A Card" } },
     { id: "c2", level: 1, domain: "VALOR", name: { "en-US": "Another Card" } },
+    { id: "c3", level: 1, domain: "VALOR", name: { "en-US": "A Third Card" } },
   ],
   effects: { [GADGET_KEY]: { advancementOption: GADGET_OPTION } },
 };
@@ -381,6 +383,94 @@ group("A slot stays marked when whatever declared it has gone");
   const shrunk = { ...ADV_DB, effects: { [GADGET_KEY]: { advancementOption: { ...GADGET_OPTION, slots: { 3: 1 } } } } };
   eq("a shrunk declaration keeps the marks it already had",
     gadgetRow(ch, shrunk).slots, { 2: 1, 3: 1, 4: 0 });
+}
+
+// A ladder climbed by taking the option above, and one climbed by levelling. Both print a string
+// the source wrote; nothing here knows that d8 beats d6.
+const GADGET_STEPS = ["d4", "d6", "d8", "d10"];
+const TRACK_DB = {
+  ...ADV_DB,
+  effects: {
+    [GADGET_KEY]: {
+      track: { id: "gadget_die", label: "Gadget Die", steps: GADGET_STEPS },
+      advancementOption: { ...GADGET_OPTION, advances: "gadget_die" },
+    },
+  },
+};
+const trackOn = (ch, db = TRACK_DB) => characterTracks(ch, db)[0];
+
+group("A track counts how many times its option was taken");
+{
+  const fresh = newCharacter();
+  eq("before anything is spent, it reads where it starts", trackOn(fresh).value, "d4");
+  eq("and says what's next", trackOn(fresh).next, "d6");
+
+  const ch = newCharacter();
+  record(ch, 2, [{ key: GADGET_KEY, slotTier: 2 }, { key: "stress", slotTier: 2 }], "c2");
+  record(ch, 3, [{ key: GADGET_KEY, slotTier: 3 }, { key: "stress", slotTier: 2 }], "c3");
+  eq("one rung per mark", trackOn(ch).value, "d8");
+  eq("the breakdown attributes each to its level",
+    trackOn(ch).parts.map((p) => `${p.label} ${p.value}`),
+    ["Where it starts d4", "Level 2 advancement d6", "Level 3 advancement d8"]);
+  // The popover prints a Total row only for a stat that has one, and a die isn't a sum.
+  eq("and carries no total", trackOn(ch).total, undefined);
+
+  // No levelUps at all: the count comes off the slots, not the replay, so an imported character
+  // baselined above level 1 still reads right.
+  const imported = newCharacter();
+  imported.level = 8;
+  imported.baselineLevel = 8;
+  imported.advancementSlotsUsed[GADGET_KEY] = { 2: 1, 3: 1, 4: 0 };
+  eq("a character with no recorded levels still reads its rung", trackOn(imported).value, "d8");
+  eq("with the unattributed marks leading, rather than inventing a level for them",
+    trackOn(imported).parts.map((p) => p.label),
+    ["Where it starts", "An earlier advancement", "An earlier advancement"]);
+
+  const over = newCharacter();
+  over.advancementSlotsUsed[GADGET_KEY] = { 2: 1, 3: 1, 4: 3 };
+  eq("more marks than rungs stops at the last one", trackOn(over).value, "d10");
+  eq("and says so", trackOn(over).capped, true);
+  eq("with nothing beyond it", trackOn(over).next, null);
+
+  // The row's label says what the box actually buys, the way the extra card row prints its caps.
+  const atTwo = newCharacter();
+  atTwo.level = 2;
+  eq("the option's row says which rung it buys",
+    optionFor(advancementOptionsFor(atTwo, TRACK_DB), GADGET_KEY).label, "Improve your gadget (d4 → d6)");
+  eq("and follows the marks already made",
+    optionFor(advancementOptionsFor(ch, TRACK_DB), GADGET_KEY).label, "Improve your gadget (d8 → d10)");
+}
+
+group("A track can climb by level, or be replaced outright");
+{
+  const byLevelDb = {
+    ...ADV_DB,
+    effects: { [GADGET_KEY]: { track: { id: "gadget_die", label: "Gadget Die", byLevel: { 1: "d6", 5: "d8" } } } },
+  };
+  const ch = newCharacter();
+  ch.level = 4;
+  eq("below the threshold it reads the lower rung", trackOn(ch, byLevelDb).value, "d6");
+  has("and says what's coming", [trackOn(ch, byLevelDb).note], "level 5");
+  ch.level = 5;
+  eq("at the threshold it steps up", trackOn(ch, byLevelDb).value, "d8");
+  eq("the breakdown shows only the rungs actually reached",
+    trackOn(ch, byLevelDb).parts.map((p) => p.label), ["Where it starts", "Level 5"]);
+  eq("and there's nothing further to promise", trackOn(ch, byLevelDb).note, null);
+
+  // A subclass revising its class's die. The override wins because collectEffects reads subclass
+  // tiers after class features — no precedence rule of its own.
+  const overridden = {
+    ...byLevelDb,
+    subclasses: [{ id: "sub", name: { "en-US": "S" }, class: "TINKER", foundation: {}, specialization: {}, mastery: {} }],
+    effects: {
+      ...byLevelDb.effects,
+      "sub:mastery": { track: { id: "gadget_die", label: "Gadget Die", value: "d12" } },
+    },
+  };
+  eq("at foundation the class's ladder stands", trackOn(ch, overridden).value, "d8");
+  const master = { ...ch, subclassTier: "mastery" };
+  eq("at mastery the subclass's value replaces it", trackOn(master, overridden).value, "d12");
+  eq("and only one row is shown, not two", characterTracks(master, overridden).length, 1);
 }
 
 group("Hit Point and Stress cap at 12");
@@ -2903,6 +2993,35 @@ group("What a source may say its content does");
     validateEffectEntry({ advancementOption: { label: "L", slots: { 2: 0.5 } } }) !== null);
   check("and a key the format hasn't got",
     validateEffectEntry({ advancementOption: { label: "L", slots: { 2: 1 }, cost: 2 } }) !== null);
+
+  eq("a die a class rolls can say what its rungs are",
+    validateEffectEntry({ track: { id: "d", label: "A Die", steps: ["d4", "d6"] } }), null);
+  eq("or which level each rung arrives at",
+    validateEffectEntry({ track: { id: "d", label: "A Die", byLevel: { 1: "d6", 5: "d8" } } }), null);
+  eq("or simply what it is now, which is how a subclass revises its class's die",
+    validateEffectEntry({ track: { id: "d", label: "A Die", value: "d10" } }), null);
+  // Two forms answer the same question, and the resolver would silently use whichever it checked
+  // first — so an entry carrying both is refused rather than half-read.
+  has("two forms at once are refused, and both named",
+    [validateEffectEntry({ track: { id: "d", label: "A Die", steps: ["d4", "d6"], value: "d10" } }) || ""], "steps and value");
+  check("and none at all", validateEffectEntry({ track: { id: "d", label: "A Die" } }) !== null);
+  check("a ladder of one rung isn't a ladder",
+    validateEffectEntry({ track: { id: "d", label: "A Die", steps: ["d4"] } }) !== null);
+  check("a rung that isn't text is refused",
+    validateEffectEntry({ track: { id: "d", label: "A Die", steps: ["d4", 6] } }) !== null);
+  check("so is a byLevel key that isn't a level",
+    validateEffectEntry({ track: { id: "d", label: "A Die", byLevel: { tier2: "d6" } } }) !== null);
+  check("and a track with no id, which nothing could then advance",
+    validateEffectEntry({ track: { label: "A Die", value: "d6" } }) !== null);
+
+  // Kept, not dropped — the option still marks its slot — but the mismatch is named, because a
+  // typo here means a row that quietly climbs nothing.
+  const dangling = mergeSources([
+    source("homebrew", {}, { hb_feature: { advancementOption: { label: "L", slots: { 2: 1 }, advances: "nope" } } }),
+  ]);
+  has("an option advancing a track nothing declares is reported",
+    dangling.report.effectIssues.map((i) => i.reason), "nope");
+  check("while the entry itself is kept", !!dangling.effects.hb_feature);
 
   const { effects, report } = mergeSources([
     source("homebrew", { }, { hb_card: { evasion: 1 }, hb_bad: { when: true } }),

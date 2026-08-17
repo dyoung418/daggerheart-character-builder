@@ -640,6 +640,12 @@ function renderDetail() {
   if (stats.spellcast) {
     statsBox2.appendChild(statLine("Spellcast", stats.spellcast.display, stats.spellcast));
   }
+  // A die a class rolls — a Rally Die, an Unstoppable Die. A string rather than a number, which
+  // statLine and the popover both take unchanged: signed() leaves anything non-numeric alone, and
+  // the Total row is skipped for a value that isn't a sum, exactly as it is for Spellcast.
+  for (const track of stats.tracks || []) {
+    statsBox2.appendChild(statLine(track.label, track.value, track));
+  }
   container.appendChild(statsBox2);
 
   renderStatNotes(container, ch, stats);

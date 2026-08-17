@@ -177,6 +177,17 @@ function renderDefenses(s) {
     if (s.spellcast.note) box.appendChild(el("p", "tick-note", s.spellcast.note));
   }
 
+  // Beside Spellcast for the same reason: "what die do I roll?" is a question a player asks every
+  // session, and the answer was buried in the feature text on page 2 — or nowhere, for a source
+  // whose cards this browser can't draw.
+  for (const track of s.tracks || []) {
+    const row = el("div", "spellcast-row");
+    row.appendChild(el("span", "spellcast-label", track.label));
+    row.appendChild(el("strong", null, track.display));
+    box.appendChild(row);
+    if (track.note) box.appendChild(el("p", "tick-note", track.note));
+  }
+
   box.appendChild(tickRow("HP", s.hitPoints, s.hitPointsNote));
   box.appendChild(tickRow("Stress", s.stress, s.stressNote));
   box.appendChild(tickRow("Hope", s.hopeSlots, `start with ${s.hopeStart}`));

@@ -297,6 +297,49 @@ const SCOPES = new Set(["primary", "secondary", "character"]);
 // Not declarable, deliberately: how many of the level's two choice points it costs, and how many
 // slots one pick marks. Both are answered by key alone (shared/advancement.js), because the level
 // replay resolves picks with no content in hand. A declared row always costs one and marks one.
+// A named value with a ladder, printed on the sheet: a Rally Die, an Unstoppable Die, a Combo
+// Die. Exactly one of the three index forms, because they answer the same question three ways and
+// an entry carrying two would silently use whichever the resolver checked first:
+//
+//   steps    the rungs, climbed by taking an advancementOption that `advances` this id
+//   byLevel  a rung per level threshold, climbed by levelling
+//   value    fixed, while the feature declaring it is on the sheet (a subclass revising a class)
+//
+// The rungs are strings this app never interprets. It counts, and prints what the source wrote.
+function validateTrack(track) {
+  if (!track || typeof track !== "object" || Array.isArray(track)) return "track must be an object";
+  for (const key of Object.keys(track)) {
+    if (!["id", "label", "steps", "byLevel", "value", "note"].includes(key)) return `track: unknown key: ${key}`;
+  }
+  if (typeof track.id !== "string" || !track.id.trim()) return "track: missing id";
+  if (typeof track.label !== "string" || !track.label.trim()) return "track: missing label";
+  if ("note" in track && typeof track.note !== "string") return "track: note must be a sentence";
+
+  const forms = ["steps", "byLevel", "value"].filter((form) => form in track);
+  if (forms.length !== 1) {
+    return forms.length === 0
+      ? "track: needs one of steps, byLevel or value"
+      : `track: ${forms.join(" and ")} both say what the value is — keep one`;
+  }
+  if ("value" in track) {
+    return typeof track.value === "string" && track.value ? null : "track: value must be text";
+  }
+  if ("steps" in track) {
+    if (!Array.isArray(track.steps) || track.steps.length < 2) return "track: steps must list at least two rungs";
+    if (track.steps.some((step) => typeof step !== "string" || !step)) return "track: every step must be text";
+    return null;
+  }
+  const byLevel = track.byLevel;
+  if (!byLevel || typeof byLevel !== "object" || Array.isArray(byLevel)) return "track: byLevel must be an object";
+  const levels = Object.keys(byLevel);
+  if (levels.length === 0) return "track: byLevel must name at least one level";
+  for (const level of levels) {
+    if (!Number.isInteger(Number(level)) || Number(level) < 1) return `track: "${level}" isn't a level`;
+    if (typeof byLevel[level] !== "string" || !byLevel[level]) return `track: level ${level} must be text`;
+  }
+  return null;
+}
+
 const SLOT_TIER_SET = new Set(SLOT_TIERS);
 
 function validateAdvancementOption(option) {
@@ -324,7 +367,7 @@ function validateAdvancementOption(option) {
 
 const ALLOWED_EFFECT_KEYS = new Set([
   ...EFFECT_STAT_KEYS, "permanent", "feature", "excluded", "choice", "unarmedProfile", "traits",
-  "scope", "advancementOption",
+  "scope", "advancementOption", "track",
 ]);
 
 /** null if the entry is usable, else why not. */
@@ -359,6 +402,10 @@ export function validateEffectEntry(entry) {
     const bad = validateAdvancementOption(entry.advancementOption);
     if (bad) return bad;
   }
+  if ("track" in entry) {
+    const bad = validateTrack(entry.track);
+    if (bad) return bad;
+  }
   if ("choice" in entry) return validateChoice(entry.choice);
   return null;
 }
@@ -381,6 +428,7 @@ const nameKeyFor = (kind, record) => (kind === "classes" ? String(record.name).t
 export function mergeSources(sources) {
   const db = {};
   const effects = {};
+  const declaredBy = new Map(); // effects key -> the source that last wrote it, for the report
   const report = { sources: [], collisions: [], effectIssues: [] };
 
   for (const key of Object.values(CONTENT_FILES)) db[key] = [];
@@ -438,6 +486,22 @@ export function mergeSources(sources) {
         continue;
       }
       effects[key] = value;
+      declaredBy.set(key, source.name);
+    }
+  }
+
+  // An advancement option that climbs a track nothing declares. Checked here rather than in
+  // validateEffectEntry because the track may be declared by another entry, or another source
+  // entirely, and this is the one place holding all of them. The option still works — it marks
+  // its slot — so the entry is kept and the mismatch is only reported.
+  const trackIds = new Set(Object.values(effects).map((e) => e.track?.id).filter(Boolean));
+  for (const [key, value] of Object.entries(effects)) {
+    const advances = value.advancementOption?.advances;
+    if (advances && !trackIds.has(advances)) {
+      report.effectIssues.push({
+        source: declaredBy.get(key) || "", key,
+        reason: `advancementOption: nothing declares a track called "${advances}"`,
+      });
     }
   }
 

@@ -235,6 +235,11 @@ export function deriveSheet(character, db) {
       ? { display: stats.spellcast.display, note: stats.spellcast.note }
       : null,
 
+    // The dice a class rolls, which the printed sheet had no way to state: the Bard's Rally Die
+    // and the Guardian's Unstoppable Die were prose inside a feature, and the feature text is on
+    // page 2. Display-only, like everything else here — there's no "?" to open on paper.
+    tracks: (stats.tracks || []).map((t) => ({ label: t.label, display: t.value, note: t.note })),
+
     loadout,
     hopeFeature: cls ? features([cls.hopeFeature])[0] : null,
     classFeatures: features(cls?.classFeatures),

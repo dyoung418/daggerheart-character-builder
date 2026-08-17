@@ -268,6 +268,15 @@ export const CSV_COLUMNS = [
   },
   { header: "Spellcast Trait", value: (r) => r.stats.spellcast?.display ?? "" },
 
+  // The dice a class rolls, "Rally Die: d8". One column rather than a name and a value, because a
+  // character can hold more than one and the header is shared by the whole party — the same
+  // reason Experiences is one column. Nothing downstream can derive these: the ladder is in the
+  // game data, and the rung is in the character's advancement history.
+  {
+    header: "Class Tracks",
+    value: (r) => (r.stats.tracks || []).map((t) => `${t.label}: ${t.value}`).join("; "),
+  },
+
   ...weaponColumns("primary", "Primary"),
   ...weaponColumns("secondary", "Secondary"),
 

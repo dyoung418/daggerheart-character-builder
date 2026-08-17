@@ -20,12 +20,14 @@ import {
   advancementOptions,
   damageThresholds,
   recordedOptionLabels,
+  usedSlotsForOption,
 } from "./advancement.js";
 import {
   EFFECT_STAT_KEYS,
   TRAIT_KEYS,
   collectEffects,
   declaredAdvancementOptions,
+  declaredTracks,
   effectValue,
   loadoutDomainCounts,
 } from "./effects.js";
@@ -278,11 +280,97 @@ export function effectExperienceBonuses(ch, db) {
  * defaults ask about the character as they stand.
  */
 export function advancementOptionsFor(ch, db, { level = ch?.level, used = ch?.advancementSlotsUsed } = {}) {
+  const declared = declaredAdvancementOptions(ch, db);
+  const tracks = characterTracks(ch, db, { level, used });
   return advancementOptions(level, {
-    declared: declaredAdvancementOptions(ch, db),
+    // A row that climbs a ladder says which rung it buys you — "Improve your gadget (d6 → d8)" —
+    // the same instinct as the extra card row printing its level caps. Appended here rather than
+    // in advancement.js, which is not allowed to know what a track is.
+    declared: declared.map((option) => ({ ...option, label: option.label + nextStepSuffix(option, tracks) })),
     used,
     labels: recordedOptionLabels(ch),
   });
+}
+
+function nextStepSuffix(option, tracks) {
+  const track = tracks.find((t) => t.id === option.advances);
+  if (track?.form !== "steps" || track.next == null || track.next === track.value) return "";
+  return ` (${track.value} → ${track.next})`;
+}
+
+/**
+ * Every track this character has, resolved to the rung they're on. Empty for most characters.
+ *
+ * `used` and `level` are the two things a rung can depend on, and both are passed in so the level
+ * up screen can ask what the value was — or is about to become — at the level being edited.
+ */
+export function characterTracks(ch, db, { level = ch?.level, used = ch?.advancementSlotsUsed } = {}) {
+  const tracks = declaredTracks(ch, db);
+  if (tracks.length === 0) return [];
+  const options = declaredAdvancementOptions(ch, db);
+  return tracks.map((track) => resolveTrack(track, ch, { level, used, options }));
+}
+
+// The three forms a ladder can take, and where each gets its rung from. Exactly one is present:
+// content-sources.js refuses an entry carrying two, or none.
+function resolveTrack(track, ch, { level, used, options }) {
+  const base = { id: track.id, label: track.label, note: track.note || null, capped: false };
+
+  // Fixed while the declaring feature is on the sheet. This is how a subclass says "your die is
+  // a d10 now" — the condition is that the feature is there at all, which collectEffects has
+  // already answered by handing this over.
+  if (track.value != null) {
+    return { ...base, form: "value", value: track.value, next: null, parts: [{ label: track.from, value: track.value }] };
+  }
+
+  if (track.byLevel) {
+    const rungs = Object.keys(track.byLevel).map(Number).filter((n) => Number.isFinite(n)).sort((a, b) => a - b);
+    const reached = rungs.filter((at) => at <= (level ?? 1));
+    const at = reached.length ? reached[reached.length - 1] : rungs[0];
+    const ahead = rungs.find((n) => n > (level ?? 1));
+    return {
+      ...base,
+      form: "byLevel",
+      value: track.byLevel[at],
+      next: ahead != null ? track.byLevel[ahead] : null,
+      // Only the rungs actually reached: a breakdown is what the value IS made of, and the note
+      // below is where what's coming belongs.
+      parts: reached.map((n) => ({ label: n <= 1 ? "Where it starts" : `Level ${n}`, value: track.byLevel[n] })),
+      note: track.note || (ahead != null ? `Increases to ${track.byLevel[ahead]} at level ${ahead}.` : null),
+    };
+  }
+
+  // Climbed by taking an advancement option. Counted off the slots marked rather than replayed,
+  // which is what lets a character imported at level 8 with no recorded levels read correctly.
+  const steps = track.steps || [];
+  const keys = options.filter((option) => option.advances === track.id).map((option) => option.key);
+  const taken = keys.reduce((sum, key) => sum + usedSlotsForOption(used, key), 0);
+  const index = Math.min(taken, steps.length - 1);
+  const levels = [];
+  for (const entry of ch?.levelUps || []) {
+    for (const pick of entry.picks || []) if (keys.includes(pick.key)) levels.push(entry.level);
+  }
+  levels.sort((a, b) => a - b);
+  const parts = [{ label: "Where it starts", value: steps[0] }];
+  // Unattributed marks lead, the way advancementParts does it: a character baselined above level 1
+  // carries steps from levels nobody wrote down, and inventing a level for them would be a lie.
+  const unattributed = Math.max(0, taken - levels.length);
+  for (let i = 0; i < unattributed && i + 1 < steps.length; i++) {
+    parts.push({ label: "An earlier advancement", value: steps[Math.min(i + 1, steps.length - 1)] });
+  }
+  levels.forEach((at, i) => {
+    const rung = Math.min(unattributed + i + 1, steps.length - 1);
+    parts.push({ label: `Level ${at} advancement`, value: steps[rung] });
+  });
+  return {
+    ...base,
+    form: "steps",
+    value: steps[index],
+    next: index + 1 < steps.length ? steps[index + 1] : null,
+    parts,
+    // Taken more times than the source wrote rungs for. Nothing is invented; the last rung stands.
+    capped: taken > index,
+  };
 }
 
 // ---------- the full picture ----------
@@ -348,6 +436,9 @@ export function derivedStats(ch, db) {
       : attackStat(primaryWeapon, traits, contributions, ctx, "primary"),
     secondaryAttack: attackStat(secondaryWeapon, traits, contributions, ctx, "secondary"),
     spellcast: spellcastStat(sub, traits, contributions, ctx),
+    // A second pass over the effects, and an empty array for almost every character — worth it
+    // because a die a class rolls is a value the sheet had no way to state at all before.
+    tracks: characterTracks(ch, db),
   };
 }
 

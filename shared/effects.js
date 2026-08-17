@@ -540,6 +540,29 @@ export function choiceFor(key, db) {
 // loadout card comes and goes, so an option hanging off one would strand its own spent slot the
 // day it was vaulted — and the level up screen is vault-blind anyway (characterAtLevel clears
 // domainVaultIds), so the gate has to be here rather than in collectEffects.
+// A named value with a ladder, printed on the sheet: the Bard's Rally Die, the Guardian's
+// Unstoppable Die, a Brawler's Combo Die. The books state these as prose inside a feature and the
+// app printed none of them, so "what die do I roll?" was a question the sheet couldn't answer.
+//
+// The steps are opaque strings. Nothing here knows that "d8" is bigger than "d6" — the source
+// writes the ladder, the app decides which rung you're on and prints what it says. That's what
+// keeps a die out of the stats: the app remembers how many times you climbed, not what you roll.
+//
+// Same id twice and the LAST one wins, which is the whole mechanism behind a subclass revising
+// its class's die ("Epic Poetry: your Rally Die increases to a d10"): collectEffects reads class
+// features before subclass tiers, so the override falls out of the reading order rather than
+// needing a rule of its own.
+export function declaredTracks(ch, db) {
+  const byId = new Map();
+  for (const entry of collectEffects(ch, db)) {
+    const track = entry.effect.track;
+    if (!track) continue;
+    if (entry.source === "domainCard" && !entry.effect.permanent) continue;
+    byId.set(track.id, { ...track, key: entry.key, from: entry.label });
+  }
+  return [...byId.values()];
+}
+
 export function declaredAdvancementOptions(ch, db) {
   const out = [];
   for (const entry of collectEffects(ch, db)) {

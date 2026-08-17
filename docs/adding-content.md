@@ -287,6 +287,7 @@ Specialization entries too.
 - **`choice`** — when the player picks something (§7).
 - **`unarmedProfile`** — replaces the weapon a bare-handed character fights with (below).
 - **`advancementOption`** — an extra row on the level-up screen's advancement table (below).
+- **`track`** — a named value with a ladder, printed on the sheet: a Rally Die, a Combo Die (below).
 
 Anything else is rejected and reported. `extraDomainCards` is not a stat: it changes how many cards
 the character gets to pick, and the level-up screen works it out by diffing before and after.
@@ -407,12 +408,52 @@ it appears as one more row in the level-up grid, indistinguishable from the prin
 
 What the app does with it:
 
-- **It marks a slot and spends one of the level's two choice points. That's all.** Whatever the
-  option *does* is yours to track — the app has no opinion about what a Combo Die rolls.
+- **It marks a slot and spends one of the level's two choice points.** If it climbs a `track`
+  (below), say so with `"advances": "<track id>"` and the row will also print what the box buys
+  you — "Improve your gadget (d6 → d8)".
 - The pick is recorded with the row's label, so a character stays readable in a browser that has
   never loaded your source: the slot still shows as marked, still named.
 - A slot that's been marked is never taken away. If you shrink `slots` later, or rename the feature,
   or the folder goes missing, the row stays on the grid with the boxes already spent.
+
+### A die your class rolls
+
+A lot of classes own a value with a ladder: *"At level 1, your Rally Die is a d6… at level 5, your
+Rally Die increases to a d8."* Say so, and it prints on both sheets and in the CSV export, beside
+the Spellcast trait.
+
+```json
+"myhomebrew_class_tinker:Escalating Gadget": {
+  "track": { "id": "gadget_die", "label": "Gadget Die", "steps": ["d4", "d6", "d8", "d10"] },
+  "advancementOption": {
+    "label": "Improve your gadget",
+    "slots": { "2": 1, "3": 1, "4": 1 },
+    "advances": "gadget_die"
+  }
+}
+```
+
+`id` and `label` are required, plus **exactly one** of three ways of saying which rung you're on:
+
+| | Rung comes from | Use it for |
+|---|---|---|
+| `"steps": ["d4", "d6", …]` | how many times an `advancementOption` that `advances` this id has been marked | a die you spend advancements on |
+| `"byLevel": { "1": "d6", "5": "d8" }` | the highest level named that you've reached | a die that grows on its own |
+| `"value": "d10"` | nothing — it's fixed while this feature is on the sheet | a **subclass** revising its class's die |
+
+- **The first `steps` entry is where you start**, not the first upgrade.
+- **The rungs are text, and the app never reads them.** It counts, and prints what you wrote — so
+  they don't have to be dice. `["once", "twice"]` works exactly as well.
+- **Two features can share an id, and the later one wins.** Reading order is class features, then
+  ancestry, then transformation, then subclass, then equipment, then cards — which is all it takes
+  for a subclass's `value` to override its class's `byLevel`, no extra wiring.
+- **`note`** (optional) — a sentence under the value. A `byLevel` track writes its own if you
+  don't ("Increases to d8 at level 5.").
+- Keep the `label` short: it prints on page 1 of the character sheet, in a row that doesn't wrap
+  gracefully.
+
+What it can't do: take its value from a stat. There's no `{ "equalTo": … }` here — a track is a
+rung on a ladder you wrote, not a computed number.
 
 ### Two shapes of choice
 
