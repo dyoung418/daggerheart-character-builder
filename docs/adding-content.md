@@ -306,12 +306,14 @@ your Spellcast trait". Write it in place of the number:
 ```
 
 The whole vocabulary after `equalTo`: the six traits (`agility`, `strength`, `finesse`, `instinct`,
-`presence`, `knowledge`), plus `spellcast`, `proficiency` and `level`.
+`presence`, `knowledge`), plus `spellcast`, `proficiency`, `level` and `tier`.
 
 - **`spellcast`** is whichever trait the character's subclass casts with, which is why it's a word
   of its own — the armour granting the bonus can't know what the wearer's subclass is. A Guardian
   or Warrior has no Spellcast trait, so it comes out as 0 for them and no row appears in the
   breakdown.
+- **`tier`** is your tier, not your level — 1 at level 1, 2 at levels 2–4, 3 at 5–7, 4 above. The
+  two agree only at level 1, so don't reach for `level` when the text says tier.
 - It resolves against the trait **after** equipment has modified it, and it can be **negative**:
   a caster whose Spellcast trait is −1 has their thresholds lowered by 1 wearing the armour above.
   That's the literal reading of the text, and the sheet shows it.

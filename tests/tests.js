@@ -1122,6 +1122,7 @@ const SRC_DB = {
   domainCards: [
     ...FX_DB.domainCards,
     { id: "src_card", name: { "en-US": "Sourced Card" }, domain: "VALOR", level: 1 },
+    { id: "src_tier_card", name: { "en-US": "Sourced Tier Card" }, domain: "VALOR", level: 1 },
   ],
   effects: {
     "armor:Awkward": { traits: { finesse: -1 } },
@@ -1132,6 +1133,7 @@ const SRC_DB = {
     },
     "src_finery:Resplendent": { armorScore: { equalTo: "presence" } },
     src_card: { severeThreshold: { equalTo: "proficiency" }, evasion: { equalTo: "level" } },
+    src_tier_card: { majorThreshold: { equalTo: "tier" } },
   },
 };
 
@@ -1175,6 +1177,13 @@ group("A source can declare a value the character's own stats decide");
   const card = derivedStats(statChar({ proficiency: 2, domainCardIds: ["src_card"] }), SRC_DB);
   eq("Proficiency scales a threshold", card.severeThreshold.total, 2 + 2);
   eq("and level scales Evasion", card.evasion.total, 9 + 1);
+
+  // Tier is not level, and at level 1 the two happen to agree — so the case that tells them
+  // apart is the only one worth asserting. Level 5 is tier 3.
+  const t5 = derivedStats(statChar({ level: 5, domainCardIds: ["src_tier_card"] }), SRC_DB);
+  eq("tier scales as tier, not as level", t5.majorThreshold.total, 5 + 3);
+  eq("and the breakdown names the card rather than the arithmetic",
+    t5.majorThreshold.parts.map((p) => p.label), ["No armor — your level", "Sourced Tier Card"]);
 }
 
 group("A weapon can boost the OTHER hand's attacks");
@@ -2729,7 +2738,9 @@ group("What a source may say its content does");
     validateEffectEntry({ armorScore: { equalTo: "presence" } }), null);
   eq("including the trait a subclass casts with, which the armour can't name itself",
     validateEffectEntry({ majorThreshold: { equalTo: "spellcast" }, severeThreshold: { equalTo: "spellcast" } }), null);
-  eq("and the two that aren't traits", validateEffectEntry({ severeThreshold: { equalTo: "proficiency" }, evasion: { equalTo: "level" } }), null);
+  eq("and the three that aren't traits", validateEffectEntry({
+    severeThreshold: { equalTo: "proficiency" }, evasion: { equalTo: "level" }, majorThreshold: { equalTo: "tier" },
+  }), null);
   check("a word nothing can scale with is refused",
     validateEffectEntry({ evasion: { equalTo: "luck" } }) !== null);
   // Refused rather than ignored, so nobody ships an entry believing the +2 was counted.
