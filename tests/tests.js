@@ -306,7 +306,7 @@ const ADV_DB = {
     id: "cls", name: "TINKER", domains: ["VALOR"], startingHitPoints: 6, startingEvasion: 10,
     classFeatures: [{ name: { "en-US": "Escalating Gadget" } }],
   }],
-  subclasses: [{ id: "sub" }],
+  subclasses: [{ id: "sub", name: { "en-US": "Tinker Sub" }, class: "TINKER" }],
   domainCards: [
     { id: "c1", level: 1, domain: "VALOR", name: { "en-US": "A Card" } },
     { id: "c2", level: 1, domain: "VALOR", name: { "en-US": "Another Card" } },
@@ -723,6 +723,58 @@ group("Two Spellcast traits are alternatives, not a sum");
   const mute = { ...ch, subclassId: "sub_mute" };
   eq("a class with no Spellcast trait borrows the one it multiclassed into",
     derivedStats(mute, castDb).spellcast.display, "Instinct");
+}
+
+group("A second class shows up wherever the first one does");
+{
+  const showDb = {
+    ...MC_DB,
+    classes: MC_DB.classes.map((c) => (c.id !== "cls2" ? c : {
+      ...c, classFeatures: [{ name: { "en-US": "Gizmo" }, description: [{ paragraph: { "en-US": "It whirrs." } }] }],
+      hopeFeature: { name: { "en-US": "Hopeful" } },
+    })),
+    subclasses: MC_DB.subclasses.map((s) => (s.id !== "sub2" ? s : {
+      ...s, foundation: { features: [{ name: { "en-US": "Groundwork" }, description: [{ paragraph: { "en-US": "It holds." } }] }] },
+    })),
+  };
+  const ch = newCharacter();
+  // deriveSheet reads the heritage, which the advancement fixtures don't carry.
+  ch.heritage = { ancestryMode: "pure", ancestryIds: [], chosenFeatures: [], communityId: null };
+  ch.equipment = { primaryWeaponId: null, secondaryWeaponId: null, armorId: null, potionChoice: null };
+  ch.background = { description: "", answers: "" };
+  ch.level = 4;
+  record(ch, 5, [MULTICLASS], "c2");
+
+  const sheet = deriveSheet(ch, showDb);
+  eq("the printed sheet names the class, the subclass and the domain",
+    sheet.multiclass, { className: "Spark", subclassName: "Spark Sub", domain: "Arcana" });
+  eq("and prints its features, labelled with where each came from",
+    sheet.multiclassFeatures.map((f) => `${f.source}: ${f.name}`),
+    ["Spark: Gizmo", "Spark Sub (Foundation): Groundwork"]);
+  check("but not its Hope feature", !sheet.multiclassFeatures.some((f) => f.name === "Hopeful"));
+  const plain = { ...newCharacter(), heritage: ch.heritage, equipment: ch.equipment, background: ch.background };
+  eq("a character without one prints nothing", deriveSheet(plain, showDb).multiclass, null);
+
+  // The column functions directly: csvRowForCharacter returns the joined line, and splitting a
+  // CSV row on commas is exactly the thing quoting exists to defeat.
+  const cell = (who, header) => CSV_COLUMNS.find((c) => c.header === header)
+    .value({ ch: who, db: showDb, stats: derivedStats(who, showDb),
+      multiclass: who.multiclass
+        ? { cls: showDb.classes.find((c) => c.id === who.multiclass.classId),
+            sub: showDb.subclasses.find((x) => x.id === who.multiclass.subclassId) }
+        : null });
+  const at = (h) => cell(ch, h);
+  eq("the export carries the class", at("Multiclass"), "Spark");
+  eq("the domain", at("Multiclass Domain"), "Arcana");
+  eq("and the subclass", at("Multiclass Subclass"), "Spark Sub");
+  has("with the feature text of both", [at("Multiclass Features")], "It whirrs.");
+  eq("a character without one leaves them empty", cell(plain, "Multiclass"), "");
+
+  // Both ids are reported, so a renamed folder says what went missing rather than quietly
+  // dropping the features. The domain isn't an id and needs no check.
+  eq("a multiclass this browser can't resolve is reported",
+    unresolvedReferences(ch, { classes: [MC_DB.classes[0]], subclasses: [], domainCards: MC_DB.domainCards }),
+    [{ kind: "subclass", id: "sub" }, { kind: "class", id: "cls2" }, { kind: "subclass", id: "sub2" }]);
 }
 
 group("Hit Point and Stress cap at 12");
@@ -2790,6 +2842,7 @@ function wizardCharacter() {
   ch.name = "Kaz";
   ch.heritage = { ancestryMode: "pure", ancestryIds: [], chosenFeatures: [], communityId: null };
   ch.equipment = { primaryWeaponId: null, secondaryWeaponId: null, armorId: null, potionChoice: null };
+  ch.background = { description: "", answers: "" };
   return ch;
 }
 

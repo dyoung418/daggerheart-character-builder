@@ -104,6 +104,16 @@ function findWeapon(id) { return db.weapons.find((w) => w.id === id); }
 function findArmor(id) { return db.armors.find((a) => a.id === id); }
 function findConsumable(id) { return db.consumables.find((c) => c.id === id); }
 
+// "Bard" on its own, or "Bard / Guardian" once a second class is in play. The multiclass shows
+// up wherever the class does, because it's half of what the character is.
+function classLine(ch) {
+  const names = [ch.classId, ch.multiclass?.classId]
+    .map((id) => findClass(id))
+    .filter(Boolean)
+    .map((c) => titleCase(c.name));
+  return names.length ? names.join(" / ") : "—";
+}
+
 function isComplete(ch) {
   const cls = findClass(ch.classId);
   const hasHeritage = ch.heritage.communityId && ch.heritage.ancestryIds.length > 0;
@@ -147,7 +157,7 @@ function renderList() {
     row.innerHTML = `
       <div class="character-row-main">
         <strong>${escapeHtml(ch.name || "(unnamed)")}</strong>
-        <span>Lv ${escapeHtml(ch.level)} · ${cls ? escapeHtml(titleCase(cls.name)) : "—"}${sub ? " · " + escapeHtml(sub.name["en-US"]) : ""}</span>
+        <span>Lv ${escapeHtml(ch.level)} · ${escapeHtml(classLine(ch))}${sub ? " · " + escapeHtml(sub.name["en-US"]) : ""}</span>
         ${complete ? "" : '<span class="badge-draft">draft</span>'}
       </div>
       <div class="character-row-actions">${actionsHtml}</div>
@@ -487,7 +497,12 @@ function renderDetail() {
 
   const header = document.createElement("div");
   header.className = "detail-header";
-  header.innerHTML = `<h2>${escapeHtml(ch.name || "(unnamed)")}</h2><p>${escapeHtml(ch.pronouns || "")} · Level ${escapeHtml(ch.level)}</p>`;
+  const mcSub = findSubclass(ch.multiclass?.subclassId);
+  const mcLine = ch.multiclass
+    ? ` · Multiclass: ${classLine(ch).split(" / ")[1] || "?"}${mcSub ? ` (${mcSub.name["en-US"]})` : ""}, ${titleCase(ch.multiclass.domain)}`
+    : "";
+  header.innerHTML = `<h2>${escapeHtml(ch.name || "(unnamed)")}</h2>` +
+    `<p>${escapeHtml(ch.pronouns || "")} · Level ${escapeHtml(ch.level)}${escapeHtml(mcLine)}</p>`;
   container.appendChild(header);
 
   // Levelling up on top of choices that no longer add up just compounds the problem, so
@@ -545,6 +560,15 @@ function renderDetail() {
       cardsRow.appendChild(cardBlock({ id: sub.id, name: `${sub.name["en-US"]} (${SUBCLASS_TIER_LABELS[tier]})`, art: subclassCardArtPath(sub, tier), type: "Subclass", features: sub[tier]?.features }));
     }
   }
+  // The card a multiclass took, next to the subclass cards it sits beside on paper. Always
+  // Foundation: the upgrade advancement takes the next card for your own subclass.
+  if (mcSub) {
+    cardsRow.appendChild(cardBlock({
+      id: mcSub.id, name: `${mcSub.name["en-US"]} (${SUBCLASS_TIER_LABELS.foundation})`,
+      art: subclassCardArtPath(mcSub, "foundation"), type: "Subclass", features: mcSub.foundation?.features,
+    }, `Multiclass: ${mcSub.name["en-US"]}`));
+  }
+
   const com = findCommunity(ch.heritage.communityId);
   if (com) cardsRow.appendChild(cardBlock({ id: com.id, name: com.name["en-US"], art: communityCardArtPath(com), type: "Community", features: com.features }, `Community: ${com.name["en-US"]}`));
   for (const ancId of ch.heritage.ancestryIds) {
@@ -601,6 +625,19 @@ function renderDetail() {
     const box = document.createElement("div");
     box.className = "class-detail detail-class-features";
     for (const section of classFeatures) box.appendChild(section);
+    container.appendChild(box);
+  }
+
+  // The second class's, in a box of their own rather than folded into the first's: the heading
+  // above says which class they came from, and a multiclass grants no Hope feature.
+  const mcClass = findClass(ch.multiclass?.classId);
+  if (mcClass) {
+    const box = document.createElement("div");
+    box.className = "class-detail detail-class-features";
+    const heading = document.createElement("h4");
+    heading.textContent = `From multiclassing into ${titleCase(mcClass.name)}`;
+    box.appendChild(heading);
+    for (const section of classFeatureSections({ classFeatures: mcClass.classFeatures })) box.appendChild(section);
     container.appendChild(box);
   }
 

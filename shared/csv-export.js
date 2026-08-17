@@ -67,6 +67,10 @@ function rowContext(ch, db, loadout) {
     stats,
     cls: find(db?.classes, ch.classId),
     sub,
+    // Null for the overwhelming majority; the columns read empty for them.
+    multiclass: ch.multiclass
+      ? { cls: find(db?.classes, ch.multiclass.classId), sub: find(db?.subclasses, ch.multiclass.subclassId) }
+      : null,
     com: find(db?.communities, ch.heritage?.communityId),
     transformation: find(db?.transformations, ch.transformationId),
     ancestries: (ch.heritage?.ancestryIds || []).map((id) => find(db?.ancestries, id)).filter(Boolean),
@@ -267,6 +271,17 @@ export const CSV_COLUMNS = [
     value: (r) => (r.stats.secondaryAttack ? signed(r.stats.secondaryAttack.total) : ""),
   },
   { header: "Spellcast Trait", value: (r) => r.stats.spellcast?.display ?? "" },
+
+  // A second class is half of what a character is, so it gets columns beside the first's rather
+  // than being folded into them. Empty for everyone who hasn't multiclassed.
+  { header: "Multiclass", value: (r) => (r.multiclass?.cls ? titleCase(r.multiclass.cls.name) : "") },
+  { header: "Multiclass Domain", value: (r) => enumLabel(r.ch.multiclass?.domain || "") },
+  { header: "Multiclass Subclass", value: (r) => (r.multiclass ? name(r.multiclass.sub) : "") },
+  {
+    header: "Multiclass Features",
+   
+    value: (r) => featuresText([...(r.multiclass?.cls?.classFeatures || []), ...(r.multiclass?.sub?.foundation?.features || [])]),
+  },
 
   // The dice a class rolls, "Rally Die: d8". One column rather than a name and a value, because a
   // character can hold more than one and the header is shared by the whole party — the same

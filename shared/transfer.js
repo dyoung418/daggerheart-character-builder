@@ -151,6 +151,10 @@ export function normalizeImported(ch) {
   if (!isObject(ch.background)) ch.background = { description: "", answers: "" };
 
   if (!isObject(ch.heritage)) ch.heritage = { ancestryMode: "pure", ancestryIds: [], chosenFeatures: [], communityId: null };
+  // A second class, when there is one. Derived by the replay from the level that took it, so a
+  // hand-edited file holding something else here is corrected on the next recompute anyway —
+  // but not before collectEffects has read it.
+  if (ch.multiclass !== undefined && !isObject(ch.multiclass)) ch.multiclass = null;
   if (!Array.isArray(ch.heritage.ancestryIds)) ch.heritage.ancestryIds = [];
   if (!Array.isArray(ch.heritage.chosenFeatures)) ch.heritage.chosenFeatures = [];
 

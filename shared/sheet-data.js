@@ -140,6 +140,8 @@ export function deriveSheet(character, db) {
   // Optional, and null for almost every character: the SRD provides none at all. Read off a
   // top-level field rather than out of `heritage`, though it prints beside it.
   const transformation = find(db?.transformations, character.transformationId);
+  const mcClass = find(db?.classes, character.multiclass?.classId);
+  const mcSub = find(db?.subclasses, character.multiclass?.subclassId);
 
   // Fighting unarmed is a choice with rules of its own — [Proficiency]d4, Strength or Finesse —
   // so the sheet prints them rather than leaving the weapon block empty. The profile is a core
@@ -239,6 +241,24 @@ export function deriveSheet(character, db) {
     // and the Guardian's Unstoppable Die were prose inside a feature, and the feature text is on
     // page 2. Display-only, like everything else here — there's no "?" to open on paper.
     tracks: (stats.tracks || []).map((t) => ({ label: t.label, display: t.value, note: t.note })),
+
+    // A second class, its domain and the foundation card it took. Its own field rather than
+    // folded into className/subclassName, which the sheet labels with the first class's names.
+    multiclass: character.multiclass && mcClass
+      ? {
+        className: titleCase(mcClass.name),
+        subclassName: mcSub ? mcSub.name["en-US"] : "—",
+        domain: titleCase(character.multiclass.domain || ""),
+      }
+      : null,
+    // Its features, labelled with where they came from, the way subclassFeatures are labelled
+    // with their tier. No Hope feature: a multiclass doesn't grant one.
+    multiclassFeatures: [
+      ...features(mcClass?.classFeatures).map((f) => ({ ...f, source: mcClass ? titleCase(mcClass.name) : "" })),
+      ...features(mcSub?.foundation?.features).map((f) => ({
+        ...f, source: `${mcSub.name["en-US"]} (${SUBCLASS_TIER_LABELS.foundation})`,
+      })),
+    ],
 
     loadout,
     hopeFeature: cls ? features([cls.hopeFeature])[0] : null,

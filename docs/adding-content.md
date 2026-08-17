@@ -502,7 +502,7 @@ rejected loudly rather than dropped silently:
 |---|---|---|
 | `when` — a condition on the bonus | it's a predicate | state the bonus unconditionally if it's always on, or don't state it and write an `excluded` note |
 | a value scaled by a *fraction* (`"half your Agility, round up"`) | one word after `equalTo` is the whole vocabulary; a fraction is the first step towards a small language | `excluded` note |
-| an `advancementOption` costing 2 choice points, or marking 2 slots at once | the level replay resolves a recorded pick with no content in hand, so what a pick costs has to be answerable from its key alone | declare it as one point and one slot; the only 2-point options are the printed ones (Proficiency, and Multiclass when it lands) |
+| an `advancementOption` costing 2 choice points, or marking 2 slots at once | the level replay resolves a recorded pick with no content in hand, so what a pick costs has to be answerable from its key alone | declare it as one point and one slot; the only 2-point options are the printed ones, Proficiency and Multiclass |
 
 The honest test for whether a thing deserves an entry at all: **is it in effect right now, given
 only what we store?** Permanent changes, a card sitting in the loadout, a configuration like "while

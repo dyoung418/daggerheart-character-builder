@@ -548,6 +548,11 @@ export function unresolvedReferences(ch, db, { sentinels = [], includeAllCards =
 
   check("class", ch?.classId, db?.classes);
   check("subclass", ch?.subclassId, db?.subclasses);
+  // A second class, if there is one. The DOMAIN needs no check: it's a stored string, and the
+  // cards taken from it stay legal whether or not the class that granted it still resolves —
+  // what goes missing is the features, which is exactly what this reports.
+  check("class", ch?.multiclass?.classId, db?.classes);
+  check("subclass", ch?.multiclass?.subclassId, db?.subclasses);
   for (const chosen of ch?.heritage?.chosenFeatures || []) check("ancestry", chosen.ancestryId, db?.ancestries);
   check("community", ch?.heritage?.communityId, db?.communities);
   // Stored beside the heritage rather than inside it: heritage's shape is ancestry-specific

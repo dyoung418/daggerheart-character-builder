@@ -64,8 +64,13 @@ function renderIdentity(s) {
   // characters (almost all of them) who have none.
   const heritage = [s.ancestryNames.join(" + ") || "—", s.communityName, s.transformationName]
     .filter(Boolean).join(" · ");
+  // The second class goes on the identity line, because it's half of what the character is —
+  // and its domain, which is the thing a player has to look up when picking a card.
+  const mc = s.multiclass
+    ? ` · Multiclass: ${s.multiclass.className} (${s.multiclass.subclassName}), ${s.multiclass.domain}`
+    : "";
   box.appendChild(el("p", "sheet-subtitle",
-    `${s.className} · ${s.subclassName} (${s.subclassTierLabel}) — ${heritage}`));
+    `${s.className} · ${s.subclassName} (${s.subclassTierLabel})${mc} — ${heritage}`));
   const stats = el("div", "sheet-identity-stats");
   stats.appendChild(el("span", null, `LV ${s.level}`));
   stats.appendChild(el("span", null, `PROF ${s.proficiency}`));
@@ -344,6 +349,9 @@ function renderPageTwo(s) {
   // character's current tier: a Mastery character prints Foundation and Specialization
   // features labelled as such, not all three relabelled "Mastery".
   for (const f of s.subclassFeatures) feats.appendChild(featureBlock(f, `${s.subclassName} (${f.source})`));
+  // Labelled with the class or subclass card they came from, so it's clear on paper which half
+  // of the character each belongs to.
+  for (const f of s.multiclassFeatures) feats.appendChild(featureBlock(f, f.source));
   for (const f of s.ancestryFeatures) feats.appendChild(featureBlock(f, f.source));
   for (const f of s.communityFeatures) feats.appendChild(featureBlock(f, f.source));
   // A transformation's drawback prints in full for the same reason its benefit does: the rules
