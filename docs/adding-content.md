@@ -254,6 +254,8 @@ Specialization entries too.
     "extraDomainCards": 1
   },
 
+  "armor:Very Heavy": { "evasion": -2, "traits": { "agility": -1 } },
+
   "core_domain_card_armorer": {
     "armorScore": 1,
     "excluded": ["Armorer's downtime armor repair needs a rest, so it isn't counted here"]
@@ -264,6 +266,12 @@ Specialization entries too.
 - **Stat keys**, all optional, all plain finite numbers:
   `evasion`, `hitPointSlots`, `stressSlots`, `majorThreshold`, `severeThreshold`, `armorScore`,
   `attack`, `spellcast`, `extraDomainCards`.
+- **`traits`** — a bonus or penalty to the character's traits, keyed by trait name **in
+  lowercase**: `{ "traits": { "finesse": -1 } }`. That's the shape the SRD's own `armor:Very
+  Heavy` and `weapon:Cumbersome` have. Lowercase is enforced rather than corrected, because the
+  rest of `data/` writes traits uppercase (a weapon's `"trait": "STRENGTH"`) and a key in the
+  wrong case would apply to nothing at all. It reaches the trait tile *and* everything computed
+  from it, so a `-1` to Finesse also lowers a Finesse weapon's attack rolls.
 - **`permanent`** (boolean) — for a card whose text says the bonus is permanent and tells you to
   vault the card. Without it the bonus stops the moment the card leaves the loadout.
 - **`feature`** (string) — which named feature of a multi-feature tier this entry encodes. It's what
@@ -363,7 +371,6 @@ rejected loudly rather than dropped silently:
 |---|---|---|
 | `when` — a condition on the bonus | it's a predicate | state the bonus unconditionally if it's always on, or don't state it and write an `excluded` note |
 | a value that scales (`"equal to your Proficiency"`) | it's a function of the character | `excluded` note |
-| `traits` — a bonus to Agility, Strength… | not a key JSON effects accept | `excluded` note |
 
 The honest test for whether a thing deserves an entry at all: **is it in effect right now, given
 only what we store?** Permanent changes, a card sitting in the loadout, a configuration like "while

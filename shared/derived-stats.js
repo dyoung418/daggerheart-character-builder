@@ -19,11 +19,13 @@ import {
   advancementCredits,
   damageThresholds,
 } from "./advancement.js";
-import { EFFECT_STAT_KEYS, collectEffects, effectValue, loadoutDomainCounts } from "./effects.js";
+import { EFFECT_STAT_KEYS, TRAIT_KEYS, collectEffects, effectValue, loadoutDomainCounts } from "./effects.js";
 import { UNARMED, UNARMORED } from "./gear.js";
 import { titleCase } from "./text.js";
 
-export const TRAIT_KEYS = ["agility", "strength", "finesse", "instinct", "presence", "knowledge"];
+// Re-exported rather than restated: an effect's `traits` map is keyed by these, so the catalogue
+// has to own the list. Every existing importer reads it from here and is unaffected.
+export { TRAIT_KEYS };
 export const TRAIT_LABELS = {
   agility: "Agility", strength: "Strength", finesse: "Finesse",
   instinct: "Instinct", presence: "Presence", knowledge: "Knowledge",

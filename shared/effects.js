@@ -82,6 +82,11 @@ import { titleCase } from "./text.js";
 // loadout are from the X domain". The card is itself an X card, so it counts toward its own 4.
 const touched = (domain) => (c) => (c.domainCounts[domain] || 0) >= 4;
 
+// The six traits, in the order a character sheet lists them. Stated here rather than in
+// derived-stats.js (which re-exports it) because this is the lowest of the three files that need
+// it: an entry's `traits` map is keyed by these, and so is half the scaling vocabulary below.
+export const TRAIT_KEYS = ["agility", "strength", "finesse", "instinct", "presence", "knowledge"];
+
 const ONCE_PER_REST = "needs an action or a rest, so it isn't counted here";
 
 // Bare Bones' base thresholds, by tier, straight off the card.

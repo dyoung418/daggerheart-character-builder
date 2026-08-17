@@ -13,7 +13,7 @@
 // read and returns the merged result, which is what makes the merge rules testable in
 // tests/tests.js the same way every other rule in this app is.
 
-import { EFFECT_STAT_KEYS } from "./effects.js";
+import { EFFECT_STAT_KEYS, TRAIT_KEYS } from "./effects.js";
 
 // Filename under a source folder -> the key it lands on in `db`. The single statement of that
 // mapping; pages that want fewer files pass a subset of these keys.
@@ -165,12 +165,12 @@ export function validateRecord(kind, record) {
 //
 // shared/effects.js is hand-maintained and can hold functions and predicates. A source's
 // effects.json is JSON, so it holds the declarative subset — which is most of it: flat stat
-// numbers, `permanent` (without which a card whose text says the bonus is permanent silently
-// stops applying the moment it goes to the vault), `feature`, `excluded`, and a whole `choice`
-// block, which shared/effect-choice.js renders with no page code at all.
+// numbers, `traits`, `permanent` (without which a card whose text says the bonus is permanent
+// silently stops applying the moment it goes to the vault), `feature`, `excluded`, and a whole
+// `choice` block, which shared/effect-choice.js renders with no page code at all.
 //
-// `when` and function values are rejected rather than ignored: JSON cannot carry them, and
-// silently dropping a condition would make a bonus apply when it shouldn't.
+// `when` is rejected rather than ignored: JSON cannot carry a predicate, and silently dropping a
+// condition would make a bonus apply when it shouldn't.
 
 const CHOICE_KINDS = new Set(["benefit", "experience"]);
 const STAT_KEYS = new Set(EFFECT_STAT_KEYS);
@@ -213,7 +213,7 @@ function validateChoice(choice) {
 //
 // `dice` may be one die or several: a profile that rolls two kinds says so as a list, and
 // Proficiency multiplies every one of them.
-const TRAIT_NAMES = new Set(["AGILITY", "STRENGTH", "FINESSE", "INSTINCT", "PRESENCE", "KNOWLEDGE"]);
+const TRAIT_NAMES = new Set(TRAIT_KEYS.map((k) => k.toUpperCase()));
 
 function validateUnarmedProfile(profile) {
   if (!profile || typeof profile !== "object" || Array.isArray(profile)) return "unarmedProfile must be an object";
@@ -240,8 +240,31 @@ function validateUnarmedProfile(profile) {
   return null;
 }
 
+// A trait modifier — "-1 to Finesse", the shape armor:Very Heavy and weapon:Cumbersome have in
+// the built-in catalogue. Keys must be LOWERCASE: derived-stats.js indexes the map with lowercase
+// trait names, so `{ "FINESSE": -1 }` would validate against a case-insensitive check and then
+// quietly do nothing. Refused and named rather than normalised, for the same reason `when` is.
+//
+// Values are plain numbers, not the scaled form the stat keys accept: no content in hand wants a
+// trait penalty that scales, and `{ "finesse": { "equalTo": … } }` would read as a scaled map
+// rather than a scaled value.
+const TRAIT_KEY_SET = new Set(TRAIT_KEYS);
+
+function validateTraits(traits) {
+  if (!traits || typeof traits !== "object" || Array.isArray(traits)) return "traits must be an object";
+  for (const [key, value] of Object.entries(traits)) {
+    if (!TRAIT_KEY_SET.has(key)) {
+      return TRAIT_NAMES.has(key.toUpperCase())
+        ? `traits: "${key}" must be written in lowercase`
+        : `traits: "${key}" isn't one of the six traits`;
+    }
+    if (typeof value !== "number" || !Number.isFinite(value)) return `traits: ${key} must be a number`;
+  }
+  return null;
+}
+
 const ALLOWED_EFFECT_KEYS = new Set([
-  ...EFFECT_STAT_KEYS, "permanent", "feature", "excluded", "choice", "unarmedProfile",
+  ...EFFECT_STAT_KEYS, "permanent", "feature", "excluded", "choice", "unarmedProfile", "traits",
 ]);
 
 /** null if the entry is usable, else why not. */
@@ -260,6 +283,10 @@ export function validateEffectEntry(entry) {
   if ("feature" in entry && typeof entry.feature !== "string") return "feature must be a string";
   if ("excluded" in entry && !(Array.isArray(entry.excluded) && entry.excluded.every((x) => typeof x === "string"))) {
     return "excluded must be a list of sentences";
+  }
+  if ("traits" in entry) {
+    const bad = validateTraits(entry.traits);
+    if (bad) return bad;
   }
   if ("unarmedProfile" in entry) {
     const bad = validateUnarmedProfile(entry.unarmedProfile);
