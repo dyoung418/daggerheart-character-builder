@@ -286,6 +286,7 @@ Specialization entries too.
   the feature that reaches across (below).
 - **`choice`** — when the player picks something (§7).
 - **`unarmedProfile`** — replaces the weapon a bare-handed character fights with (below).
+- **`advancementOption`** — an extra row on the level-up screen's advancement table (below).
 
 Anything else is rejected and reported. `extraDomainCards` is not a stat: it changes how many cards
 the character gets to pick, and the level-up screen works it out by diffing before and after.
@@ -380,6 +381,39 @@ Equip a shield and the character falls back to the SRD's d4, because a shield is
 makes a feature worded "while you have no other active weapons" come out right, and it leaves the
 SRD's own profile behaving exactly as it always has.
 
+### A level-up option of your own
+
+Some classes add an advancement option nobody else gets: *"Once per tier, you can increase your
+Combo Die by one step as a level advancement option."* Declare it on the feature that says so, and
+it appears as one more row in the level-up grid, indistinguishable from the printed six.
+
+```json
+"myhomebrew_class_tinker:Escalating Gadget": {
+  "advancementOption": {
+    "label": "Improve your gadget",
+    "slots": { "2": 1, "3": 1, "4": 1 }
+  }
+}
+```
+
+- **`slots`** is per tier, the same shape the printed table has, so "how often" needs no wording of
+  its own. `{ "2": 1, "3": 1, "4": 1 }` is **once per tier**; `{ "3": 1 }` is **once ever, and not
+  before tier 3**. The difference doesn't show until level 5, so decide which you meant.
+- Tiers run 2, 3 and 4 — tier 1 is level 1, before any level up. A tier outside that is refused and
+  named.
+- **`label`** is the row's text, so write the sentence a player should read.
+- A **subclass** can declare one too, keyed `<subclassId>:foundation|specialization|mastery`. The
+  row appears when that tier does.
+
+What the app does with it:
+
+- **It marks a slot and spends one of the level's two choice points. That's all.** Whatever the
+  option *does* is yours to track — the app has no opinion about what a Combo Die rolls.
+- The pick is recorded with the row's label, so a character stays readable in a browser that has
+  never loaded your source: the slot still shows as marked, still named.
+- A slot that's been marked is never taken away. If you shrink `slots` later, or rename the feature,
+  or the folder goes missing, the row stays on the grid with the boxes already spent.
+
 ### Two shapes of choice
 
 ```json
@@ -427,6 +461,7 @@ rejected loudly rather than dropped silently:
 |---|---|---|
 | `when` — a condition on the bonus | it's a predicate | state the bonus unconditionally if it's always on, or don't state it and write an `excluded` note |
 | a value scaled by a *fraction* (`"half your Agility, round up"`) | one word after `equalTo` is the whole vocabulary; a fraction is the first step towards a small language | `excluded` note |
+| an `advancementOption` costing 2 choice points, or marking 2 slots at once | the level replay resolves a recorded pick with no content in hand, so what a pick costs has to be answerable from its key alone | declare it as one point and one slot; the only 2-point options are the printed ones (Proficiency, and Multiclass when it lands) |
 
 The honest test for whether a thing deserves an entry at all: **is it in effect right now, given
 only what we store?** Permanent changes, a card sitting in the loadout, a configuration like "while

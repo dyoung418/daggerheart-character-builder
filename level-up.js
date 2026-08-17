@@ -1,18 +1,16 @@
 import { renderCardArt, domainCardArtPath, subclassCardArtPath } from "./shared/card-render.js";
 import {
-  ADVANCEMENT_LABELS,
   MAX_HIT_POINT_SLOTS,
   MAX_STRESS_SLOTS,
   SLOT_TIERS,
   SUBCLASS_TIER_LABELS,
-  availableOptionKeys,
   ensureLevelFields,
   extraCardLevelCap,
   isLevelAchievement,
   nextSubclassTier,
   optionCost,
+  optionFor,
   remainingSlots,
-  slotsInTier,
   slotsPerPick,
   tierForLevel,
 } from "./shared/advancement.js";
@@ -24,7 +22,13 @@ import {
   validateEntry,
   writeLevelEntry,
 } from "./shared/history.js";
-import { effectBonuses, effectExperienceBonuses, hitPointTotal, stressTotal } from "./shared/derived-stats.js";
+import {
+  advancementOptionsFor,
+  effectBonuses,
+  effectExperienceBonuses,
+  hitPointTotal,
+  stressTotal,
+} from "./shared/derived-stats.js";
 import { blankAnswer, choiceFor } from "./shared/effects.js";
 import { loadContent } from "./shared/content-load.js";
 import { mountContentSettings } from "./shared/content-settings.js";
@@ -60,6 +64,7 @@ let exchange = null; // optional { outCardId, inCardId }: the swap allowed on ev
 // pickers, but everything is evaluated against the character as it stood at that level.
 let editLevel = null;
 let context = null; // replayed state the level being worked on is chosen against
+let options = []; // the advancement rows on offer at that level, rebuilt on every render
 let pendingSave = null; // consequences awaiting confirmation before an edit is written
 
 const isEditing = () => editLevel !== null;
@@ -115,9 +120,25 @@ function slotsTakenInTier(key, tier) {
   return already + picksFor(key, tier).length * slotsPerPick(key);
 }
 
-function totalRemainingAcrossAllOptions(newLevel) {
-  return availableOptionKeys(newLevel)
-    .reduce((sum, key) => sum + remainingSlots(context.slotsUsed, key, newLevel), 0);
+function totalRemainingAcrossAllOptions() {
+  return options.reduce((sum, option) => sum + remainingSlots(option, context.slotsUsed), 0);
+}
+
+// What `options` is built from: the slots every level below this one marked, plus the ones being
+// marked on screen right now.
+//
+// Without the second half, a row that exists only because it was already marked — one whose
+// source has since gone — would have no capacity of its own while this level is being edited. Its
+// box would render as "marking now", removing the mark would work, and putting it back would be
+// blocked. One stray click and the pick is unrecoverable.
+function usedWithPicks(slotsUsed, current) {
+  const used = {};
+  for (const [key, perTier] of Object.entries(slotsUsed || {})) used[key] = { ...perTier };
+  for (const pick of current) {
+    const perTier = (used[pick.key] ||= { 2: 0, 3: 0, 4: 0 });
+    perTier[pick.slotTier] = (perTier[pick.slotTier] || 0) + slotsPerPick(pick.key);
+  }
+  return used;
 }
 
 // The context already has this level's tier achievement applied, so marks cleared at 5 and
@@ -151,20 +172,33 @@ function stressAfterPicks() {
   return stressTotal(context.stressSlotsBonus + picksFor("stress").length, grantedSlots().stressSlots);
 }
 
-// Why a given slot can't be marked right now (null when it can).
-function markBlockedReason(key, tier, newLevel) {
+// Why a given slot can't be marked right now (null when it can). The three key tests below are
+// core rules about core rows, so they match the key exactly — a declared row is never one of them.
+function markBlockedReason(option, tier) {
+  const key = option.key;
   if (picksFor("proficiency").length > 0) return "Proficiency uses both picks for this level.";
   if (key === "proficiency" && picks.length > 0) return "Proficiency needs both picks: clear the other one first.";
-  if (budgetSpent() + optionCost(key) > 2) return "No choice points left this level.";
-  if (slotsTakenInTier(key, tier) + slotsPerPick(key) > slotsInTier(key, tier)) return "No slots left in this tier.";
+  if (budgetSpent() + option.cost > 2) return "No choice points left this level.";
+  if (slotsTakenInTier(key, tier) + option.slotsPerPick > option.slots[tier]) return "No slots left in this tier.";
   if (key === "subclass" && subclassTierAfterPicks() === "mastery") return "Subclass is already at Mastery.";
   if (key === "hitPoint" && hitPointsAfterPicks() >= MAX_HIT_POINT_SLOTS) return `Hit Points are at the maximum of ${MAX_HIT_POINT_SLOTS}.`;
   if (key === "stress" && stressAfterPicks() >= MAX_STRESS_SLOTS) return `Stress is at the maximum of ${MAX_STRESS_SLOTS}.`;
   return null;
 }
 
-function addPick(key, slotTier) {
-  picks.push({ key, slotTier, traits: [], experienceIds: [], cardId: null });
+// A declared row's pick carries its own label. Everything else a pick stores is a CHOICE (which
+// traits, which card); this is a copy of something that could in principle be looked up again —
+// except that it can't, once the content declaring it has moved on. The history list and the
+// grid stay readable for a character imported into a browser that has never seen the source.
+function addPick(option, slotTier) {
+  picks.push({
+    key: option.key,
+    slotTier,
+    traits: [],
+    experienceIds: [],
+    cardId: null,
+    optionLabel: option.source === "core" ? null : option.label,
+  });
 }
 
 // The Experience granted by the tier achievement exists before advancements are chosen, so
@@ -209,6 +243,18 @@ function render() {
   const cls = selectedClass();
   const newLevel = workingLevel();
   context = contextForLevel(character, newLevel);
+  // Asked of the character as they stood AT this level, not as they stand now: a row a subclass
+  // feature declares mustn't be offered on a level edited from before that subclass tier was
+  // taken. validateEntry resolves the same way, so the screen and the validator agree.
+  options = advancementOptionsFor(characterAtLevel(character, context), db, {
+    level: newLevel,
+    used: usedWithPicks(context.slotsUsed, picks),
+  });
+  // An author fixing a typo in a label should see it here rather than the one recorded months ago.
+  for (const pick of picks) {
+    const option = optionFor(options, pick.key);
+    if (option && option.source !== "core") pick.optionLabel = option.label;
+  }
 
   if (!isEditing() && character.level >= 10) {
     main.innerHTML = `<p class="hint">${escapeHtml(character.name || "This character")} is already at the maximum level (10).</p>
@@ -304,12 +350,12 @@ function renderAdvancementGrid(main, newLevel) {
   }
   grid.appendChild(head);
 
-  for (const key of availableOptionKeys(newLevel)) {
+  for (const option of options) {
     const row = document.createElement("div");
     row.className = "adv-row";
-    row.appendChild(labelCell(rowLabel(key, tiers)));
+    row.appendChild(labelCell(option.label));
     for (const tier of tiers) {
-      row.appendChild(tierGroupCell(key, tier, newLevel));
+      row.appendChild(tierGroupCell(option, tier));
     }
     grid.appendChild(row);
   }
@@ -328,18 +374,11 @@ function labelCell(text) {
   return cell;
 }
 
-// The extra domain card's cap differs per tier, so it goes in the row label the way the
-// character sheet prints it on the option itself.
-function rowLabel(key, tiers) {
-  if (key !== "domainCard") return ADVANCEMENT_LABELS[key];
-  const caps = tiers.map((tier) => `≤${extraCardLevelCap(10, tier)}`).join(" / ");
-  return `Extra domain card (${caps})`;
-}
-
-function tierGroupCell(key, tier, newLevel) {
+function tierGroupCell(option, tier) {
+  const key = option.key;
   const cell = document.createElement("span");
   cell.className = "adv-tier-group";
-  const total = slotsInTier(key, tier);
+  const total = option.slots[tier];
   if (total === 0) {
     cell.textContent = "—";
     cell.classList.add("adv-tier-empty");
@@ -347,8 +386,8 @@ function tierGroupCell(key, tier, newLevel) {
   }
 
   const alreadyUsed = context.slotsUsed?.[key]?.[tier] || 0;
-  const markingNow = picksFor(key, tier).length * slotsPerPick(key);
-  const blocked = markBlockedReason(key, tier, newLevel);
+  const markingNow = picksFor(key, tier).length * option.slotsPerPick;
+  const blocked = markBlockedReason(option, tier);
 
   for (let i = 0; i < total; i++) {
     const box = document.createElement("button");
@@ -369,7 +408,7 @@ function tierGroupCell(key, tier, newLevel) {
     } else {
       box.classList.add("open");
       box.title = `Mark this tier ${tier} slot`;
-      box.addEventListener("click", () => { addPick(key, tier); render(); });
+      box.addEventListener("click", () => { addPick(option, tier); render(); });
     }
     cell.appendChild(box);
   }
@@ -656,7 +695,7 @@ function commitCardChoices() {
 
 function stepValidation(newLevel) {
   const spent = budgetSpent();
-  const totalRemaining = totalRemainingAcrossAllOptions(newLevel);
+  const totalRemaining = totalRemainingAcrossAllOptions();
   const budgetOk = spent === 2 || (totalRemaining < 2 && spent === totalRemaining);
   if (!budgetOk) return false;
 
@@ -693,6 +732,9 @@ function currentEntry(level) {
       if (p.key === "traits") entry.traits = [...p.traits];
       if (p.key === "experience") entry.experienceIds = [...p.experienceIds];
       if (p.key === "domainCard") entry.cardId = p.cardId;
+      // Only ever set for a declared row, so every entry written before this existed — and every
+      // one written since for a core row — serialises byte for byte as it always did.
+      if (p.optionLabel) entry.optionLabel = p.optionLabel;
       return entry;
     }),
     mandatoryCardId,
@@ -851,6 +893,7 @@ function loadPicksFrom(entry) {
     traits: [...(p.traits || [])],
     experienceIds: [...(p.experienceIds || [])],
     cardId: p.cardId || null,
+    optionLabel: p.optionLabel || null,
   }));
   mandatoryCardId = entry.mandatoryCardId || null;
   grantedCardIds = [...(entry.grantedCardIds || [])];

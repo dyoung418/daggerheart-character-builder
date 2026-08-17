@@ -9,19 +9,17 @@
 // Everything here is a pure function over plain objects: no DOM, no storage.
 
 import {
-  ADVANCEMENT_LABELS,
   MAX_HIT_POINT_SLOTS,
   MAX_STRESS_SLOTS,
   extraCardLevelCap,
   isLevelAchievement,
   nextSubclassTier,
   optionCost,
-  slotsInTier,
+  optionFor,
   slotsPerPick,
   tierForLevel,
-  totalSlotsForOption,
 } from "./advancement.js";
-import { effectBonuses, hitPointTotal, stressTotal } from "./derived-stats.js";
+import { advancementOptionsFor, effectBonuses, hitPointTotal, stressTotal } from "./derived-stats.js";
 import { titleCase } from "./text.js";
 
 // The character as it stood at some level, for the purpose of asking shared/effects.js what
@@ -229,26 +227,40 @@ export function validateEntry(ch, entry, db) {
   const spent = picks.reduce((sum, p) => sum + optionCost(p.key), 0);
   if (spent !== 2) errors.push(`${spent} of the 2 choice points for this level are spent.`);
 
+  // The rows that were on offer AT THIS LEVEL, not the ones on offer now: resolved against the
+  // same rewound character the level up screen resolves against, so the screen and this function
+  // can't disagree about whether a row existed yet.
+  const options = advancementOptionsFor(characterAtLevel(ch, state), db, { level, used: state.slotsUsed });
+
   // Slots: what this level marks, on top of what every other level already marked.
   const marked = {};
   for (const pick of picks) {
     (marked[pick.key] ||= {})[pick.slotTier] = (marked[pick.key]?.[pick.slotTier] || 0) + slotsPerPick(pick.key);
   }
   for (const [key, perTier] of Object.entries(marked)) {
+    const option = optionFor(options, key);
+    // Named from the row if it still exists, else from what the pick itself recorded. Before this,
+    // any row the printed table didn't know produced the literal sentence "undefined: no tier 2
+    // slot left to mark." on every load, with no edit that could clear it.
+    const name = option?.label || picks.find((p) => p.key === key)?.optionLabel || key;
+    if (!option) {
+      errors.push(`${name}: this level marks a slot for an advancement this character doesn't have.`);
+      continue;
+    }
     for (const [slotTier, count] of Object.entries(perTier)) {
       const t = Number(slotTier);
       if (t > tier) {
-        errors.push(`${ADVANCEMENT_LABELS[key]}: a tier ${t} slot isn't available at level ${level}.`);
+        errors.push(`${name}: a tier ${t} slot isn't available at level ${level}.`);
         continue;
       }
       const already = state.slotsUsed?.[key]?.[t] || 0;
-      if (already + count > slotsInTier(key, t)) {
-        errors.push(`${ADVANCEMENT_LABELS[key]}: no tier ${t} slot left to mark.`);
+      if (already + count > option.slots[t]) {
+        errors.push(`${name}: no tier ${t} slot left to mark.`);
       }
     }
     if ((state.slotsUsed?.[key] ? Object.values(state.slotsUsed[key]).reduce((a, b) => a + b, 0) : 0)
-      + Object.values(perTier).reduce((a, b) => a + b, 0) > totalSlotsForOption(key, tier)) {
-      errors.push(`${ADVANCEMENT_LABELS[key]}: more slots marked than this tier allows.`);
+      + Object.values(perTier).reduce((a, b) => a + b, 0) > option.total) {
+      errors.push(`${name}: more slots marked than this tier allows.`);
     }
   }
 
@@ -372,7 +384,9 @@ export function describeLevelUp(ch, entry, db) {
     } else if (pick.key === "domainCard") {
       parts.push(`${SHORT_LABELS.domainCard}: ${cardName(byId.get(pick.cardId))}`);
     } else {
-      parts.push(SHORT_LABELS[pick.key] || pick.key);
+      // A declared row's pick carries its own label, which is why this needs neither the content
+      // nor the option table to stay readable — see the note on optionLabel in level-up.js.
+      parts.push(pick.optionLabel || SHORT_LABELS[pick.key] || pick.key);
     }
   }
   return parts;

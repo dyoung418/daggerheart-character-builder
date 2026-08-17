@@ -7,16 +7,12 @@ import {
   transformationCardArtPath,
 } from "./shared/card-render.js";
 import {
-  ADVANCEMENT_LABELS,
   MAX_HOPE,
   SLOT_TIERS,
   STARTING_HOPE,
   SUBCLASS_TIER_LABELS,
   activeDomainCardIds,
-  availableOptionKeys,
   ensureLevelFields,
-  extraCardLevelCap,
-  slotsInTier,
   slotsPerPick,
   subclassTiersUpTo,
   tierForLevel,
@@ -28,7 +24,7 @@ import {
   unresolvedProblems,
   validateLevelUps,
 } from "./shared/history.js";
-import { derivedStats } from "./shared/derived-stats.js";
+import { advancementOptionsFor, derivedStats } from "./shared/derived-stats.js";
 import { statLine } from "./shared/stat-line.js";
 import { titleCase } from "./shared/text.js";
 import { ignoresBurden, unresolvedChoices } from "./shared/effects.js";
@@ -221,18 +217,19 @@ function renderHistoryGrid(ch) {
   }
   grid.appendChild(head);
 
-  for (const key of availableOptionKeys(ch.level)) {
+  // The character as they stand, not as they stood: this grid is their sheet, and the row
+  // builder's own merge of declared-and-marked slots is what keeps a spent box on it even when
+  // nothing declares that row any more.
+  for (const option of advancementOptionsFor(ch, db)) {
+    const key = option.key;
     const row = document.createElement("div");
     row.className = "adv-row";
-    const label = key === "domainCard"
-      ? `Extra domain card (${tiers.map((t) => `≤${extraCardLevelCap(10, t)}`).join(" / ")})`
-      : ADVANCEMENT_LABELS[key];
-    row.appendChild(labelSpan(label));
+    row.appendChild(labelSpan(option.label));
 
     for (const tier of tiers) {
       const cell = document.createElement("span");
       cell.className = "adv-tier-group";
-      const total = slotsInTier(key, tier);
+      const total = option.slots[tier];
       if (total === 0) {
         cell.textContent = "—";
         cell.classList.add("adv-tier-empty");

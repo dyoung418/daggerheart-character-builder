@@ -13,6 +13,7 @@
 // read and returns the merged result, which is what makes the merge rules testable in
 // tests/tests.js the same way every other rule in this app is.
 
+import { SLOT_TIERS } from "./advancement.js";
 import { EFFECT_SCALE_KEYS, EFFECT_STAT_KEYS, TRAIT_KEYS } from "./effects.js";
 
 // Filename under a source folder -> the key it lands on in `db`. The single statement of that
@@ -285,9 +286,45 @@ function validateTraits(traits) {
 
 const SCOPES = new Set(["primary", "secondary", "character"]);
 
+// An extra row on the level up screen's advancement table — "Once per tier, you can increase your
+// Combo Die by one step as a level advancement option."
+//
+// `slots` is the per-tier shape the printed table uses, which is why "once per tier" needs no
+// vocabulary of its own: { "2": 1, "3": 1, "4": 1 } is once per tier, { "2": 1 } is once ever.
+// A tier that has no advancement slots is named rather than dropped — an author who writes 1 or 5
+// has misread the table, and silently ignoring it would hide a row they meant to add.
+//
+// Not declarable, deliberately: how many of the level's two choice points it costs, and how many
+// slots one pick marks. Both are answered by key alone (shared/advancement.js), because the level
+// replay resolves picks with no content in hand. A declared row always costs one and marks one.
+const SLOT_TIER_SET = new Set(SLOT_TIERS);
+
+function validateAdvancementOption(option) {
+  if (!option || typeof option !== "object" || Array.isArray(option)) return "advancementOption must be an object";
+  if (typeof option.label !== "string" || !option.label.trim()) return "advancementOption: missing label";
+  for (const key of Object.keys(option)) {
+    if (!["label", "slots", "advances"].includes(key)) return `advancementOption: unknown key: ${key}`;
+  }
+  const slots = option.slots;
+  if (!slots || typeof slots !== "object" || Array.isArray(slots)) return "advancementOption: missing slots";
+  const tiers = Object.keys(slots);
+  if (tiers.length === 0) return "advancementOption: slots must name at least one tier";
+  for (const tier of tiers) {
+    if (!SLOT_TIER_SET.has(Number(tier))) {
+      return `advancementOption: tier ${tier} isn't a tier that has advancement slots — they run 2, 3, 4`;
+    }
+    const count = slots[tier];
+    if (!Number.isInteger(count) || count < 1) return `advancementOption: tier ${tier} must be a whole number of slots`;
+  }
+  if ("advances" in option && (typeof option.advances !== "string" || !option.advances)) {
+    return "advancementOption: advances must name a track";
+  }
+  return null;
+}
+
 const ALLOWED_EFFECT_KEYS = new Set([
   ...EFFECT_STAT_KEYS, "permanent", "feature", "excluded", "choice", "unarmedProfile", "traits",
-  "scope",
+  "scope", "advancementOption",
 ]);
 
 /** null if the entry is usable, else why not. */
@@ -316,6 +353,10 @@ export function validateEffectEntry(entry) {
   }
   if ("unarmedProfile" in entry) {
     const bad = validateUnarmedProfile(entry.unarmedProfile);
+    if (bad) return bad;
+  }
+  if ("advancementOption" in entry) {
+    const bad = validateAdvancementOption(entry.advancementOption);
     if (bad) return bad;
   }
   if ("choice" in entry) return validateChoice(entry.choice);

@@ -17,9 +17,18 @@ import {
   MAX_HIT_POINT_SLOTS,
   MAX_STRESS_SLOTS,
   advancementCredits,
+  advancementOptions,
   damageThresholds,
+  recordedOptionLabels,
 } from "./advancement.js";
-import { EFFECT_STAT_KEYS, TRAIT_KEYS, collectEffects, effectValue, loadoutDomainCounts } from "./effects.js";
+import {
+  EFFECT_STAT_KEYS,
+  TRAIT_KEYS,
+  collectEffects,
+  declaredAdvancementOptions,
+  effectValue,
+  loadoutDomainCounts,
+} from "./effects.js";
 import { UNARMED, UNARMORED } from "./gear.js";
 import { titleCase } from "./text.js";
 
@@ -253,6 +262,27 @@ export function effectBonuses(ch, db) {
  */
 export function effectExperienceBonuses(ch, db) {
   return gather(ch, db).experienceBonus;
+}
+
+/**
+ * The advancement rows this character is offered — the printed table, plus whatever their class
+ * or subclass declared, plus a row for anything they've already marked that nothing declares any
+ * more. The level up screen, the history grid and the history validation all build it from here
+ * so they can't disagree about which rows exist.
+ *
+ * It lives in this file for one reason: shared/advancement.js is not allowed to import
+ * shared/effects.js (effects.js imports tierForLevel from it), and this file already imports
+ * both — as does every caller, so nothing gains an import edge.
+ *
+ * Pass `level` and `used` from a rewound state to ask what was on offer at an earlier level; the
+ * defaults ask about the character as they stand.
+ */
+export function advancementOptionsFor(ch, db, { level = ch?.level, used = ch?.advancementSlotsUsed } = {}) {
+  return advancementOptions(level, {
+    declared: declaredAdvancementOptions(ch, db),
+    used,
+    labels: recordedOptionLabels(ch),
+  });
 }
 
 // ---------- the full picture ----------

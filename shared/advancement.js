@@ -1,7 +1,17 @@
-// Generic advancement rules (Core Rulebook p.109-111): the same options and slots
-// apply to every class, so a single table is enough instead of per-class data.
+// Advancement rules (Core Rulebook p.109-111). The printed table below is the same for every
+// class — but it is no longer the whole table: a class or subclass feature may declare a row of
+// its own ("Once per tier, you can increase your Combo Die by one step as a level advancement
+// option"), so what a particular character is offered is built per character by
+// advancementOptions() rather than read off a constant.
+//
+// Nothing here knows where a declared row comes from. shared/effects.js reads the declarations
+// (it's the file allowed to know content) and hands them in, which is also why the dependency
+// runs that way: effects.js imports tierForLevel from here, so here can't import effects.js.
+//
 // Multiclassing is NOT implemented (deliberate scope cut: rare in practice, adds
-// disproportionate data/UI complexity for a personal-scale tool).
+// disproportionate data/UI complexity for a personal-scale tool). When it lands it belongs in
+// the table below rather than in a declaration: it costs both of a level's points, and
+// optionCost/slotsPerPick answer by key alone because the replay has no content in hand.
 
 // NEW slots that unlock starting at each tier (cumulative, not replaced: at tier 3
 // you have tier 2's slots plus the new tier 3 ones, and so on).
@@ -19,7 +29,9 @@ export const TIER_SLOT_TABLE = {
 // Tiers that have advancement slots at all (tier 1 is level 1: no level ups yet).
 export const SLOT_TIERS = [2, 3, 4];
 
-export const ADVANCEMENT_LABELS = {
+// Not exported: a label is a property of a row, and advancementOptions() below is the only way
+// to ask for one. Two ways to get a label is how a declared row's row printed "undefined".
+const ADVANCEMENT_LABELS = {
   traits: "+1 to two unmarked traits",
   hitPoint: "+1 permanent Hit Point slot",
   stress: "+1 permanent Stress slot",
@@ -104,27 +116,86 @@ export function usedSlotsForOption(slotsUsed, key) {
   return SLOT_TIERS.reduce((sum, tier) => sum + (perTier[tier] || 0), 0);
 }
 
-export function remainingSlots(slotsUsed, key, level) {
-  return totalSlotsForOption(key, tierForLevel(level)) - usedSlotsForOption(slotsUsed, key);
+export function remainingSlots(option, slotsUsed) {
+  return option.total - usedSlotsForOption(slotsUsed, option.key);
 }
 
-// Tiers whose slot for this option is still unmarked and reachable at this level: the
-// choices offered when marking a box ("your tier or below").
-export function openSlotTiers(slotsUsed, key, level) {
-  const maxTier = tierForLevel(level);
-  const open = [];
-  for (const tier of SLOT_TIERS) {
-    if (tier > maxTier) break;
-    if ((slotsUsed?.[key]?.[tier] || 0) < slotsInTier(key, tier)) open.push(tier);
+// The one option row that says what it gets you rather than just what it is: the extra card's
+// level cap depends on which tier's slot you mark, and a player choosing between two boxes is
+// choosing between two caps.
+function coreLabel(key, tiers) {
+  if (key !== "domainCard") return ADVANCEMENT_LABELS[key];
+  return `Extra domain card (${tiers.map((tier) => `≤${extraCardLevelCap(10, tier)}`).join(" / ")})`;
+}
+
+/**
+ * Every advancement row this character is offered at this level, in the order the grid draws
+ * them: the printed table first, then whatever a source declared, then a row for any option
+ * they have already marked that neither table knows about.
+ *
+ * That last group is the point of building this per character. A declaration lives in content,
+ * and content moves — a folder is renamed, a character is imported into a browser without the
+ * source, a feature is renamed upstream. A slot that was spent is spent, and docs/adding-content.md
+ * §9 promises switching a source off doesn't unbuild characters, so a row nobody can explain any
+ * more is still drawn, still full, and still labelled with what the pick recorded.
+ *
+ * @param {number} level
+ * @param {object} [opts]
+ * @param {Array<{key,label,slots,advances}>} [opts.declared] rows a source declared, from effects.js
+ * @param {object} [opts.used] slotsUsed-shaped: { key: { 2, 3, 4 } }
+ * @param {object} [opts.labels] key -> the label a pick recorded, for rows nothing declares now
+ */
+export function advancementOptions(level, { declared = [], used = null, labels = null } = {}) {
+  const tiers = SLOT_TIERS.filter((tier) => tier <= tierForLevel(level));
+  const rows = new Map();
+
+  const push = (key, label, declaredSlots, source, extra = {}) => {
+    // First writer wins, and the printed table is written first: a source can add a row, never
+    // redefine one. (A card whose id is literally "traits" is cheap to rule out here.)
+    if (rows.has(key)) return;
+    const slots = {};
+    for (const tier of SLOT_TIERS) {
+      // A marked slot is drawn whatever the table now says. Same instinct as splitFlatSlotTotals:
+      // keep an over-count rather than quietly hand back a slot somebody already spent.
+      slots[tier] = Math.max(declaredSlots?.[tier] || 0, used?.[key]?.[tier] || 0);
+    }
+    const total = tiers.reduce((sum, tier) => sum + slots[tier], 0);
+    if (total <= 0) return; // nothing at this level: tier 1, or a row that starts higher up
+    rows.set(key, {
+      key,
+      label,
+      slots,
+      total,
+      // Both answered by key, never declared — see the note at the top of this file.
+      cost: optionCost(key),
+      slotsPerPick: slotsPerPick(key),
+      source,
+      ...extra,
+    });
+  };
+
+  for (const key of Object.keys(TIER_SLOT_TABLE)) push(key, coreLabel(key, tiers), TIER_SLOT_TABLE[key], "core");
+  for (const row of declared) push(row.key, row.label, row.slots, "declared", { advances: row.advances || null });
+  for (const key of Object.keys(used || {})) push(key, labels?.[key] || key, null, "orphan");
+
+  return [...rows.values()];
+}
+
+export function optionFor(options, key) {
+  return (options || []).find((option) => option.key === key) || null;
+}
+
+// What each pick called the option it marked. Written by the level up screen for declared rows
+// only, and read back when nothing declares that row any more — the label is the one thing here
+// that can't be looked up again.
+export function recordedOptionLabels(ch) {
+  const labels = {};
+  for (const entry of ch?.levelUps || []) {
+    for (const pick of entry.picks || []) {
+      if (pick.optionLabel) labels[pick.key] = pick.optionLabel;
+    }
   }
-  return open;
-}
-
-// Options unlocked at this level's tier.
-export function availableOptionKeys(level) {
-  const tier = tierForLevel(level);
-  if (tier === 1) return [];
-  return Object.keys(TIER_SLOT_TABLE).filter((key) => totalSlotsForOption(key, tier) > 0);
+  return labels;
 }
 
 export function isLevelAchievement(level) {
@@ -139,9 +210,13 @@ export function damageThresholds(baseMajor, baseSevere, level) {
 // Characters saved before slots were tracked per tier hold a single total per option.
 // Split it across the tiers lowest-first: it's deterministic, and it's what playing well
 // does anyway, since spending the cheap slots first keeps the higher domain card caps free.
+//
+// The key list is the union rather than the printed table's, because a declared option's key
+// isn't in that table and dropping it here would silently un-mark a slot the player spent.
 function splitFlatSlotTotals(flat) {
   const state = blankSlotsUsed();
-  for (const key of Object.keys(TIER_SLOT_TABLE)) {
+  for (const key of new Set([...Object.keys(TIER_SLOT_TABLE), ...Object.keys(flat || {})])) {
+    state[key] ||= { 2: 0, 3: 0, 4: 0 };
     let left = flat?.[key] || 0;
     for (const tier of SLOT_TIERS) {
       const take = Math.min(left, slotsInTier(key, tier));

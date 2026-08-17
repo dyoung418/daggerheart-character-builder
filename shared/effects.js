@@ -526,6 +526,36 @@ export function choiceFor(key, db) {
   return effectFor(db, key)?.choice || null;
 }
 
+// A level advancement option a feature adds to the ones every class gets. The Brawler's Combo
+// Strike is the case in hand: "Once per tier, you can increase your Combo Die by one step as a
+// level advancement option." It moves no stat — the app remembers the pick was made and how many
+// are left, and what the die then reads is the track beside it, not arithmetic this app does.
+//
+// Keyed like anything else here, so a SUBCLASS can declare one too. That isn't hypothetical: the
+// SRD's own Beastbound Companion says "choose a level-up option for your companion from this
+// sheet as well", so a rule tied to a subclass tier rather than a class is the normal case, not
+// the exotic one.
+//
+// A non-permanent domain card is refused outright. A marked slot is on the sheet forever and a
+// loadout card comes and goes, so an option hanging off one would strand its own spent slot the
+// day it was vaulted — and the level up screen is vault-blind anyway (characterAtLevel clears
+// domainVaultIds), so the gate has to be here rather than in collectEffects.
+export function declaredAdvancementOptions(ch, db) {
+  const out = [];
+  for (const entry of collectEffects(ch, db)) {
+    const declared = entry.effect.advancementOption;
+    if (!declared) continue;
+    if (entry.source === "domainCard" && !entry.effect.permanent) continue;
+    out.push({
+      key: entry.key,
+      label: declared.label || entry.label,
+      slots: declared.slots,
+      advances: declared.advances || null,
+    });
+  }
+  return out;
+}
+
 // How many of each domain are in the loadout — the requirement the *-Touched cards check.
 export function loadoutDomainCounts(ch, db) {
   const counts = {};

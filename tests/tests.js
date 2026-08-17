@@ -24,13 +24,14 @@ const {
   SUBCLASS_TIER_ORDER,
   TIER_CARD_CAP,
   advancementCredits,
-  availableOptionKeys,
+  advancementOptions,
   blankSlotsUsed,
   ensureLevelFields,
   extraCardLevelCap,
   isLevelAchievement,
   nextSubclassTier,
-  openSlotTiers,
+  optionFor,
+  recordedOptionLabels,
   remainingSlots,
   slotsInTier,
   slotsPerPick,
@@ -40,6 +41,7 @@ const {
   usedSlotsForOption,
 } = await import(`../shared/advancement.js${RUN}`);
 const {
+  describeLevelUp,
   experiencesAtLevel,
   recomputeCharacter,
   stateAtLevel,
@@ -51,6 +53,7 @@ const {
 const {
   TRAIT_KEYS,
   UNARMED_PROFILE,
+  advancementOptionsFor,
   derivedStats,
   effectBonuses,
   effectExperienceBonuses,
@@ -231,10 +234,15 @@ eq("Extra domain card: 1 per tier", [2, 3, 4].map((t) => slotsInTier("domainCard
 eq("Evasion: 1 per tier", [2, 3, 4].map((t) => slotsInTier("evasion", t)), [1, 1, 1]);
 eq("Subclass upgrade: tiers 3 and 4 only", [2, 3, 4].map((t) => slotsInTier("subclass", t)), [0, 1, 1]);
 eq("Proficiency: 2 joined slots, tiers 3 and 4 only", [2, 3, 4].map((t) => slotsInTier("proficiency", t)), [0, 2, 2]);
-eq("tier 2 offers exactly the six options printed there", availableOptionKeys(3).sort(),
+// Asked through the row builder, which is the only way the app asks: a stronger check than the
+// old one against a constant, because it also proves the builder leaves the printed table alone.
+eq("tier 2 offers exactly the six options printed there",
+  advancementOptions(3).map((o) => o.key).sort(),
   ["domainCard", "evasion", "experience", "hitPoint", "stress", "traits"]);
-eq("tier 3 adds subclass and proficiency", availableOptionKeys(5).sort(),
+eq("tier 3 adds subclass and proficiency",
+  advancementOptions(5).map((o) => o.key).sort(),
   ["domainCard", "evasion", "experience", "hitPoint", "proficiency", "stress", "subclass", "traits"]);
+eq("and level 1 offers nothing at all", advancementOptions(1), []);
 eq("proficiency costs both of a level's picks", slotsPerPick("proficiency"), 2);
 
 group("Tiers and achievements");
@@ -277,9 +285,102 @@ eq("traits at tier 4 includes both", totalSlotsForOption("traits", 4), 9);
   used.traits[2] = 3;
   used.traits[3] = 1;
   eq("used counts every tier", usedSlotsForOption(used, "traits"), 4);
-  eq("remaining at level 6", remainingSlots(used, "traits", 6), 2);
-  eq("an exhausted tier is no longer offered", openSlotTiers(used, "traits", 6), [3]);
-  eq("tiers above your own are never offered", openSlotTiers(blankSlotsUsed(), "traits", 3), [2]);
+  const traitsAt6 = optionFor(advancementOptions(6, { used }), "traits");
+  eq("remaining at level 6", remainingSlots(traitsAt6, used), 2);
+}
+
+// The Brawler's Combo Strike is the case this exists for — "Once per tier, you can increase your
+// Combo Die by one step as a level advancement option" — but nothing here may name it, so the
+// fixture declares the same shape on a class of its own.
+const GADGET_KEY = "cls:Escalating Gadget";
+const GADGET_OPTION = { label: "Improve your gadget", slots: { 2: 1, 3: 1, 4: 1 } };
+const ADV_DB = {
+  classes: [{
+    id: "cls", name: "TINKER", domains: ["VALOR"], startingHitPoints: 6, startingEvasion: 10,
+    classFeatures: [{ name: { "en-US": "Escalating Gadget" } }],
+  }],
+  subclasses: [{ id: "sub" }],
+  domainCards: [
+    { id: "c1", level: 1, domain: "VALOR", name: { "en-US": "A Card" } },
+    { id: "c2", level: 1, domain: "VALOR", name: { "en-US": "Another Card" } },
+  ],
+  effects: { [GADGET_KEY]: { advancementOption: GADGET_OPTION } },
+};
+const rowsFor = (ch, db = ADV_DB) => advancementOptionsFor(ch, db);
+const gadgetRow = (ch, db) => optionFor(rowsFor(ch, db), GADGET_KEY);
+
+group("A class can add a row to the advancement table without the code knowing its name");
+{
+  const ch = newCharacter();
+  ch.level = 5;
+  const rows = rowsFor(ch);
+  eq("the printed table comes first, in its printed order",
+    rows.slice(0, 8).map((o) => o.key),
+    ["traits", "hitPoint", "stress", "experience", "domainCard", "evasion", "subclass", "proficiency"]);
+  eq("the declared row is appended, never inserted", rows[8].key, GADGET_KEY);
+  eq("it carries the label the source wrote", rows[8].label, "Improve your gadget");
+  eq("and its own per-tier slots", rows[8].slots, { 2: 1, 3: 1, 4: 1 });
+  eq("it is marked as declared", rows[8].source, "declared");
+  // Not declarable, because the replay resolves picks with no content in hand.
+  eq("it costs one of the level's two points", rows[8].cost, 1);
+  eq("and marks exactly one slot", rows[8].slotsPerPick, 1);
+  eq("no row appears twice", rows.length, new Set(rows.map((o) => o.key)).size);
+
+  const later = { ...ADV_DB, effects: { [GADGET_KEY]: { advancementOption: { ...GADGET_OPTION, slots: { 3: 1 } } } } };
+  const atThree = newCharacter(); atThree.level = 3;
+  check("a row that starts at tier 3 isn't offered at level 3", !gadgetRow(atThree, later));
+  check("and is at level 5", !!gadgetRow(ch, later));
+
+  // A source may add a row; it may never redefine one.
+  const collide = { ...ADV_DB, effects: { traits: { advancementOption: { label: "Nope", slots: { 2: 9 } } } } };
+  eq("a declared key colliding with a printed one is ignored",
+    optionFor(rowsFor(ch, collide), "traits").label, "+1 to two unmarked traits");
+}
+
+group("A declared row needs no new state in the replay");
+{
+  const ch = newCharacter();
+  record(ch, 2, [{ key: GADGET_KEY, slotTier: 2, optionLabel: "Improve your gadget" }, { key: "stress", slotTier: 2 }], "c2");
+  eq("the slot is marked like any other", ch.advancementSlotsUsed[GADGET_KEY], { 2: 1, 3: 0, 4: 0 });
+  eq("used counts it", usedSlotsForOption(ch.advancementSlotsUsed, GADGET_KEY), 1);
+  // It moves nothing: what the die then reads is the track beside it, not arithmetic done here.
+  // Proficiency is 2 because level 2 is an achievement level, not because of this pick.
+  eq("it moves no stat of its own", [ch.hitPointSlotsBonus, ch.evasionBonus], [0, 0]);
+  eq("the other pick still applied", ch.stressSlotsBonus, 1);
+  eq("nothing is credited to it", advancementCredits(ch).hitPoint, []);
+  eq("the history list prints the label, not the key",
+    describeLevelUp(ch, ch.levelUps[0], ADV_DB).includes("Improve your gadget"), true);
+  eq("and the label is readable back off the character",
+    recordedOptionLabels(ch)[GADGET_KEY], "Improve your gadget");
+
+  eq("a legal declared pick is not an error", validateEntry(ch, ch.levelUps[0], ADV_DB), []);
+  // The regression this whole change turns on: before it, EVERY declared pick reported the
+  // literal sentence "undefined: no tier 2 slot left to mark." on every load, forever.
+  const twice = entry(2, [{ key: GADGET_KEY, slotTier: 2 }, { key: GADGET_KEY, slotTier: 2 }], "c2");
+  const errors = validateEntry(ch, twice, ADV_DB);
+  check("marking a once-per-tier row twice in one tier is an error", errors.length > 0);
+  check("and no message says 'undefined'", !errors.some((e) => e.includes("undefined")));
+  check("the message names the row", errors.some((e) => e.includes("Improve your gadget")));
+}
+
+group("A slot stays marked when whatever declared it has gone");
+{
+  const ch = newCharacter();
+  record(ch, 2, [{ key: GADGET_KEY, slotTier: 2, optionLabel: "Improve your gadget" }, { key: "stress", slotTier: 2 }], "c2");
+  const gone = { ...ADV_DB, effects: {} };
+  const row = gadgetRow(ch, gone);
+  check("the row is still drawn", !!row);
+  eq("as an orphan", row.source, "orphan");
+  eq("with exactly the slots that were spent", row.slots, { 2: 1, 3: 0, 4: 0 });
+  eq("labelled from what the pick recorded", row.label, "Improve your gadget");
+  eq("and offering nothing free", remainingSlots(row, ch.advancementSlotsUsed), 0);
+  check("the level now reads as one this character can't account for",
+    validateEntry(ch, ch.levelUps[0], gone).some((e) => e.includes("Improve your gadget")));
+
+  // An author who shrinks a declaration can't un-mark a slot either.
+  const shrunk = { ...ADV_DB, effects: { [GADGET_KEY]: { advancementOption: { ...GADGET_OPTION, slots: { 3: 1 } } } } };
+  eq("a shrunk declaration keeps the marks it already had",
+    gadgetRow(ch, shrunk).slots, { 2: 1, 3: 1, 4: 0 });
 }
 
 group("Hit Point and Stress cap at 12");
@@ -554,7 +655,8 @@ group("The same option marked twice in one level applies twice");
   record(ch, 2, [{ key: "hitPoint", slotTier: 2 }, { key: "hitPoint", slotTier: 2 }], "c2");
   eq("+2 Hit Point slots", ch.hitPointSlotsBonus, 2);
   eq("both tier-2 slots are marked", ch.advancementSlotsUsed.hitPoint, { 2: 2, 3: 0, 4: 0 });
-  eq("the row is now full", remainingSlots(ch.advancementSlotsUsed, "hitPoint", 2), 0);
+  const row = optionFor(advancementOptions(2, { used: ch.advancementSlotsUsed }), "hitPoint");
+  eq("the row is now full", remainingSlots(row, ch.advancementSlotsUsed), 0);
 }
 
 group("Editing a past level re-derives everything");
@@ -2783,6 +2885,24 @@ group("What a source may say its content does");
     validateEffectEntry({ choice: { prompt: "?", kind: "vibes", options: [{ id: "a", label: "A" }] } }) !== null);
   check("`when` is refused, because JSON can't carry the function it needs",
     validateEffectEntry({ evasion: 1, when: true }) !== null);
+
+  eq("a class may add a row to the level up table",
+    validateEffectEntry({ advancementOption: { label: "Improve your gadget", slots: { 2: 1, 3: 1, 4: 1 } } }), null);
+  eq("once ever is the same shape as once per tier, with fewer tiers in it",
+    validateEffectEntry({ advancementOption: { label: "Once", slots: { 3: 1 } } }), null);
+  check("a row with no label is refused, because the grid would print nothing",
+    validateEffectEntry({ advancementOption: { slots: { 2: 1 } } }) !== null);
+  check("and one with no slots, because there'd be no box to mark",
+    validateEffectEntry({ advancementOption: { label: "L", slots: {} } }) !== null);
+  // Tier 1 is level 1: no level ups yet. Named rather than dropped — an author who writes it has
+  // misread the table, and silently ignoring it hides a row they meant to add.
+  has("a tier that has no advancement slots is refused, and named",
+    [validateEffectEntry({ advancementOption: { label: "L", slots: { 5: 1 } } }) || ""], "tier 5");
+  has("including tier 1", [validateEffectEntry({ advancementOption: { label: "L", slots: { 1: 1 } } }) || ""], "tier 1");
+  check("half a slot is refused",
+    validateEffectEntry({ advancementOption: { label: "L", slots: { 2: 0.5 } } }) !== null);
+  check("and a key the format hasn't got",
+    validateEffectEntry({ advancementOption: { label: "L", slots: { 2: 1 }, cost: 2 } }) !== null);
 
   const { effects, report } = mergeSources([
     source("homebrew", { }, { hb_card: { evasion: 1 }, hb_bad: { when: true } }),
