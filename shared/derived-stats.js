@@ -139,6 +139,7 @@ function resolveChoice(entry, ch) {
 function gather(ch, db) {
   const domainCounts = loadoutDomainCounts(ch, db);
   const armor = equippedArmor(ch, db);
+  const sub = find(db?.subclasses, ch.subclassId);
   const ctx = {
     character: ch,
     level: ch.level,
@@ -146,6 +147,10 @@ function gather(ch, db) {
     armor,
     domainCounts,
     traits: baseTraitTotals(ch),
+    // Which trait "equal to your Spellcast trait" means. Only the subclass knows, and the thing
+    // granting such a bonus — a piece of armour — can't name it, so it's resolved here once.
+    // Null for the Guardian and the Warrior, whose subclasses have no Spellcast trait at all.
+    spellcastTrait: String(sub?.spellcastTrait || "").toLowerCase() || null,
   };
 
   // `when` and the trait modifiers are settled first, against base traits. Nothing in the
@@ -220,6 +225,13 @@ function baseOverride(contributions, key, ctx) {
  * the level up screen's slot gating, the history validation, the extra domain card count.
  * Every key in EFFECT_STAT_KEYS is present, so a new one in effects.js turns up here with
  * no change needed at either end.
+ *
+ * A value that scales with a trait is evaluated against BASE traits here, where derivedStats()
+ * below evaluates it against effective ones — this function never reassigns ctx.traits, because
+ * it doesn't compute the traits in the first place. That predates the `equalTo` form (it already
+ * applied to Untouchable's half-Agility) and no caller is affected: the three that exist read
+ * hitPointSlots, stressSlots and extraDomainCards, none of which scales with anything. Worth
+ * knowing before cataloguing a trait-scaled bonus that a level up screen has to gate on.
  */
 export function effectBonuses(ch, db) {
   const { contributions, ctx } = gather(ch, db);

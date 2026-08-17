@@ -263,9 +263,10 @@ Specialization entries too.
 }
 ```
 
-- **Stat keys**, all optional, all plain finite numbers:
+- **Stat keys**, all optional:
   `evasion`, `hitPointSlots`, `stressSlots`, `majorThreshold`, `severeThreshold`, `armorScore`,
-  `attack`, `spellcast`, `extraDomainCards`.
+  `attack`, `spellcast`, `extraDomainCards`. Each is a finite number, or a value the character's
+  own stats decide (below).
 - **`traits`** — a bonus or penalty to the character's traits, keyed by trait name **in
   lowercase**: `{ "traits": { "finesse": -1 } }`. That's the shape the SRD's own `armor:Very
   Heavy` and `weapon:Cumbersome` have. Lowercase is enforced rather than corrected, because the
@@ -284,6 +285,35 @@ Specialization entries too.
 
 Anything else is rejected and reported. `extraDomainCards` is not a stat: it changes how many cards
 the character gets to pick, and the level-up screen works it out by diffing before and after.
+
+### A value the character's own stats decide
+
+The books say this constantly — "equal to your Proficiency", "equal to your Presence", "equal to
+your Spellcast trait". Write it in place of the number:
+
+```json
+{
+  "myhomebrew_armor_robes:Spellwoven": {
+    "majorThreshold":  { "equalTo": "spellcast" },
+    "severeThreshold": { "equalTo": "spellcast" }
+  },
+  "myhomebrew_armor_finery:Resplendent": { "armorScore": { "equalTo": "presence" } }
+}
+```
+
+The whole vocabulary after `equalTo`: the six traits (`agility`, `strength`, `finesse`, `instinct`,
+`presence`, `knowledge`), plus `spellcast`, `proficiency` and `level`.
+
+- **`spellcast`** is whichever trait the character's subclass casts with, which is why it's a word
+  of its own — the armour granting the bonus can't know what the wearer's subclass is. A Guardian
+  or Warrior has no Spellcast trait, so it comes out as 0 for them and no row appears in the
+  breakdown.
+- It resolves against the trait **after** equipment has modified it, and it can be **negative**:
+  a caster whose Spellcast trait is −1 has their thresholds lowered by 1 wearing the armour above.
+  That's the literal reading of the text, and the sheet shows it.
+- **`equalTo` is the whole value.** `{ "equalTo": "presence", "plus": 2 }` is refused rather than
+  half-applied. If you need arithmetic, the bonus isn't declarative — write an `excluded` note.
+- `traits` values stay plain numbers; nothing scales a trait penalty.
 
 ### A better pair of fists
 
@@ -370,7 +400,7 @@ rejected loudly rather than dropped silently:
 | Not available | Why | What to do |
 |---|---|---|
 | `when` — a condition on the bonus | it's a predicate | state the bonus unconditionally if it's always on, or don't state it and write an `excluded` note |
-| a value that scales (`"equal to your Proficiency"`) | it's a function of the character | `excluded` note |
+| a value scaled by a *fraction* (`"half your Agility, round up"`) | one word after `equalTo` is the whole vocabulary; a fraction is the first step towards a small language | `excluded` note |
 
 The honest test for whether a thing deserves an entry at all: **is it in effect right now, given
 only what we store?** Permanent changes, a card sitting in the loadout, a configuration like "while

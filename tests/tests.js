@@ -1088,6 +1088,9 @@ group("Equipment changes traits, Evasion, Armor Score and attacks");
 // on, so these entries take the JSON path rather than the EFFECTS one.
 const SRC_DB = {
   ...FX_DB,
+  // Guardian and Warrior subclasses have no Spellcast trait, which is what makes them the
+  // interesting case for a bonus that scales with one.
+  subclasses: [...FX_DB.subclasses, { id: "nocast" }],
   armors: [
     ...FX_DB.armors,
     {
@@ -1095,9 +1098,31 @@ const SRC_DB = {
       baseScore: 2, baseMajorThreshold: 5, baseSevereThreshold: 11,
       features: [{ name: { "en-US": "Awkward" } }],
     },
+    {
+      id: "src_robes", name: { "en-US": "Sourced Robes" },
+      baseScore: 2, baseMajorThreshold: 5, baseSevereThreshold: 11,
+      features: [{ name: { "en-US": "Ensorcelled" } }],
+    },
+    {
+      id: "src_finery", name: { "en-US": "Sourced Finery" },
+      baseScore: 2, baseMajorThreshold: 5, baseSevereThreshold: 11,
+      // Gilded is the SRD's own +1 Presence, picked up by feature name — so this armour raises
+      // the very trait its other feature scales with.
+      features: [{ name: { "en-US": "Gilded" } }, { name: { "en-US": "Resplendent" } }],
+    },
+  ],
+  domainCards: [
+    ...FX_DB.domainCards,
+    { id: "src_card", name: { "en-US": "Sourced Card" }, domain: "VALOR", level: 1 },
   ],
   effects: {
     "armor:Awkward": { traits: { finesse: -1 } },
+    "src_robes:Ensorcelled": {
+      majorThreshold: { equalTo: "spellcast" },
+      severeThreshold: { equalTo: "spellcast" },
+    },
+    "src_finery:Resplendent": { armorScore: { equalTo: "presence" } },
+    src_card: { severeThreshold: { equalTo: "proficiency" }, evasion: { equalTo: "level" } },
   },
 };
 
@@ -1112,6 +1137,35 @@ group("A source can declare a trait penalty in JSON");
   // A Finesse weapon rolls the effective trait, so a penalty that stopped at the tile would
   // leave the attack a point too high — the same path armor:Very Heavy's -1 Agility takes.
   eq("and the attack roll drops with it", ch.primaryAttack.total, -1);
+}
+
+group("A source can declare a value the character's own stats decide");
+{
+  // Armor Score equal to your Presence, on armour that also raises Presence. Trait modifiers are
+  // settled before anything else reads them, so this must see the raised value: were it reading
+  // base traits the Gilded +1 would go missing and the number would be 2.
+  const finery = derivedStats(statChar({ equipment: { armorId: "src_finery" } }), SRC_DB);
+  eq("the trait it scales with is the effective one", finery.traits.presence.total, 1);
+  eq("so Armor Score is the armour's 2 plus that 1", finery.armorScore.total, 3);
+  eq("and the breakdown names the feature, not the trait",
+    finery.armorScore.parts.map((p) => p.label), ["Sourced Finery", "Sourced Finery (Resplendent)"]);
+
+  // "Equal to your Spellcast trait" means the trait itself, and this character's is Knowledge at
+  // -1 — so the bonus is negative. A form that could only ever add would be the wrong shape.
+  const robes = derivedStats(statChar({ equipment: { armorId: "src_robes" } }), SRC_DB);
+  eq("a Spellcast trait of -1 lowers both thresholds",
+    [robes.majorThreshold.total, robes.severeThreshold.total], [5, 11]);
+
+  const nocast = derivedStats(statChar({ subclassId: "nocast", equipment: { armorId: "src_robes" } }), SRC_DB);
+  eq("a subclass with no Spellcast trait scales to nothing",
+    [nocast.majorThreshold.total, nocast.severeThreshold.total], [6, 12]);
+  check("and contributes no breakdown row, rather than a +0 one",
+    !nocast.majorThreshold.parts.some((p) => p.label.includes("Ensorcelled")));
+
+  // The two words in the vocabulary that aren't traits.
+  const card = derivedStats(statChar({ proficiency: 2, domainCardIds: ["src_card"] }), SRC_DB);
+  eq("Proficiency scales a threshold", card.severeThreshold.total, 2 + 2);
+  eq("and level scales Evasion", card.evasion.total, 9 + 1);
 }
 
 group("Choosing to wear nothing");
@@ -2642,6 +2696,19 @@ group("What a source may say its content does");
     validateEffectEntry({ traits: { luck: 1 } }) !== null);
   check("and a penalty that isn't a number",
     validateEffectEntry({ traits: { finesse: "a lot" } }) !== null);
+  eq("a value the character's own stats decide is accepted",
+    validateEffectEntry({ armorScore: { equalTo: "presence" } }), null);
+  eq("including the trait a subclass casts with, which the armour can't name itself",
+    validateEffectEntry({ majorThreshold: { equalTo: "spellcast" }, severeThreshold: { equalTo: "spellcast" } }), null);
+  eq("and the two that aren't traits", validateEffectEntry({ severeThreshold: { equalTo: "proficiency" }, evasion: { equalTo: "level" } }), null);
+  check("a word nothing can scale with is refused",
+    validateEffectEntry({ evasion: { equalTo: "luck" } }) !== null);
+  // Refused rather than ignored, so nobody ships an entry believing the +2 was counted.
+  check("and `equalTo` with anything alongside it, because it's the whole value",
+    validateEffectEntry({ armorScore: { equalTo: "presence", plus: 2 } }) !== null);
+  eq("a benefit option can scale too, since it's checked by the same code", validateEffectEntry({
+    choice: { prompt: "Pick one", kind: "benefit", pick: 1, options: [{ id: "a", label: "A", armorScore: { equalTo: "strength" } }] },
+  }), null);
   // effect-choice.js renders anything that isn't "benefit" as an Experience picker rather than
   // failing, so an unrecognised kind would silently ask the wrong question.
   check("a choice of an unknown kind is refused rather than rendered as the wrong picker",
