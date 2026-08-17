@@ -466,7 +466,8 @@ function renderSubclassPreview(main) {
 // ---------- domain cards ----------
 
 function cardModel(c) {
-  return { id: c.id, name: c.name["en-US"], art: domainCardArtPath(c), level: c.level, type: c.type, features: c.features };
+  return { id: c.id, name: c.name["en-US"], art: domainCardArtPath(c), level: c.level,
+           recallCost: c.recallCost, type: c.type, features: c.features };
 }
 
 // The picker, so it's the one place the source toggles reach. Every other read of db.domainCards

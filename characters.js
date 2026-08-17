@@ -654,7 +654,8 @@ function renderDetail() {
       const inVault = ch.domainVaultIds.includes(cardId);
       const wrap = document.createElement("div");
       wrap.className = "card-tile";
-      wrap.appendChild(renderCardArt({ id: dc.id, name: dc.name["en-US"], art: domainCardArtPath(dc), level: dc.level, type: dc.type, features: dc.features }));
+      wrap.appendChild(renderCardArt({ id: dc.id, name: dc.name["en-US"], art: domainCardArtPath(dc),
+        level: dc.level, recallCost: dc.recallCost, type: dc.type, features: dc.features }));
       const label = document.createElement("div");
       label.className = "card-tile-label";
       label.textContent = dc.name["en-US"];

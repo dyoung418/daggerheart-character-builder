@@ -216,6 +216,28 @@ h1, h2, h3, .btn-primary, .btn-ghost, .btn-small, .top-nav a {
   font-size: 0.82rem;
 }
 .fallback-level:empty { display: none; }
+/* Recall cost, top right, the way the printed card places it. Same circle as the level but
+   outlined rather than filled, because the two are different numbers sitting side by side and
+   a player glancing at the card has to tell them apart at once. Hidden when absent, so the
+   cards that have no recall cost — subclass, ancestry, community, transformation — show
+   nothing rather than an empty ring. */
+.fallback-recall {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.05rem;
+  min-width: 1.7rem;
+  height: 1.7rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.82rem;
+}
+.fallback-recall:empty { display: none; }
+.fallback-recall-glyph { font-size: 0.68rem; line-height: 1; }
 .fallback-type {
   font-size: 0.66rem;
   color: var(--text-dim);

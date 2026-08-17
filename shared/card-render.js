@@ -10,7 +10,8 @@ import { openLightbox } from "./lightbox.js";
 import { escapeHtml } from "./escape.js";
 
 /**
- * @param {{ art: string, domainClass?: string, level?: number|string, type?: string, name: string, features?: Array<{name: {"en-US": string}, description: Array<{paragraph: {"en-US": string}}>}> }} card
+ * @param {{ art: string, domainClass?: string, level?: number|string, recallCost?: number,
+ *   type?: string, name: string, features?: Array<{name: {"en-US": string}, description: Array<{paragraph: {"en-US": string}}>}> }} card
  * @returns {HTMLDivElement}
  */
 export function renderCardArt(card) {
@@ -31,10 +32,23 @@ export function renderCardArt(card) {
     img.remove();
     const fallback = document.createElement("div");
     fallback.className = "card-fallback";
+    // Level, type and recall cost, laid out the way the printed card puts them: level top left,
+    // recall cost top right. Both circles are empty for a card that has neither — a subclass,
+    // ancestry, community or transformation — and CSS hides an empty one, so only domain cards
+    // show them.
+    //
+    // Recall cost belongs here because this fallback IS the card for anyone without the art,
+    // and "what does it cost to pull this back out of the vault?" is a question you answer mid
+    // -session. A cost of 0 is a real and common answer, so it's tested for null rather than
+    // for truthiness. The ⚡ is the Stress glyph the printed card puts beside the number.
+    const recall = card.recallCost == null
+      ? ""
+      : `${escapeHtml(card.recallCost)}<span class="fallback-recall-glyph" aria-hidden="true">⚡</span>`;
     fallback.innerHTML = `
       <div class="fallback-header">
-        <span class="fallback-level">${escapeHtml(card.level ?? "")}</span>
+        <span class="fallback-level" title="Level">${escapeHtml(card.level ?? "")}</span>
         <span class="fallback-type">${escapeHtml(card.type ?? "")}</span>
+        <span class="fallback-recall" title="Recall Cost">${recall}</span>
       </div>
       <div class="fallback-title">${escapeHtml(card.name)}</div>
       <div class="fallback-features">${featuresHtml(card.features)}</div>

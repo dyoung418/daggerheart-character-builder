@@ -935,7 +935,8 @@ function renderDomainCardsStep(panel) {
   grid.className = "tile-grid";
   if (available.length === 0) emptyPickerNote(panel, "level 1 cards in this class's domains");
   for (const c of available) {
-    const card = { id: c.id, name: c.name["en-US"], art: domainCardArtPath(c), level: c.level, type: c.type, features: c.features };
+    const card = { id: c.id, name: c.name["en-US"], art: domainCardArtPath(c), level: c.level,
+                   recallCost: c.recallCost, type: c.type, features: c.features };
     const selected = character.creationDomainCardIds.includes(c.id);
     const tile = cardTile(card, selected, () => {
       if (selected) {
