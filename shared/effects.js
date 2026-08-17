@@ -361,10 +361,15 @@ export const EFFECT_STAT_KEYS = [
 // `spellcast` earns its place beside the six traits because the thing declaring the bonus can't
 // name the trait: a piece of armour doesn't know what the wearer's subclass casts with.
 //
+// `tier` is not a field on the context — it's tierForLevel(level), stated once in
+// advancement.js and read here the same way Bare Bones' threshold table reads it. It's a word of
+// its own because "equal to your tier" is how the books write it, and deriving it at the call
+// site would put that mapping in two places.
+//
 // Anything more involved stays a function, which only this file can hold. Notably "half your
 // Agility, round up" (Untouchable) is not expressible, deliberately: one word after `equalTo` is
 // the whole vocabulary, and a fraction would be the first step towards a small language.
-export const EFFECT_SCALE_KEYS = [...TRAIT_KEYS, "spellcast", "proficiency", "level"];
+export const EFFECT_SCALE_KEYS = [...TRAIT_KEYS, "spellcast", "proficiency", "level", "tier"];
 
 // A content source may declare its own effects, and they arrive on `db.effects` — never merged
 // into EFFECTS above, which stays exactly the hand-audited catalogue this file documents.
@@ -540,6 +545,9 @@ export function loadoutDomainCounts(ch, db) {
 function scaledValue({ equalTo }, ctx) {
   if (equalTo === "proficiency") return ctx.proficiency ?? 0;
   if (equalTo === "level") return ctx.level ?? 0;
+  // Tier is a function of level rather than a field of its own, and tierForLevel is the one
+  // place that mapping is stated — the same call Bare Bones' threshold table makes.
+  if (equalTo === "tier") return tierForLevel(ctx.level ?? 1);
   const key = equalTo === "spellcast" ? ctx.spellcastTrait : equalTo;
   if (!key) return 0;
   return ctx.traits?.[key] ?? 0;
