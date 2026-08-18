@@ -94,6 +94,7 @@ const {
   CSV_COLUMNS,
   buildCsv,
   csvField,
+  rowContext,
 } = await import(`../shared/csv-export.js${RUN}`);
 const {
   combineManifests,
@@ -843,17 +844,25 @@ group("A second class shows up wherever the first one does");
   // The column functions directly: csvRowForCharacter returns the joined line, and splitting a
   // CSV row on commas is exactly the thing quoting exists to defeat.
   const cell = (who, header) => CSV_COLUMNS.find((c) => c.header === header)
-    .value({ ch: who, db: showDb, stats: derivedStats(who, showDb),
-      multiclass: who.multiclass
-        ? { cls: showDb.classes.find((c) => c.id === who.multiclass.classId),
-            sub: showDb.subclasses.find((x) => x.id === who.multiclass.subclassId) }
-        : null });
+    .value(rowContext(who, showDb, true));
   const at = (h) => cell(ch, h);
   eq("the export carries the class", at("Multiclass"), "Spark");
   eq("the domain", at("Multiclass Domain"), "Arcana");
   eq("and the subclass", at("Multiclass Subclass"), "Spark Sub");
-  has("with the feature text of both", [at("Multiclass Features")], "It whirrs.");
+  // A pair per group rather than one combined cell, so a consumer with a slot for each can
+  // fill them without guessing where the class's features end and the subclass's begin.
+  eq("the class's own features get their own pair", at("Multiclass feature name"), "Gizmo");
+  has("with their text", [at("Multiclass feature text")], "It whirrs.");
+  eq("and the subclass's foundation another",
+    at("Multiclass Foundation feature name"), "Groundwork");
+  has("with its text", [at("Multiclass Foundation feature text")], "Groundwork:");
+  eq("a tier this character hasn't reached is empty",
+    at("Multiclass Specialization feature name"), "");
+  check("and the Hope feature is in none of them",
+    !["Multiclass feature text", "Multiclass Foundation feature text"]
+      .some((h) => at(h).includes("Hopeful")));
   eq("a character without one leaves them empty", cell(plain, "Multiclass"), "");
+  eq("and their feature columns too", cell(plain, "Multiclass Foundation feature name"), "");
 
   // Both ids are reported, so a renamed folder says what went missing rather than quietly
   // dropping the features. The domain isn't an id and needs no check.

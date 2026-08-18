@@ -55,11 +55,18 @@ function names(records) {
 /**
  * Everything the column functions read, looked up once. Fifty-odd values off one character
  * would otherwise re-find the same class fifty-odd times.
+ *
+ * Exported for the tests, which exercise one column at a time: building this by hand there
+ * meant a second copy of these lookups, and it went stale the moment a column needed a new one.
  */
-function rowContext(ch, db, loadout) {
+export function rowContext(ch, db, loadout) {
   const unarmored = ch.equipment?.armorId === UNARMORED;
   const sub = find(db?.subclasses, ch.subclassId);
   const stats = derivedStats(ch, db);
+  // Null for the overwhelming majority; the columns read empty for them.
+  const multiclass = ch.multiclass
+    ? { cls: find(db?.classes, ch.multiclass.classId), sub: find(db?.subclasses, ch.multiclass.subclassId) }
+    : null;
   return {
     ch,
     db,
@@ -67,10 +74,7 @@ function rowContext(ch, db, loadout) {
     stats,
     cls: find(db?.classes, ch.classId),
     sub,
-    // Null for the overwhelming majority; the columns read empty for them.
-    multiclass: ch.multiclass
-      ? { cls: find(db?.classes, ch.multiclass.classId), sub: find(db?.subclasses, ch.multiclass.subclassId) }
-      : null,
+    multiclass,
     com: find(db?.communities, ch.heritage?.communityId),
     transformation: find(db?.transformations, ch.transformationId),
     ancestries: (ch.heritage?.ancestryIds || []).map((id) => find(db?.ancestries, id)).filter(Boolean),
@@ -84,6 +88,13 @@ function rowContext(ch, db, loadout) {
     // rather than replacing the one below it, so the tiers below always count.
     tierFeatures: Object.fromEntries(
       subclassTiersUpTo(ch.subclassTier).map((tier) => [tier, sub?.[tier]?.features || []]),
+    ),
+    // The same, for the second subclass, which climbs its own ladder: a character can be at
+    // Mastery in one and Foundation in the other. Empty for everyone who hasn't multiclassed.
+    multiclassTierFeatures: Object.fromEntries(
+      (multiclass ? subclassTiersUpTo(ch.multiclass.tier || "foundation") : []).map(
+        (tier) => [tier, multiclass.sub?.[tier]?.features || []],
+      ),
     ),
     unarmored,
     armor: unarmored ? null : find(db?.armors, ch.equipment?.armorId),
@@ -277,15 +288,16 @@ export const CSV_COLUMNS = [
   { header: "Multiclass", value: (r) => (r.multiclass?.cls ? titleCase(r.multiclass.cls.name) : "") },
   { header: "Multiclass Domain", value: (r) => enumLabel(r.ch.multiclass?.domain || "") },
   { header: "Multiclass Subclass", value: (r) => (r.multiclass ? name(r.multiclass.sub) : "") },
-  {
-    header: "Multiclass Features",
-   
-    value: (r) => featuresText([
-      ...(r.multiclass?.cls?.classFeatures || []),
-      ...(r.multiclass ? subclassTiersUpTo(r.ch.multiclass.tier || "foundation") : [])
-        .flatMap((tier) => r.multiclass.sub?.[tier]?.features || []),
-    ]),
-  },
+  // A name/text pair per group, the shape the primary class's features already take, because a
+  // consumer laying out a sheet has a separate slot for each: the second class's own features,
+  // its subclass's foundation, its subclass's specialization. One combined cell ran them
+  // together with nothing to tell a reader — or a script — where one group ended.
+  //
+  // No Mastery pair: Multiclass marks both slots of its tier (advancement.js), so the second
+  // subclass can be upgraded at most once and never reaches mastery.
+  ...featurePair("Multiclass", (r) => r.multiclass?.cls?.classFeatures || []),
+  ...featurePair("Multiclass Foundation", (r) => r.multiclassTierFeatures.foundation || []),
+  ...featurePair("Multiclass Specialization", (r) => r.multiclassTierFeatures.specialization || []),
 
   // The dice a class rolls, "Rally Die: d8". One column rather than a name and a value, because a
   // character can hold more than one and the header is shared by the whole party — the same
