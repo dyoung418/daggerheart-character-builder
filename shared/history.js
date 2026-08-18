@@ -370,8 +370,16 @@ export function validateEntry(ch, entry, db) {
   // What the character's second class is once this level's picks are counted, so the card the
   // level GRANTS may already come from the new domain — the sheet's step order puts advancements
   // before the domain card.
+  //
+  // The WHOLE payload, not just the domain. Two things downstream read this: the domain access
+  // below, which wants only `domain`, and the granted-card count further down, which asks
+  // effects.js what the character has — and that needs the ids, or a foundation card whose
+  // feature hands over a domain card grants nothing and the level flags itself the moment it's
+  // saved. (A School of Knowledge multiclass did exactly that.)
   const mcAfterPicks = state.multiclass
-    || picks.filter((p) => p.key === "multiclass").map((p) => ({ domain: p.domain }))[0]
+    || picks
+      .filter((p) => p.key === "multiclass")
+      .map((p) => ({ classId: p.classId, subclassId: p.subclassId, domain: p.domain }))[0]
     || null;
   const check = (id, cap, what) => {
     if (!id) { errors.push(`${what}: no card chosen.`); return; }

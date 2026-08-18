@@ -725,6 +725,32 @@ group("Two Spellcast traits are alternatives, not a sum");
     derivedStats(mute, castDb).spellcast.display, "Instinct");
 }
 
+group("A foundation card that grants a card grants it at the level you multiclass");
+{
+  // School of Knowledge's shape: the foundation card hands over an extra domain card, and you
+  // took that card by multiclassing, so the level grants one.
+  const grantDb = {
+    ...MC_DB,
+    subclasses: MC_DB.subclasses.map((s) => (s.id !== "sub2" ? s : { ...s, foundation: { features: [] } })),
+    effects: { ...MC_DB.effects, "sub2:foundation": { extraDomainCards: 1 } },
+  };
+  const ch = newCharacter();
+  ch.level = 4;
+  const level5 = { ...entry(5, [MULTICLASS], "c2"), grantedCardIds: ["c3"] };
+  eq("the level that takes it is legal with one granted card recorded",
+    validateEntry(ch, level5, grantDb), []);
+  has("and reports it missing when none was recorded",
+    validateEntry(ch, entry(5, [MULTICLASS], "c2"), grantDb), "0 chosen, 1 granted");
+
+  // Only at that level: from the next one on, the character already had the feature.
+  record(ch, 5, [MULTICLASS], "c2", null);
+  ch.levelUps[0].grantedCardIds = ["c3"];
+  recomputeCharacter(ch);
+  eq("the level after grants nothing further",
+    validateEntry(ch, entry(6, [{ key: "evasion", slotTier: 2 }, { key: "stress", slotTier: 2 }], "c1"), grantDb)
+      .filter((e) => e.includes("granted")), []);
+}
+
 group("A second class shows up wherever the first one does");
 {
   const showDb = {
