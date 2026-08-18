@@ -255,9 +255,11 @@ export function deriveSheet(character, db) {
     // with their tier. No Hope feature: a multiclass doesn't grant one.
     multiclassFeatures: [
       ...features(mcClass?.classFeatures).map((f) => ({ ...f, source: mcClass ? titleCase(mcClass.name) : "" })),
-      ...features(mcSub?.foundation?.features).map((f) => ({
-        ...f, source: `${mcSub.name["en-US"]} (${SUBCLASS_TIER_LABELS.foundation})`,
-      })),
+      ...(mcSub ? subclassTiersUpTo(character.multiclass.tier || "foundation") : []).flatMap((tier) =>
+        features(mcSub[tier]?.features).map((f) => ({
+          ...f, source: `${mcSub.name["en-US"]} (${SUBCLASS_TIER_LABELS[tier]})`,
+        })),
+      ),
     ],
 
     loadout,

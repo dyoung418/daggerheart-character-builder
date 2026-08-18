@@ -67,7 +67,9 @@ function blankState(ch) {
     // `?? null` is the whole back-compat story: captureBaseline runs once per character, so every
     // save written before this existed has a baseline with no such key and nothing will ever add
     // one. Reading it as undefined would round-trip through JSON as a missing field instead.
-    multiclass: b.multiclass ?? null,
+    // Copied, not shared: the subclass upgrade below advances `tier` on this object, and the
+    // baseline must not move when it does.
+    multiclass: b.multiclass ? { ...b.multiclass } : null,
     slotsUsed: JSON.parse(JSON.stringify(b.slotsUsed)),
     cardIds: baselineCardIds(ch),
     expBonus: {}, // experience id -> how many +1s it has picked up
@@ -106,8 +108,16 @@ function applyEntry(state, entry) {
       case "experience":
         for (const id of pick.experienceIds || []) state.expBonus[id] = (state.expBonus[id] || 0) + 1;
         break;
+      // Which subclass to upgrade. Absent means your own, so every entry recorded before a
+      // character could have two reads exactly as it always did.
       case "subclass":
-        if (state.subclassTier !== "mastery") state.subclassTier = nextSubclassTier(state.subclassTier);
+        if (pick.target === "multiclass") {
+          if (state.multiclass && state.multiclass.tier !== "mastery") {
+            state.multiclass = { ...state.multiclass, tier: nextSubclassTier(state.multiclass.tier) };
+          }
+        } else if (state.subclassTier !== "mastery") {
+          state.subclassTier = nextSubclassTier(state.subclassTier);
+        }
         break;
       case "proficiency": state.proficiency += 1; break;
       // The earliest one wins, replay being level-ordered. A hand-edited file holding two keeps
@@ -116,6 +126,8 @@ function applyEntry(state, entry) {
       case "multiclass":
         state.multiclass ||= {
           classId: pick.classId, subclassId: pick.subclassId, domain: pick.domain, level: entry.level,
+          // Its own ladder, climbed by a subclass upgrade that targets it.
+          tier: "foundation",
         };
         break;
       case "domainCard":
@@ -327,10 +339,19 @@ export function validateEntry(ch, entry, db) {
   const stress = stressTotal(state.stressSlotsBonus + picks.filter((p) => p.key === "stress").length, granted.stressSlots);
   if (stress > MAX_STRESS_SLOTS) errors.push(`This would take Stress past the maximum of ${MAX_STRESS_SLOTS}.`);
 
+  // One ladder per subclass the character has. A pick names which it climbs; the mastery check
+  // and the tier the effects are asked about both follow from that.
   let tierAfterPicks = state.subclassTier;
-  for (const _ of picks.filter((p) => p.key === "subclass")) {
-    if (state.subclassTier === "mastery") errors.push("The subclass is already at Mastery.");
-    tierAfterPicks = nextSubclassTier(tierAfterPicks);
+  let mcTierAfterPicks = state.multiclass?.tier || "foundation";
+  for (const pick of picks.filter((p) => p.key === "subclass")) {
+    if (pick.target === "multiclass") {
+      if (!state.multiclass) errors.push("Subclass upgrade: this character has no second subclass to upgrade.");
+      else if (mcTierAfterPicks === "mastery") errors.push("The second subclass is already at Mastery.");
+      mcTierAfterPicks = nextSubclassTier(mcTierAfterPicks);
+    } else {
+      if (tierAfterPicks === "mastery") errors.push("The subclass is already at Mastery.");
+      tierAfterPicks = nextSubclassTier(tierAfterPicks);
+    }
   }
 
   // Multiclass: the payload has to name a class this character could actually have taken. The
@@ -379,7 +400,7 @@ export function validateEntry(ch, entry, db) {
   const mcAfterPicks = state.multiclass
     || picks
       .filter((p) => p.key === "multiclass")
-      .map((p) => ({ classId: p.classId, subclassId: p.subclassId, domain: p.domain }))[0]
+      .map((p) => ({ classId: p.classId, subclassId: p.subclassId, domain: p.domain, tier: "foundation" }))[0]
     || null;
   const check = (id, cap, what) => {
     if (!id) { errors.push(`${what}: no card chosen.`); return; }
@@ -411,7 +432,11 @@ export function validateEntry(ch, entry, db) {
     // in effects.js rather than here; only your level caps these, since they aren't slots.
     const before = granted.extraDomainCards;
     const after = effectBonuses(
-      { ...characterAtLevel(ch, state), subclassTier: tierAfterPicks, multiclass: mcAfterPicks },
+      {
+        ...characterAtLevel(ch, state),
+        subclassTier: tierAfterPicks,
+        multiclass: mcAfterPicks && { ...mcAfterPicks, tier: mcTierAfterPicks },
+      },
       db,
     ).extraDomainCards;
     const expected = Math.max(0, after - before);
@@ -473,6 +498,11 @@ export function describeLevelUp(ch, entry, db) {
       parts.push(`+1 to ${names.join(" & ")}`);
     } else if (pick.key === "domainCard") {
       parts.push(`${SHORT_LABELS.domainCard}: ${cardName(byId.get(pick.cardId))}`);
+    } else if (pick.key === "subclass" && pick.target === "multiclass") {
+      // Which one it climbed, for a character with two ladders. A pick with no target is your
+      // own subclass and reads as it always did.
+      const sub = (db?.subclasses || []).find((s) => s.id === ch.multiclass?.subclassId);
+      parts.push(`${SHORT_LABELS.subclass}: ${sub?.name?.["en-US"] || "multiclass"}`);
     } else if (pick.key === "multiclass") {
       // Named the way the extra card is: the choice is the interesting part, not the option.
       const into = (db?.classes || []).find((c) => c.id === pick.classId);

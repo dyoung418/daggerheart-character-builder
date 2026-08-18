@@ -534,8 +534,8 @@ group("A multiclass is recorded on the pick and derived by the replay");
   const ch = newCharacter();
   ch.level = 4;
   record(ch, 5, [MULTICLASS], "c2");
-  eq("the replay derives it, with the level it was taken at",
-    ch.multiclass, { classId: "cls2", subclassId: "sub2", domain: "ARCANA", level: 5 });
+  eq("the replay derives it, with the level it was taken at and its own subclass ladder",
+    ch.multiclass, { classId: "cls2", subclassId: "sub2", domain: "ARCANA", level: 5, tier: "foundation" });
   eq("both of the tier's boxes are marked", ch.advancementSlotsUsed.multiclass, { 2: 0, 3: 2, 4: 0 });
   eq("it moves no stat", [ch.hitPointSlotsBonus, ch.stressSlotsBonus, ch.evasionBonus], [0, 0, 0]);
   eq("and is credited with nothing", advancementCredits(ch).evasion, []);
@@ -678,7 +678,8 @@ group("A second class brings its features, and its foundation card");
   check("its class feature applies", keys.includes("cls2:Gizmo"));
   check("its Hope feature does not — the module doesn't hand one over", !keys.includes("cls2:Hopeful"));
   check("the foundation card you took applies", keys.includes("sub2:foundation"));
-  check("and never the tiers above it: only your own subclass ladders", !keys.includes("sub2:specialization"));
+  // Its ladder starts at the foundation card you took; a later upgrade that names it climbs.
+  check("and only the tier it has reached", !keys.includes("sub2:specialization"));
   eq("so the numbers reach the sheet", effectBonuses(ch, featureDb).evasion, 1);
 
   const before = newCharacter();
@@ -749,6 +750,64 @@ group("A foundation card that grants a card grants it at the level you multiclas
   eq("the level after grants nothing further",
     validateEntry(ch, entry(6, [{ key: "evasion", slotTier: 2 }, { key: "stress", slotTier: 2 }], "c1"), grantDb)
       .filter((e) => e.includes("granted")), []);
+}
+
+group("A subclass upgrade can climb either subclass");
+{
+  const ladderDb = {
+    ...MC_DB,
+    subclasses: MC_DB.subclasses.map((x) => {
+      if (x.id === "sub") return { ...x, foundation: {}, specialization: {}, mastery: {} };
+      if (x.id === "sub2") return { ...x, foundation: {}, specialization: {}, mastery: {} };
+      return x;
+    }),
+    effects: {
+      ...MC_DB.effects,
+      "sub:specialization": { evasion: 1 },
+      "sub2:specialization": { stressSlots: 1 },
+    },
+  };
+  const built = () => {
+    const ch = newCharacter();
+    ch.level = 4;
+    record(ch, 5, [MULTICLASS], "c2");
+    return ch;
+  };
+
+  eq("a multiclass starts its subclass at foundation", built().multiclass.tier, "foundation");
+
+  const own = built();
+  record(own, 8, [{ key: "subclass", slotTier: 4 }, { key: "stress", slotTier: 2 }], "c3");
+  eq("an upgrade with no target climbs your own, as it always did", own.subclassTier, "specialization");
+  eq("and leaves the second one alone", own.multiclass.tier, "foundation");
+  eq("so its specialization is what applies", effectBonuses(own, ladderDb).evasion, 1);
+
+  const second = built();
+  record(second, 8, [{ key: "subclass", slotTier: 4, target: "multiclass" }, { key: "stress", slotTier: 2 }], "c3");
+  eq("an upgrade that names the multiclass climbs that one", second.multiclass.tier, "specialization");
+  eq("and leaves your own at foundation", second.subclassTier, "foundation");
+  eq("so ITS specialization is what applies", effectBonuses(second, ladderDb).stressSlots, 1);
+  eq("with no evasion from the other ladder", effectBonuses(second, ladderDb).evasion, 0);
+  eq("the level is legal", validateEntry(second, second.levelUps[1], ladderDb), []);
+
+  // Mastery needs two upgrades, and multiclassing spends one of the two slots.
+  const maxed = built();
+  maxed.baseline.multiclass = null;
+  maxed.multiclass = { ...maxed.multiclass, tier: "mastery" };
+  has("a second subclass that's already at Mastery is refused",
+    validateEntry({ ...maxed, baseline: { ...maxed.baseline, multiclass: { ...maxed.multiclass } } },
+      entry(8, [{ key: "subclass", slotTier: 4, target: "multiclass" }, { key: "stress", slotTier: 2 }], "c3"),
+      ladderDb),
+    "second subclass is already at Mastery");
+  has("and so is naming a multiclass the character hasn't got",
+    validateEntry(newCharacter(), entry(8, [{ key: "subclass", slotTier: 4, target: "multiclass" }, { key: "stress", slotTier: 2 }], "c2"), ladderDb),
+    "no second subclass");
+
+  // The baseline must not move when a ladder does.
+  const baselineCheck = built();
+  record(baselineCheck, 8, [{ key: "subclass", slotTier: 4, target: "multiclass" }, { key: "stress", slotTier: 2 }], "c3");
+  recomputeCharacter(baselineCheck);
+  eq("replaying twice doesn't climb twice", baselineCheck.multiclass.tier, "specialization");
 }
 
 group("A second class shows up wherever the first one does");

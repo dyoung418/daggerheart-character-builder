@@ -153,9 +153,14 @@ function traitsPickedThisLevel() {
   return picksFor("traits").flatMap((p) => p.traits);
 }
 
-function subclassTierAfterPicks() {
-  let tier = context.subclassTier;
-  for (let i = 0; i < picksFor("subclass").length; i++) tier = nextSubclassTier(tier);
+// One ladder per subclass. `target` is "multiclass" or absent, absent meaning your own — which
+// is what keeps every level recorded before a character could have two reading as it always did.
+function subclassTierAfterPicks(target) {
+  const own = target !== "multiclass";
+  let tier = own ? context.subclassTier : (context.multiclass?.tier || "foundation");
+  for (const pick of picksFor("subclass")) {
+    if ((pick.target === "multiclass") === !own) tier = nextSubclassTier(tier);
+  }
   return tier;
 }
 
@@ -190,7 +195,12 @@ function markBlockedReason(option, tier) {
   if (option.cost === 2 && picks.length > 0) return `${WHOLE_LEVEL_NAMES[key]} needs both picks: clear the other one first.`;
   if (budgetSpent() + option.cost > 2) return "No choice points left this level.";
   if (slotsTakenInTier(key, tier) + option.slotsPerPick > option.slots[tier]) return "No slots left in this tier.";
-  if (key === "subclass" && subclassTierAfterPicks() === "mastery") return "Subclass is already at Mastery.";
+  // Blocked only when BOTH ladders are done: with a second subclass there's still somewhere to
+  // spend it, and which one is chosen below the grid.
+  if (key === "subclass" && subclassTierAfterPicks() === "mastery"
+    && (!context.multiclass || subclassTierAfterPicks("multiclass") === "mastery")) {
+    return "Every subclass is already at Mastery.";
+  }
   if (key === "hitPoint" && hitPointsAfterPicks() >= MAX_HIT_POINT_SLOTS) return `Hit Points are at the maximum of ${MAX_HIT_POINT_SLOTS}.`;
   if (key === "stress" && stressAfterPicks() >= MAX_STRESS_SLOTS) return `Stress is at the maximum of ${MAX_STRESS_SLOTS}.`;
   return null;
@@ -207,6 +217,8 @@ function addPick(option, slotTier) {
     traits: [],
     experienceIds: [],
     cardId: null,
+    // Which subclass an upgrade climbs. Null means your own.
+    target: null,
     // The multiclass payload: which class, which of its domains, which of its subclasses. Null
     // until the picker below fills them in, and stepValidation won't let the level confirm until
     // all three are set.
@@ -452,7 +464,7 @@ function renderSubPickers(main, cls, newLevel) {
     if (pick.key === "traits") renderTraitSubPicker(main, pick, index, ordinal, newLevel);
     if (pick.key === "experience") renderExperienceSubPicker(main, pick, ordinal, newLevel);
     if (pick.key === "domainCard") renderExtraCardPicker(main, pick, index, ordinal, cls, newLevel);
-    if (pick.key === "subclass") renderSubclassPreview(main);
+    if (pick.key === "subclass") renderSubclassPreview(main, pick, ordinal);
     if (pick.key === "multiclass") renderMulticlassPicker(main, pick);
   });
 }
@@ -509,20 +521,51 @@ function renderExperienceSubPicker(main, pick, ordinal, newLevel) {
   main.appendChild(list);
 }
 
-function renderSubclassPreview(main) {
-  const nextTier = nextSubclassTier(context.subclassTier);
-  const sub = db.subclasses.find((s) => s.id === character.subclassId);
+// A preview for a character with one subclass; a choice of which to upgrade for a character with
+// two. The card is never a choice — it's whatever comes next on the ladder you name.
+function renderSubclassPreview(main, pick, ordinal) {
+  const targets = [{ key: null, subclassId: character.subclassId }];
+  if (context.multiclass) targets.push({ key: "multiclass", subclassId: context.multiclass.subclassId });
+
+  if (targets.length > 1) {
+    subHeading(main, `Subclass upgrade${ordinal}: which subclass does this one advance?`);
+    const row = document.createElement("div");
+    row.className = "field-row";
+    for (const target of targets) {
+      const sub = db.subclasses.find((s) => s.id === target.subclassId);
+      const at = subclassTierAfterPicks(target.key);
+      // Un-taking this pick first, so a ladder already at Mastery reads as such rather than
+      // counting the very pick that's asking.
+      const done = at === "mastery" && (pick.target === "multiclass") !== (target.key === "multiclass");
+      const label = document.createElement("label");
+      label.innerHTML = `<input type="radio" name="subclass-target-${pick.slotTier}" ` +
+        `${(pick.target || null) === target.key ? "checked" : ""} ${done ? "disabled" : ""}/> ` +
+        `${escapeHtml(sub ? sub.name["en-US"] : "Subclass")}` +
+        `${target.key ? " (multiclass)" : ""}${done ? " — already at Mastery" : ""}`;
+      label.querySelector("input").addEventListener("change", () => { pick.target = target.key; render(); });
+      row.appendChild(label);
+    }
+    main.appendChild(row);
+    if (!pick.target && pick.target !== null) return;
+  }
+
+  const chosen = pick.target === "multiclass" ? targets[1] : targets[0];
+  const currentTier = pick.target === "multiclass"
+    ? (context.multiclass?.tier || "foundation")
+    : context.subclassTier;
+  const nextTier = nextSubclassTier(currentTier);
+  const sub = db.subclasses.find((s) => s.id === chosen.subclassId);
   const label = SUBCLASS_TIER_LABELS[nextTier];
   const name = sub ? `${sub.name["en-US"]} (${label})` : label;
   // "Add", not "take": the new card joins the ones already on the sheet instead of replacing
   // them, and the features of the earlier cards keep working.
-  subHeading(main, `You'll add the ${label} card to your subclass. The cards you already have still apply.`);
+  subHeading(main, `You'll add the ${label} card to ${sub ? sub.name["en-US"] : "your subclass"}. The cards you already have still apply.`);
   const preview = document.createElement("div");
   preview.className = "tile-grid";
   const tile = document.createElement("div");
   tile.className = "card-tile";
   tile.appendChild(renderCardArt({
-    id: character.subclassId, name, art: subclassCardArtPath(sub, nextTier),
+    id: chosen.subclassId, name, art: subclassCardArtPath(sub, nextTier),
     type: "Subclass", features: sub?.[nextTier]?.features,
   }));
   preview.appendChild(tile);
@@ -575,7 +618,7 @@ function renderMulticlassPicker(main, pick) {
   // isn't an id, and the same one the creation wizard makes.
   const subs = visibleRecords(db.subclasses, content.disabled)
     .filter((s) => s.class === String(into?.name || "").toUpperCase());
-  subHeading(main, "Take the foundation card from one of its subclasses. It never upgrades: only your own subclass ladders.");
+  subHeading(main, "Take the foundation card from one of its subclasses. A later subclass upgrade can advance either subclass.");
   const grid = document.createElement("div");
   grid.className = "tile-grid";
   for (const sub of subs) {
@@ -624,7 +667,9 @@ function accessFor(baseCap) {
 function multiclassAfterPicks() {
   if (context.multiclass) return context.multiclass;
   const pick = picksFor("multiclass").find((p) => p.classId && p.domain && p.subclassId);
-  return pick ? { classId: pick.classId, subclassId: pick.subclassId, domain: pick.domain } : null;
+  return pick
+    ? { classId: pick.classId, subclassId: pick.subclassId, domain: pick.domain, tier: "foundation" }
+    : null;
 }
 
 // Eligibility is a function of the picks, so it's re-asked on every render: change the multiclass
@@ -710,10 +755,11 @@ function renderMandatoryCardStep(main, cls, newLevel) {
 // The character as this level's picks would leave them. One projection, not two sequential ones,
 // so nothing can be counted twice.
 function characterAfterPicks() {
+  const mc = multiclassAfterPicks();
   return {
     ...characterAtLevel(character, context),
     subclassTier: subclassTierAfterPicks(),
-    multiclass: multiclassAfterPicks(),
+    multiclass: mc && { ...mc, tier: subclassTierAfterPicks("multiclass") },
   };
 }
 
@@ -879,6 +925,9 @@ function currentEntry(level) {
       if (p.key === "traits") entry.traits = [...p.traits];
       if (p.key === "experience") entry.experienceIds = [...p.experienceIds];
       if (p.key === "domainCard") entry.cardId = p.cardId;
+      // Only written when it isn't your own subclass, so a level recorded for a single-subclass
+      // character serialises byte for byte as it always did.
+      if (p.key === "subclass" && p.target) entry.target = p.target;
       if (p.key === "multiclass") {
         entry.classId = p.classId;
         entry.domain = p.domain;
@@ -1045,6 +1094,7 @@ function loadPicksFrom(entry) {
     traits: [...(p.traits || [])],
     experienceIds: [...(p.experienceIds || [])],
     cardId: p.cardId || null,
+    target: p.target || null,
     classId: p.classId || null,
     domain: p.domain || null,
     subclassId: p.subclassId || null,

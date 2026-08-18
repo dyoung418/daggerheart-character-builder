@@ -280,7 +280,11 @@ export const CSV_COLUMNS = [
   {
     header: "Multiclass Features",
    
-    value: (r) => featuresText([...(r.multiclass?.cls?.classFeatures || []), ...(r.multiclass?.sub?.foundation?.features || [])]),
+    value: (r) => featuresText([
+      ...(r.multiclass?.cls?.classFeatures || []),
+      ...(r.multiclass ? subclassTiersUpTo(r.ch.multiclass.tier || "foundation") : [])
+        .flatMap((tier) => r.multiclass.sub?.[tier]?.features || []),
+    ]),
   },
 
   // The dice a class rolls, "Rally Die: d8". One column rather than a name and a value, because a

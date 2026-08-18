@@ -529,12 +529,15 @@ export function collectEffects(ch, db) {
     }
   }
 
-  // The foundation card a multiclass took, and only ever that one: the upgrade advancement takes
-  // the next card for YOUR subclass, so the second one never ladders.
+  // The multiclass's subclass, on its own ladder. It starts at the foundation card you took and
+  // climbs when a subclass upgrade names it — "you can't gain the mastery card for ANY subclass"
+  // is the rules' own way of saying either of them can be the one you upgrade.
   const secondSub = (db?.subclasses || []).find((s) => s.id === ch.multiclass?.subclassId);
   if (secondSub) {
-    const hit = lookup(db, `${secondSub.id}:foundation`);
-    add(hit, "subclass", `${displayName(secondSub, "Subclass")}${hit?.effect.feature ? ` — ${hit.effect.feature}` : ""}`);
+    for (const tier of tiersUpTo(ch.multiclass.tier || "foundation")) {
+      const hit = lookup(db, `${secondSub.id}:${tier}`);
+      add(hit, "subclass", `${displayName(secondSub, "Subclass")}${hit?.effect.feature ? ` — ${hit.effect.feature}` : ""}`);
+    }
   }
 
   // A character who chose to wear nothing has no armor features; the sentinel matches no id,

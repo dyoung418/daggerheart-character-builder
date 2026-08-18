@@ -560,13 +560,15 @@ function renderDetail() {
       cardsRow.appendChild(cardBlock({ id: sub.id, name: `${sub.name["en-US"]} (${SUBCLASS_TIER_LABELS[tier]})`, art: subclassCardArtPath(sub, tier), type: "Subclass", features: sub[tier]?.features }));
     }
   }
-  // The card a multiclass took, next to the subclass cards it sits beside on paper. Always
-  // Foundation: the upgrade advancement takes the next card for your own subclass.
+  // The multiclass's subclass cards, next to the ones they sit beside on paper. Its own ladder:
+  // a subclass upgrade can name either subclass, so this one can reach Specialization too.
   if (mcSub) {
-    cardsRow.appendChild(cardBlock({
-      id: mcSub.id, name: `${mcSub.name["en-US"]} (${SUBCLASS_TIER_LABELS.foundation})`,
-      art: subclassCardArtPath(mcSub, "foundation"), type: "Subclass", features: mcSub.foundation?.features,
-    }, `Multiclass: ${mcSub.name["en-US"]}`));
+    for (const tier of subclassTiersUpTo(ch.multiclass.tier || "foundation")) {
+      cardsRow.appendChild(cardBlock({
+        id: mcSub.id, name: `${mcSub.name["en-US"]} (${SUBCLASS_TIER_LABELS[tier]})`,
+        art: subclassCardArtPath(mcSub, tier), type: "Subclass", features: mcSub[tier]?.features,
+      }, `Multiclass: ${mcSub.name["en-US"]} (${SUBCLASS_TIER_LABELS[tier]})`));
+    }
   }
 
   const com = findCommunity(ch.heritage.communityId);

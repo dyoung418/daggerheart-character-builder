@@ -447,6 +447,8 @@ export function ensureLevelFields(ch) {
   // Derived by the replay from the level that took it; null until then, and null forever for the
   // characters this app has built so far.
   if (ch.multiclass === undefined) ch.multiclass = null;
+  // Its own subclass ladder, which characters multiclassed before it existed don't carry.
+  if (ch.multiclass && !ch.multiclass.tier) ch.multiclass.tier = "foundation";
   if (!hasPerTierSlots(ch.advancementSlotsUsed)) ch.advancementSlotsUsed = splitFlatSlotTotals(ch.advancementSlotsUsed);
   if (!ch.domainVaultIds) ch.domainVaultIds = [];
   // Answers to the few features that say "choose": Clank's Purposeful Design, Vitality, Master
