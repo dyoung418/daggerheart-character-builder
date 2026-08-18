@@ -681,6 +681,8 @@ h1, h2, h3, .btn-primary, .btn-ghost, .btn-small, .top-nav a {
 /* Un segno di spunta cancellato: la regola ha tolto lo slot (multiclasse o carta di sottoclasse). */
 .slot-box.crossed { cursor: not-allowed; opacity: 0.55; border-style: dashed; background: linear-gradient(to top left, transparent calc(50% - 0.5px), var(--text-dim) calc(50% - 0.5px), var(--text-dim) calc(50% + 0.5px), transparent calc(50% + 0.5px)); }
 .slot-legend { margin-top: 0; }
+/* Perché il pulsante di conferma è spento: accanto ad esso, non solo nel tooltip. */
+.confirm-blocked { margin: 0.35rem 0 0; text-align: right; }
 .sub-pick-heading { margin-bottom: 0.35rem; }
 
 .problem-box { margin: 1rem 0; padding: 0.6rem 0.8rem; background: rgba(178, 59, 59, 0.12); border: 1px solid var(--c-valor); border-radius: 6px; font-size: 0.82rem; }

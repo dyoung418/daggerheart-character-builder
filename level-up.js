@@ -220,7 +220,7 @@ function addPick(option, slotTier) {
     // Which subclass an upgrade climbs. Null means your own.
     target: null,
     // The multiclass payload: which class, which of its domains, which of its subclasses. Null
-    // until the picker below fills them in, and stepValidation won't let the level confirm until
+    // until the picker below fills them in, and confirmBlockedReason won't let the level confirm until
     // all three are set.
     classId: null,
     domain: null,
@@ -885,27 +885,45 @@ function commitCardChoices() {
 
 // ---------- confirm ----------
 
-function stepValidation(newLevel) {
+// Why this level can't be confirmed yet, as a sentence, or null when it can.
+//
+// A sentence rather than a boolean because the button it gates is the only control on the page
+// that used to fail silently: greyed out, no reason given, and on a page this long the thing
+// that's missing is usually scrolled off. A click on it looks like a click that didn't register.
+// Every other refusal here explains itself (see markBlockedReason), and now so does this one.
+function confirmBlockedReason(newLevel) {
   const spent = budgetSpent();
   const totalRemaining = totalRemainingAcrossAllOptions();
   const budgetOk = spent === 2 || (totalRemaining < 2 && spent === totalRemaining);
-  if (!budgetOk) return false;
+  if (!budgetOk) {
+    const want = Math.min(2, totalRemaining);
+    return `Mark ${want} advancement slot${want === 1 ? "" : "s"} above — ${spent} of ${want} chosen.`;
+  }
 
   for (const pick of picks) {
-    if (pick.key === "traits" && pick.traits.length !== 2) return false;
-    if (pick.key === "experience" && new Set(pick.experienceIds).size !== 2) return false;
-    if (pick.key === "domainCard" && !pick.cardId) return false;
-    if (pick.key === "multiclass" && !(pick.classId && pick.domain && pick.subclassId)) return false;
+    if (pick.key === "traits" && pick.traits.length !== 2) return "Choose two traits to raise.";
+    if (pick.key === "experience" && new Set(pick.experienceIds).size !== 2) return "Choose two Experiences to raise.";
+    if (pick.key === "domainCard" && !pick.cardId) return "Choose the extra domain card.";
+    if (pick.key === "multiclass" && !(pick.classId && pick.domain && pick.subclassId)) {
+      return "Choose a class to multiclass into, one of its domains, and one of its subclasses.";
+    }
   }
   // Taking the trait option twice needs four DIFFERENT unmarked traits.
   const allTraits = traitsPickedThisLevel();
-  if (new Set(allTraits).size !== allTraits.length) return false;
+  if (new Set(allTraits).size !== allTraits.length) return "Two trait advancements have to raise four different traits.";
 
-  if (!mandatoryCardId) return false;
-  if (grantedCardIds.length !== grantedCardCount()) return false;
-  if (grantedCardIds.some((id) => !id)) return false;
-  if (exchange && !exchange.inCardId) return false;
-  return true;
+  if (!mandatoryCardId) return "Choose the domain card this level grants.";
+  // The commonest one, and the one that used to be invisible: a feature gained this level hands
+  // over a card, and it hasn't been picked. It also catches a level recorded before the app knew
+  // that feature granted anything, which is a level that opens with the button already dead.
+  const granted = grantedCardCount();
+  if (grantedCardIds.length !== granted || grantedCardIds.some((id) => !id)) {
+    return granted === 1
+      ? "Choose the extra domain card a feature gained this level grants."
+      : `Choose the ${granted} extra domain cards the features gained this level grant.`;
+  }
+  if (exchange && !exchange.inCardId) return "Finish the exchange, or clear the card you chose to give up.";
+  return null;
 }
 
 function renderProblemBox(main, heading, problems) {
@@ -958,13 +976,23 @@ function renderConfirmBar(main, newLevel) {
   back.textContent = "← Cancel";
   bar.appendChild(back);
 
+  const blocked = confirmBlockedReason(newLevel);
   const confirm = document.createElement("button");
   confirm.className = "btn-primary";
   confirm.textContent = isEditing() ? `Save level ${newLevel}` : `Confirm level ${newLevel}`;
-  confirm.disabled = !stepValidation(newLevel);
+  confirm.disabled = !!blocked;
+  if (blocked) confirm.title = blocked;
   confirm.addEventListener("click", () => (isEditing() ? reviewLevelEdit(newLevel) : applyLevelUp(newLevel)));
   bar.appendChild(confirm);
   main.appendChild(bar);
+  // Beside the button, not only in its tooltip: a tooltip needs a hover to find, and what's
+  // missing is usually somewhere else on the page.
+  if (blocked) {
+    const why = document.createElement("p");
+    why.className = "hint confirm-blocked";
+    why.textContent = `⚠ ${blocked}`;
+    main.appendChild(why);
+  }
 }
 
 // What the edit would break, shown before anything is written — the cheapest moment to
@@ -972,20 +1000,17 @@ function renderConfirmBar(main, newLevel) {
 function renderSavePreview(main, newLevel) {
   const box = document.createElement("div");
   box.className = "problem-box";
+  // Only ever reached when there IS something to warn about — see reviewLevelEdit.
   const { consequences } = pendingSave;
-  if (consequences.length === 0) {
-    box.innerHTML = `<strong>Save level ${escapeHtml(newLevel)}? No other level is affected.</strong>`;
-  } else {
-    box.innerHTML = `<strong>Saving level ${escapeHtml(newLevel)} makes ${escapeHtml(consequences.length)} later level${consequences.length === 1 ? "" : "s"} stop adding up:</strong>` +
-      consequences.map((c) => `<div>└ L${escapeHtml(c.level)} — ${escapeHtml(c.errors[0])}</div>`).join("") +
-      `<div class="hint">You can fix them from the character sheet, or keep them as they are.</div>`;
-  }
+  box.innerHTML = `<strong>Saving level ${escapeHtml(newLevel)} makes ${escapeHtml(consequences.length)} later level${consequences.length === 1 ? "" : "s"} stop adding up:</strong>` +
+    consequences.map((c) => `<div>└ L${escapeHtml(c.level)} — ${escapeHtml(c.errors[0])}</div>`).join("") +
+    `<div class="hint">You can fix them from the character sheet, or keep them as they are.</div>`;
   main.appendChild(box);
 
   const bar = document.createElement("div");
   bar.className = "wizard-actions";
   bar.appendChild(actionButton("← Back", "btn-ghost", () => { pendingSave = null; render(); }));
-  bar.appendChild(actionButton(consequences.length ? "Save anyway" : `Save level ${newLevel}`, "btn-primary", () => commitLevelEdit(newLevel)));
+  bar.appendChild(actionButton("Save anyway", "btn-primary", () => commitLevelEdit(newLevel)));
   main.appendChild(bar);
 }
 
@@ -999,13 +1024,35 @@ function actionButton(label, className, onClick) {
 
 // Try the edit on a copy first, so the consequences can be reported without touching the
 // stored character.
+// Saving an edit is one click when nothing else is affected, and two when something is.
+//
+// The second step exists to warn you that OTHER levels stop adding up — so with nothing to warn
+// about it was a confirmation of nothing, and an expensive one: the box appears directly above the
+// action bar, which pushed the button ~50px down while the pointer stayed where it was, and the
+// button's label was the same before and after. The click registered, the next one landed on bare
+// background, and the third found the button again.
 function reviewLevelEdit(newLevel) {
   const trial = JSON.parse(JSON.stringify(character));
   writeEntry(trial, newLevel);
   const before = new Set(unresolvedProblems(character, db).map((p) => p.level));
   const consequences = unresolvedProblems(trial, db).filter((p) => p.level !== newLevel && !before.has(p.level));
+  if (consequences.length === 0) {
+    commitLevelEdit(newLevel);
+    return;
+  }
+  // Something to read. Hold the action bar still across the re-render, so the button doesn't move
+  // out from under the pointer that just clicked it.
+  const barBefore = currentActionBar()?.getBoundingClientRect().top ?? null;
   pendingSave = { consequences };
   render();
+  const barAfter = currentActionBar()?.getBoundingClientRect().top ?? null;
+  if (barBefore !== null && barAfter !== null) window.scrollBy(0, barAfter - barBefore);
+}
+
+// The last one on the page: the confirm bar always renders after everything else.
+function currentActionBar() {
+  const bars = document.querySelectorAll(".wizard-actions");
+  return bars[bars.length - 1] || null;
 }
 
 // Replaces the recorded choices for a level that's already been taken. The entry replaces the
