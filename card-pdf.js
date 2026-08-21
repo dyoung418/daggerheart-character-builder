@@ -83,8 +83,19 @@ const TITLE_LINE = 40;
 const TITLE_BOX = 2 * TITLE_LINE;
 const SUBTITLE_SIZE = 20;
 const SUBTITLE_TOP = PAD_TOP + TITLE_BOX + 2;
-const HEADER_RULE_Y = SUBTITLE_TOP + 36;
-const BODY_TOP = HEADER_RULE_Y + 14;
+const HEADER_RULE_GAP = 36;
+const HEADER_BODY_GAP = 14;
+
+// Where the rule under the header sits, and where the body starts, for THIS content. Not
+// constants: the stats card carries no subtitle — its level moved up onto the title row and its
+// class and subclass have cards of their own — and a fixed header would leave that row as a hole
+// above the traits rather than giving it back to the body, which is what the card is short of.
+function headerRuleY(content) {
+  return (content?.subtitle ? SUBTITLE_TOP + HEADER_RULE_GAP : PAD_TOP + TITLE_BOX + 6);
+}
+function bodyTop(content) {
+  return headerRuleY(content) + HEADER_BODY_GAP;
+}
 
 const BODY_SIZE = 24;
 const HEADING_SIZE = 25;
@@ -99,6 +110,8 @@ const FOOTER_RULE_GAP = 12;
 const FOOTER_BODY_GAP = 10;
 
 const BAND_GAP = 10;
+// How tight the air between bands may get before text starts shrinking instead. See bandLayout().
+const MIN_BAND_GAP = 4;
 const LABEL_SIZE = 16;
 const LABEL_LINE = 19;
 const NOTE_SIZE = 16;
@@ -115,6 +128,16 @@ const ROW_LINE = 26;
 const ROW_LABEL_SIZE = 18;
 const ROW_VALUE_SIZE = 20;
 const SLOT_ROW = 29;
+// A weapon feature is set at the weapon's own row size, not body size, and indented under it.
+const FEATURE_SIZE = ROW_LABEL_SIZE;
+const FEATURE_INDENT = 20;
+// The damage-threshold scale: the words that name each band, and the numbers that divide them.
+const THRESHOLD_WORD_SIZE = ROW_LABEL_SIZE;
+const THRESHOLD_VALUE_SIZE = ROW_VALUE_SIZE;
+const THRESHOLD_GAP = 10;
+// One line of gear. Matches the weapon feature under it, so a weapon and what it does read as
+// one block rather than two sizes.
+const DETAIL_SIZE = ROW_LABEL_SIZE;
 const SLOT_LABEL_WIDTH = 150;
 const BOX_SIZE = 20;
 const BOX_GAP = 6;
@@ -217,7 +240,11 @@ function hairline(ctx, y) {
 // on the stats card it is the difference between a player trusting the Evasion on the card and
 // finding out at the table — so it gets its space first and the body gets what's left.
 function footerLines(ctx, footer) {
-  return footer ? wrapLines(ctx, footer, CONTENT_WIDTH, FOOTER_SIZE, false) : [];
+  // One note or several. The stats card carries two — which bonuses the numbers include, and the
+  // Spellcast legend — and they are separate entries rather than one string with a newline in it
+  // so that each wraps on its own and a long first note can never pull the second onto its line.
+  const notes = (Array.isArray(footer) ? footer : [footer]).filter(Boolean);
+  return notes.flatMap((note) => wrapLines(ctx, note, CONTENT_WIDTH, FOOTER_SIZE, false));
 }
 
 function bodyBottom(ctx, footer) {
@@ -234,7 +261,7 @@ function bodyBottom(ctx, footer) {
 function textOpts(ctx, content) {
   return {
     width: CONTENT_WIDTH,
-    height: bodyBottom(ctx, content.footer) - BODY_TOP,
+    height: bodyBottom(ctx, content.footer) - bodyTop(content),
     lineHeight: LINE_HEIGHT,
     bodySize: BODY_SIZE,
     headingSize: HEADING_SIZE,
@@ -243,7 +270,13 @@ function textOpts(ctx, content) {
 }
 
 function drawHeader(ctx, content) {
-  const lines = wrapLines(ctx, content.title || "", CONTENT_WIDTH, TITLE_SIZE, true).slice(0, 2);
+  // "Level 5", set regular and right-aligned on the title's own row. It reads as an annotation to
+  // the name rather than a second heading, and it costs no vertical space at all — which is the
+  // point, on the one card that was overflowing.
+  const right = content.titleRight || "";
+  const rightWidth = right ? measure(ctx, right, SUBTITLE_SIZE, false) + 20 : 0;
+  // The title wraps clear of it, so a long name breaks early instead of running underneath.
+  const lines = wrapLines(ctx, content.title || "", CONTENT_WIDTH - rightWidth, TITLE_SIZE, true).slice(0, 2);
   // A single-line title sits centred in the two-line box rather than at the top of it: the box is
   // fixed, so the alternative is a card with a conspicuous hole under its name.
   const top = PAD_TOP + (TITLE_BOX - lines.length * TITLE_LINE) / 2;
@@ -251,13 +284,23 @@ function drawHeader(ctx, content) {
   ctx.font = font(TITLE_SIZE, 700);
   lines.forEach((line, i) => ctx.fillText(line, PAD_X, top + i * TITLE_LINE));
 
+  if (right) {
+    ctx.fillStyle = MUTED;
+    ctx.font = font(SUBTITLE_SIZE, 400);
+    ctx.textAlign = "right";
+    // Nudged down to sit on the title's optical line: with a top baseline the smaller face would
+    // otherwise ride high against the capitals beside it.
+    ctx.fillText(right, PAD_X + CONTENT_WIDTH, top + (TITLE_SIZE - SUBTITLE_SIZE));
+    ctx.textAlign = "left";
+  }
+
   const subtitle = truncate(ctx, content.subtitle || "", CONTENT_WIDTH, SUBTITLE_SIZE, false);
   if (subtitle) {
     ctx.fillStyle = MUTED;
     ctx.font = font(SUBTITLE_SIZE, 400);
     ctx.fillText(subtitle, PAD_X, SUBTITLE_TOP);
   }
-  hairline(ctx, HEADER_RULE_Y);
+  hairline(ctx, headerRuleY(content));
 }
 
 function drawFooter(ctx, footer) {
@@ -299,6 +342,14 @@ function renderBand(ctx, band, top, size, draw) {
     return y - top;
   }
 
+  // A weapon's feature. Same run-on shape as a note — bold name, prose running on from it — but
+  // sized and placed as a subordinate of the line above rather than as its own subject.
+  if (band.type === "feature") {
+    for (const c of cells) y += renderRunOn(ctx, c.label, c.value, y, size, draw, FEATURE_INDENT);
+    return y - top;
+  }
+
+
   if (band.label) {
     if (draw) {
       ctx.fillStyle = MUTED;
@@ -306,6 +357,18 @@ function renderBand(ctx, band, top, size, draw) {
       ctx.fillText(String(band.label).toUpperCase(), PAD_X, y);
     }
     y += LABEL_LINE;
+  }
+
+  // One piece of gear on one line: a muted "Primary weapon -" then the data. Wrapped rather than
+  // truncated — a long name ("Improved Round Shield: Agility +0 | 2d4+1 Physical") takes a second
+  // line, where cutting it would drop the damage, which is the half you actually roll.
+  //
+  // Below the shared label block, not above it with the note and feature branches: the first gear
+  // line carries the "WEAPONS AND ARMOR" heading, and returning before that block is what left the
+  // section unheaded.
+  if (band.type === "detail") {
+    for (const c of cells) y += renderRunOn(ctx, c.label, c.value, y, DETAIL_SIZE, draw, 0, "muted");
+    return y - top;
   }
 
   if (band.type === "grid") {
@@ -328,6 +391,50 @@ function renderBand(ctx, band, top, size, draw) {
       }
     });
     return y + Math.ceil(cells.length / columns) * TRAIT_ROW - top;
+  }
+
+  // Evasion on the left, the damage-threshold scale on the right, one row.
+  //
+  // "Minor 10 Major 16 Severe": alternating words and boundaries, the numbers carrying the weight
+  // because they are what a damage roll gets compared against. Each cell is a word plus the
+  // number that follows it, so the final cell has no value and closes the scale.
+  if (band.type === "defense") {
+    const half = CONTENT_WIDTH / 2;
+    const c = cells[0];
+    if (c && draw) {
+      ctx.fillStyle = MUTED;
+      ctx.font = font(ROW_LABEL_SIZE, 400);
+      ctx.fillText(c.label, PAD_X, y + 2);
+      ctx.textAlign = "right";
+      ctx.fillStyle = INK;
+      ctx.font = font(ROW_VALUE_SIZE, 700);
+      ctx.fillText(c.value, PAD_X + half - 24, y);
+      ctx.textAlign = "left";
+    }
+
+    const parts = [];
+    for (const sc of band.scale || []) {
+      parts.push({ text: sc.label, strong: false });
+      if (sc.value) parts.push({ text: sc.value, strong: true });
+    }
+    const sizeOf = (p) => (p.strong ? THRESHOLD_VALUE_SIZE : THRESHOLD_WORD_SIZE);
+    const width = parts.reduce((w, p) => w + measure(ctx, p.text, sizeOf(p), p.strong), 0)
+      + Math.max(0, parts.length - 1) * THRESHOLD_GAP;
+    if (draw && parts.length) {
+      // Right-aligned in its half, and clamped to the halfway mark so a wide scale (three-digit
+      // thresholds, or every number a dash on a draft) can never run back over Evasion.
+      let x = Math.max(PAD_X + half, PAD_X + CONTENT_WIDTH - width);
+      for (const p of parts) {
+        const sz = sizeOf(p);
+        ctx.fillStyle = p.strong ? INK : MUTED;
+        ctx.font = font(sz, p.strong ? 700 : 400);
+        // The words are set smaller than the numbers, so with a top baseline they need nudging
+        // down to sit on the same optical line.
+        ctx.fillText(p.text, x, y + (p.strong ? 0 : (THRESHOLD_VALUE_SIZE - THRESHOLD_WORD_SIZE)));
+        x += measure(ctx, p.text, sz, p.strong) + THRESHOLD_GAP;
+      }
+    }
+    return y + ROW_LINE - top;
   }
 
   if (band.type === "slots") {
@@ -425,19 +532,25 @@ function renderCaption(ctx, text, top, draw) {
 // A bold name with its text running on from it — how the weapon feature is set, and the one
 // place a name and its prose share a line. The name is its own heading everywhere else; here it
 // would waste a line of the block that already has the least room.
-function renderRunOn(ctx, name, text, top, size, draw) {
+function renderRunOn(ctx, name, text, top, size, draw, indent = 0, lead = "strong") {
   const lineHeight = Math.round(size * 1.35);
-  const nameWidth = name ? measure(ctx, `${name} `, size, true) : 0;
-  const lines = wrapLines(ctx, text, CONTENT_WIDTH, size, false, nameWidth);
+  const left = PAD_X + indent;
+  // The indent narrows the column too. Wrapping to the full width and merely starting further in
+  // would run the right-hand edge past the margin the rest of the card keeps.
+  const width = CONTENT_WIDTH - indent;
+  const nameWidth = name ? measure(ctx, `${name} `, size, lead !== "muted") : 0;
+  const lines = wrapLines(ctx, text, width, size, false, nameWidth);
   if (draw) {
     if (name) {
-      ctx.fillStyle = INK;
-      ctx.font = font(size, 700);
-      ctx.fillText(name, PAD_X, top);
+      // "strong" is a feature's own name, which owns its block. "muted" is a label in front of
+      // data that matters more than it does — "Primary weapon -" before the weapon.
+      ctx.fillStyle = lead === "muted" ? MUTED : INK;
+      ctx.font = font(size, lead === "muted" ? 400 : 700);
+      ctx.fillText(name, left, top);
     }
     ctx.fillStyle = INK;
     ctx.font = font(size, 400);
-    lines.forEach((line, i) => ctx.fillText(line, PAD_X + (i === 0 ? nameWidth : 0), top + i * lineHeight));
+    lines.forEach((line, i) => ctx.fillText(line, left + (i === 0 ? nameWidth : 0), top + i * lineHeight));
   }
   return Math.max(1, lines.length) * lineHeight;
 }
@@ -453,15 +566,28 @@ function renderRunOn(ctx, name, text, top, size, draw) {
  * Stepping a point at a time rather than solving for a size keeps the sizes integral (canvas will
  * happily render 17.3px and it looks like it) and terminates in at most ten passes.
  */
-function bandSizes(ctx, bands, available) {
-  const sizes = bands.map(() => BODY_SIZE);
+function bandLayout(ctx, bands, available) {
+  // A feature band starts at the weapon's row size; everything else at body size. Starting every
+  // band at BODY_SIZE is what drew the weapon feature larger than the weapon.
+  const sizes = bands.map((band) => (band.type === "feature" ? FEATURE_SIZE : BODY_SIZE));
+  let gap = BAND_GAP;
   const total = () => bands.reduce((sum, band, i) => sum + renderBand(ctx, band, 0, sizes[i], false), 0)
-    + Math.max(0, bands.length - 1) * BAND_GAP;
+    + Math.max(0, bands.length - 1) * gap;
+
+  // Two levers, cheapest first. Air between bands goes before any text gets smaller: a card set
+  // two points tighter is visibly worse, and four pixels of gap is not. Only then do the bands
+  // that marked themselves shrinkable — the features — start stepping down.
+  //
+  // Both are bounded, so this terminates whatever it is handed, and neither ever touches the
+  // numbers: a card whose Evasion is set smaller than the Evasion on the next player's card is a
+  // card that gets misread. If both levers bottom out the clip in drawTextCard() takes over,
+  // which is a visibly cut-off card rather than one with a sentence written through its footer.
+  while (total() > available && gap > MIN_BAND_GAP) gap -= 1;
   const shrinkable = bands.map((band, i) => (band.shrink ? i : -1)).filter((i) => i >= 0);
   while (total() > available && shrinkable.some((i) => sizes[i] > MIN_SHRINK_SIZE)) {
     for (const i of shrinkable) if (sizes[i] > MIN_SHRINK_SIZE) sizes[i] -= 1;
   }
-  return sizes;
+  return { sizes, gap };
 }
 
 // Sections — the class features and the missing-art fallback.
@@ -544,15 +670,16 @@ function drawTextCard(ctx, content) {
   // visibly cut off; unclipped text is a card whose caveat has a sentence written through it.
   ctx.save();
   ctx.beginPath();
-  ctx.rect(0, BODY_TOP, CARD_PIXEL_WIDTH, Math.max(0, bottom - BODY_TOP));
+  const top = bodyTop(content);
+  ctx.rect(0, top, CARD_PIXEL_WIDTH, Math.max(0, bottom - top));
   ctx.clip();
 
-  let y = BODY_TOP;
+  let y = top;
   const bands = content.bands || [];
   if (bands.length) {
-    const sizes = bandSizes(ctx, bands, bottom - BODY_TOP);
+    const { sizes, gap } = bandLayout(ctx, bands, bottom - top);
     bands.forEach((band, i) => {
-      y += renderBand(ctx, band, y, sizes[i], true) + BAND_GAP;
+      y += renderBand(ctx, band, y, sizes[i], true) + gap;
     });
   }
   renderSections(ctx, content.sections || [], y, true);
@@ -770,3 +897,4 @@ export async function buildCardPdf(character, db, opts = {}) {
     fellBack,
   };
 }
+

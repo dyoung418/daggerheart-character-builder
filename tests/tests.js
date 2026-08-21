@@ -4263,7 +4263,12 @@ group("A transformation prints on the sheet and exports to the GM");
   const MULTICLASSED = { classId: "cls2", subclassId: "sub2", tier: "foundation", domain: "ARCANA" };
 
   const band = (card, label) => card.bands.find((b) => b.label === label);
-  const boxesOn = (card, label) => band(card, "Slots").cells.find((c) => c.label === label).boxes;
+  const byType = (card, type) => card.bands.find((b) => b.type === type);
+  // Slots and the class track dropped their headings to save vertical space, so they are found by
+  // what they are rather than by a label they no longer carry.
+  const boxesOn = (card, label) => byType(card, "slots").cells.find((c) => c.label === label).boxes;
+  const gearLines = (card) => card.bands.filter((b) => b.type === "detail")
+    .map((b) => `${b.cells[0].label} ${b.cells[0].value}`);
   const traitLabels = (card) => band(card, "Traits").cells.map((c) => c.label);
 
   group("The stats card counts permanent bonuses only");
@@ -4286,7 +4291,8 @@ group("A transformation prints on the sheet and exports to the GM");
       band(printed, "Defense").cells[0].value, String(owns.evasion));
     eq("even though it IS in play, which is the difference the footer warns about",
       inPlay.evasion, owns.evasion + 1);
-    eq("and the footer says so", printed.footer, "Permanent bonuses only — loadout card bonuses not counted.");
+    check("and the footer says so",
+      String(printed.footer).includes("permanent bonuses only"));
 
     // The substitution is on a copy. A stats card that vaulted the character's cards for real
     // would empty the loadout of every screen that redrew after it.
@@ -4299,9 +4305,15 @@ group("A transformation prints on the sheet and exports to the GM");
     const one = statsCardContent(sheetChar(), CARD_DB); // "sub" casts with Knowledge
     eq("one subclass, one starred trait", traitLabels(one),
       ["Agility", "Strength", "Finesse", "Instinct", "Presence", "Knowledge*"]);
-    check("with a legend saying what the mark means", !!band(one, "* Spellcast trait"));
+    check("with a legend in the footer saying what the mark means",
+      String(one.footer).startsWith("* spellcasting trait"));
+    check("and not as a band, which put a footnote in the middle of the card",
+      !one.bands.some((b) => /spellcast/i.test(b.label || "")));
     check("and no Spellcast row restating a value the grid already prints",
       !one.bands.some((b) => b.label === "Spellcast"));
+    // One line carries both footnotes — the legend and the caveat about which bonuses count.
+    check("on the same single line as the permanent-bonuses caveat",
+      String(one.footer).includes("permanent bonuses only"));
 
     // Two foundation cards naming different traits is a choice per roll, not a sum, so both are
     // marked and the player picks one at the table.
@@ -4312,13 +4324,15 @@ group("A transformation prints on the sheet and exports to the GM");
     const none = statsCardContent(sheetChar({ subclassId: "nocast" }), CARD_DB);
     eq("a Guardian's grid carries no mark", traitLabels(none),
       ["Agility", "Strength", "Finesse", "Instinct", "Presence", "Knowledge"]);
-    check("and no legend for a mark that isn't there", !band(none, "* Spellcast trait"));
+    check("and no legend for a mark that isn't there", !String(none.footer).includes("*"));
+    check("but the card still carries the caveat, which is true either way",
+      String(none.footer).includes("permanent bonuses only"));
   }
 
   group("Slot rows print empty boxes, at the counts the rules give");
   {
     const card = statsCardContent(sheetChar(), CARD_DB);
-    const cells = band(card, "Slots").cells;
+    const cells = byType(card, "slots").cells;
     eq("the four tracks, in the order a sheet prints them", cells.map((c) => c.label),
       ["Armor", "Hit Points", "Stress", "Hope"]);
     eq("Armor Score boxes come from the armor", boxesOn(card, "Armor"), 3);
@@ -4330,28 +4344,131 @@ group("A transformation prints on the sheet and exports to the GM");
     check("every box is empty", cells.every((c) => c.marked === 0));
 
     // 4 of 15 classes have a track; the other 11 must not print an empty label.
-    eq("a class with a track prints it", band(card, "Class track").cells[0].value, "d4");
+    eq("a class with a track prints it", byType(card, "lines").cells[0].value, "d4");
     const trackless = statsCardContent(sheetChar(), { ...CARD_DB, effects: {} });
-    check("a class without one prints no band at all", !band(trackless, "Class track"));
+    check("a class without one prints no track row at all",
+      !trackless.bands.some((b) => b.type === "lines" && (b.cells || []).some((c) => /die/i.test(c.label))));
   }
 
-  group("The weapon block prints strings, and is the only band a renderer may shrink");
+  group("Each weapon is one line, and only its feature may shrink");
   {
     const unarmed = statsCardContent(sheetChar({ equipment: { primaryWeaponId: UNARMED, armorId: "gambeson" } }), CARD_DB);
-    const attack = band(unarmed, "Unarmed").cells[0].value;
-    check("an unarmed attack prints the profile's own two-trait string", attack.includes("Strength") && attack.includes("Finesse"));
-    check("never the object it came from", !attack.includes("[object"));
+    const line = gearLines(unarmed)[0];
+    // An unarmed profile names both traits itself, because the SRD hands the choice to the roll.
+    // Prefixing it with a trait label would name three.
+    check("an unarmed attack prints the profile's own two-trait string",
+      line.includes("Strength") && line.includes("Finesse"));
+    check("never the object it came from", !line.includes("[object"));
 
     const listed = statsCardContent(sheetChar({ equipment: { primaryWeaponId: "listed", armorId: "gambeson" } }), CARD_DB);
     const shrinkable = listed.bands.filter((b) => b.shrink);
-    eq("exactly one band is marked shrinkable", shrinkable.length, 1);
-    eq("and it is the weapon feature, not the numbers above it", shrinkable[0].cells[0].label, "Options");
+    eq("the feature is the only thing marked shrinkable", shrinkable.map((b) => b.cells[0].label), ["Options"]);
+    check("the weapon's own line is not, so its numbers never shrink",
+      !listed.bands.some((b) => b.type === "detail" && b.shrink));
     eq("a list keeps its markers where there's no room to be a list",
       shrinkable[0].cells[0].value, "• Choose fire. • Choose frost.");
 
     const plain = statsCardContent(sheetChar({ equipment: { primaryWeaponId: "plain", armorId: "gambeson" } }), CARD_DB);
     eq("a weapon with no feature prints no shrinkable band", plain.bands.filter((b) => b.shrink).length, 0);
-    eq("the attack modifier is the weapon's trait, effective", band(plain, "Shortsword").cells[0].value, "+1");
+    // "Primary weapon - Shortsword: Agility +1 | 1d6 Physical" — the four values a weapon has, on
+    // the one row that used to be three.
+    const first = gearLines(plain)[0];
+    check("the line leads with which hand, not which sword", first.startsWith("Primary weapon -"));
+    check("and carries name, trait, attack and damage", /Shortsword: Agility \+1 \| .*Physical/.test(first));
+  }
+
+  group("Damage thresholds print as one scale, not two rows");
+  {
+    const card = statsCardContent(sheetChar(), CARD_DB);
+    const sheet = deriveSheet(sheetChar(), CARD_DB);
+    const scale = band(card, "Defense").scale;
+    // Word, boundary, word, boundary, word. The numbers sit BETWEEN the bands they divide, which
+    // is the thing two rows headed "Major threshold" and "Severe threshold" got wrong.
+    eq("the three bands damage can land in, in order", scale.map((c) => c.label),
+      ["Minor", "Major", "Severe"]);
+    eq("the first boundary is the Major threshold", scale[0].value, String(sheet.thresholds.major));
+    eq("the second is the Severe threshold", scale[1].value, String(sheet.thresholds.severe));
+    eq("and the last word closes the scale with no number after it", scale[2].value, "");
+    check("the old rows are gone",
+      !card.bands.some((b) => (b.cells || []).some((c) => /threshold/i.test(c.label))));
+    // Evasion shares the row with the scale rather than owning one: it is a number you roll
+    // against, not a band on a track, and the card cannot spare a row for each.
+    eq("Evasion is the row's only cell", band(card, "Defense").cells.map((c) => c.label), ["Evasion"]);
+
+    // A draft with no equipment has no thresholds to print. It still prints the scale, with
+    // dashes, because a band that vanishes reads as a printing fault rather than as "not known".
+    const draft = statsCardContent(sheetChar({ equipment: {} }), CARD_DB);
+    eq("a character with no equipment still gets the scale",
+      band(draft, "Defense").scale.map((c) => c.label), ["Minor", "Major", "Severe"]);
+  }
+
+  group("Both hands and the armor print, each with its own feature under it");
+  {
+    const two = statsCardContent(sheetChar({
+      equipment: { primaryWeaponId: "plain", secondaryWeaponId: "listed", armorId: "gambeson" },
+    }), CARD_DB);
+    const leads = two.bands.filter((b) => b.type === "detail").map((b) => b.cells[0].label);
+    eq("three lines, each saying what it is", leads,
+      ["Primary weapon -", "Secondary weapon -", "Armor -"]);
+    check("no section heading above them — every line already announces itself",
+      !two.bands.some((b) => /weapons and armor/i.test(b.label || "")));
+
+    // The armor prints its OWN base numbers, not the character's current ones: those are already
+    // the scale beside Evasion and the Armor boxes, and printing both invites adding them up.
+    check("the armor line carries base thresholds then base score", /: 5\/11 \| 3/.test(gearLines(two)[2]));
+
+    // A feature belongs to the thing it follows. With three lines on the card, a pooled list
+    // would leave the reader matching a feature name back to the hand holding it.
+    const idx = two.bands.map((b, i) => [b, i]);
+    const secondary = idx.find(([b]) => b.type === "detail" && b.cells[0].label === "Secondary weapon -")[1];
+    const armorAt = idx.find(([b]) => b.type === "detail" && b.cells[0].label === "Armor -")[1];
+    eq("the secondary's feature sits immediately under it", two.bands[secondary + 1].type, "feature");
+    eq("named for that weapon, not the other one", two.bands[secondary + 1].cells[0].label, "Options");
+    // This fixture's armor has no feature, so nothing follows its line — the next band is the
+    // Experiences heading, not an empty feature block.
+    check("a featureless armor gets no feature band at all",
+      (two.bands[armorAt + 1] || {}).type !== "feature");
+
+    // And when the armor DOES have one, it is indented under the armor exactly like a weapon's.
+    const withFeature = statsCardContent(
+      sheetChar({ equipment: { primaryWeaponId: "plain", armorId: "flexible" } }),
+      { ...CARD_DB, armors: [...CARD_DB.armors, {
+        id: "flexible", name: { "en-US": "Flexible Mail" }, baseScore: 4,
+        baseMajorThreshold: 6, baseSevereThreshold: 12,
+        features: [{ name: { "en-US": "Flexible" }, description: [{ paragraph: { "en-US": "+1 to Evasion." } }] }],
+      }] });
+    const at = withFeature.bands.findIndex((b) => b.type === "detail" && b.cells[0].label === "Armor -");
+    eq("the armor's own feature follows it", withFeature.bands[at + 1].cells[0].label, "Flexible");
+    check("and the line above carries that armor's bases",
+      /: 6\/12 \| 4/.test(gearLines(withFeature).pop()));
+
+    const one = statsCardContent(sheetChar({ equipment: { primaryWeaponId: "plain", armorId: "gambeson" } }), CARD_DB);
+    eq("a character with one weapon gets one weapon line and the armor",
+      one.bands.filter((b) => b.type === "detail").map((b) => b.cells[0].label),
+      ["Primary weapon -", "Armor -"]);
+  }
+
+  group("The title row carries the name and the level, and nothing the deck repeats");
+  {
+    const card = statsCardContent(sheetChar(), CARD_DB);
+    const sheet = deriveSheet(sheetChar(), CARD_DB);
+    eq("the name is the title", card.title, sheet.name);
+    eq("the level rides on the same row", card.titleRight, `Level ${sheet.level}`);
+    // Class and subclass both have cards of their own further into the same deck, so a subtitle
+    // naming them restated the deck and cost the body a row it needed.
+    eq("and there is no subtitle at all", card.subtitle, "");
+  }
+
+  group("A weapon feature is set as part of its weapon, not as its own subject");
+  {
+    const card = statsCardContent(sheetChar({ equipment: { primaryWeaponId: "listed", armorId: "gambeson" } }), CARD_DB);
+    const feature = card.bands.find((b) => b.type === "feature");
+    // "note" is body-sized, which drew the feature LARGER than the Attack and Damage rows it
+    // describes. The type is what tells the renderer to match the weapon and indent under it.
+    check("it is a feature band, never a note", !!feature);
+    check("no note band survives on the stats card", !card.bands.some((b) => b.type === "note"));
+    eq("it still carries the feature's own name as its heading", feature.cells[0].label, "Options");
+    check("and it is still the band a renderer may shrink", feature.shrink === true);
   }
 
   group("Class cards: one per class, and a multiclass grants no Hope feature");

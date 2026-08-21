@@ -32,7 +32,13 @@ const DASH = "—";
 
 // The footer is not decoration: without it a player reads an Evasion off this card, compares it
 // with the app, and finds a different number. Say why, on the card, where the number is.
-export const PERMANENT_ONLY_NOTE = "Permanent bonuses only — loadout card bonuses not counted.";
+export const PERMANENT_ONLY_NOTE = "Stats include permanent bonuses only";
+
+// The legend for the asterisk the traits grid puts on the Spellcast trait. It lives in the footer
+// beside PERMANENT_ONLY_NOTE rather than under the grid: both are footnotes about how to read the
+// numbers above them, and one of them sitting mid-card while the other sits at the bottom made the
+// grid look like it had a caption and the card look like it had two footers.
+export const SPELLCAST_NOTE = "* spellcasting trait; stats include permanent bonuses only";
 
 const BULLET = "• ";
 
@@ -134,25 +140,36 @@ export function statsCardContent(character, db) {
     // the card already prints and become the copy that goes stale.
     cells: s.traits.map((t) => cell(casting.has(t.key) ? `${t.label}*` : t.label, t.display)),
   });
-  // Only when something is starred. A legend for a mark that appears nowhere is worse than no
-  // legend: it sends a Guardian looking for the asterisk they don't have. Two are starred for a
-  // multiclass whose second subclass also casts — the SRD lets you pick either per roll — which
-  // is why spellcastTraitKeys() returns an array and this asterisks every key in it.
-  if (casting.size > 0) bands.push({ type: "note", label: "* Spellcast trait", cells: [] });
 
+  // Evasion on the left, the damage-threshold scale beside it on the right. One row, because the
+  // scale needs no heading of its own — "Minor 10 Major 16 Severe" says what it is — and a card
+  // this dense cannot afford a heading and a row for three numbers.
+  //
+  // The scale replaced two rows reading "Major threshold 10" and "Severe threshold 16". Those
+  // name each number after the band ABOVE it, so working out what 10 means takes a moment every
+  // time: it is the number damage has to reach to stop being Minor. As a track, each number sits
+  // on the boundary it actually is, between the two words it divides.
+  //
+  // A scale cell is one word plus the number that follows it, so the last carries no value.
+  // Dashes rather than an omitted scale when there's no equipment yet: this card prints dashes
+  // wherever a number isn't known, and a row that vanishes reads as a printing fault.
   bands.push({
-    type: "lines",
+    type: "defense",
     label: "Defense",
-    cells: [
-      cell("Evasion", num(s.evasion)),
-      cell("Major threshold", num(s.thresholds?.major)),
-      cell("Severe threshold", num(s.thresholds?.severe)),
+    cells: [cell("Evasion", num(s.evasion))],
+    scale: [
+      cell("Minor", num(s.thresholds?.major)),
+      cell("Major", num(s.thresholds?.severe)),
+      cell("Severe", ""),
     ],
   });
 
+  // No heading. The four marked tracks read as a continuation of Defense above them, which is
+  // what they are, and the word "Slots" was a row of vertical space spent naming something the
+  // boxes already say. Only Traits, Defense, Weapons and armor, and Experiences keep a heading.
   bands.push({
     type: "slots",
-    label: "Slots",
+    label: "",
     cells: [
       slotCell("Armor", s.armorScore, s.armorScoreNote),
       slotCell("Hit Points", s.hitPoints, s.hitPointsNote),
@@ -171,37 +188,77 @@ export function statsCardContent(character, db) {
   // band is emitted only when there's something in it rather than printing an empty label on the
   // other eleven cards.
   if (s.tracks.length > 0) {
+    // Also unheaded: the row already reads "Rally Die  d8", and a "CLASS TRACK" line above it
+    // spends a row to say what the next row says.
     bands.push({
       type: "lines",
-      label: "Class track",
+      label: "",
       cells: s.tracks.map((t) => cell(t.label, t.display, t.note)),
     });
   }
 
-  // The primary only. A secondary weapon is on the printed sheet; this card is the one you hold
-  // while rolling, and the space it would take is the space the weapon feature needs.
-  const weapon = s.weapons[0] || null;
-  if (weapon) {
-    bands.push({
-      type: "lines",
-      label: weapon.name,
-      cells: [
-        // Already a string, and for an unarmed profile already "Strength +2 / Finesse 0" — the
-        // SRD hands the choice of trait to the roll, so there is no single total to sign.
-        cell("Attack", weapon.attack),
-        cell("Damage", [weapon.damage, weapon.damageType].filter(Boolean).join(" ")),
-      ],
+  // Weapons and armor: one line each, with anything that line carries a feature indented under
+  // it — the same shape for all three, so the eye learns it once.
+  //
+  // A weapon used to cost three rows: its name as a band heading, then an Attack row and a Damage
+  // row, for four values. As one line it costs one, which is what buys the secondary weapon and
+  // the armour their place on a card that was already full.
+  //
+  // "Primary weapon -" leads rather than the weapon's name, because with two weapons the thing
+  // you reach for first is which hand, not which sword. deriveSheet returns [primary, secondary]
+  // with the empty slot already filtered out, so the index is the only thing that knows which is
+  // which — and a character fighting one-handed simply has no second entry.
+  //
+  // A feature band, not a note: a note is set at body size, which drew the feature LARGER than
+  // the line it belongs to and made the one discretionary block on the card its loudest. A
+  // feature matches its owner's size and indents under it, so it reads as something that weapon
+  // or armour does rather than as a new subject. The feature's own name is the heading inside the
+  // cell; a band label here would print "Weapon feature" above the word "Magnetic".
+  const featureBand = (features) => ({
+    type: "feature",
+    label: "",
+    cells: features.map((f) => cell(f.name, featureText(f))),
+    shrink: true,
+  });
+
+  const gear = [];
+  const slotName = ["Primary weapon", "Secondary weapon"];
+  s.weapons.forEach((weapon, i) => {
+    // traitLabel is empty for an unarmed profile, whose attack string already names both traits
+    // ("Strength +2 / Finesse 0") because the SRD hands the choice to the roll. Prefixing that
+    // with a trait would name three.
+    const attack = weapon.traitLabel ? `${weapon.traitLabel} ${weapon.attack}` : weapon.attack;
+    const damage = [weapon.damage, weapon.damageType].filter(Boolean).join(" ");
+    gear.push({ lead: `${slotName[i] || "Weapon"} -`, text: `${weapon.name}: ${attack} | ${damage}`,
+      features: weapon.features });
+  });
+
+  // Armour, on the same footing. BASE thresholds and BASE score deliberately — they are the
+  // armour's own numbers, the ones printed on its card, and they don't move with level. The
+  // figures that apply to THIS character are the scale beside Evasion and the Armor boxes above;
+  // repeating those here would print them twice and invite the reader to add them together.
+  //
+  // Read off the record rather than deriveSheet, which carries the armour's name and features but
+  // not its bases — nothing else that reads deriveSheet has ever wanted them. Absent for an
+  // unarmored character, whose numbers come from the SRD's unarmored rule or from Bare Bones
+  // standing in for the armour they aren't wearing, and neither has a base to print.
+  const armor = (db?.armors || []).find((a) => a.id === character.equipment?.armorId) || null;
+  if (armor) {
+    gear.push({
+      lead: "Armor -",
+      text: `${armor.name["en-US"]}: ${armor.baseMajorThreshold}/${armor.baseSevereThreshold} | ${armor.baseScore}`,
+      features: s.armorFeatures,
     });
-    if (weapon.features.length > 0) {
-      bands.push({
-        type: "note",
-        // The feature's own name is the heading, in the cell. A band label here would print
-        // "Weapon feature" above the word "Magnetic", which says nothing twice.
-        label: "",
-        cells: weapon.features.map((f) => cell(f.name, featureText(f))),
-        shrink: true,
-      });
-    }
+  } else if (s.armorName && s.armorName !== DASH) {
+    gear.push({ lead: "Armor -", text: s.armorName, features: s.armorFeatures });
+  }
+
+  // No section heading. Every one of these lines opens by saying what it is — "Primary weapon -",
+  // "Secondary weapon -", "Armor -" — so a WEAPONS AND ARMOR rule above them spends a row
+  // announcing what the next row already announces.
+  for (const entry of gear) {
+    bands.push({ type: "detail", label: "", cells: [cell(entry.lead, entry.text)] });
+    if (entry.features.length > 0) bands.push(featureBand(entry.features));
   }
 
   if (s.experiences.length > 0) {
@@ -214,12 +271,19 @@ export function statsCardContent(character, db) {
 
   return {
     title: s.name,
-    // The subclass earns its place here rather than in a band: it's how a player names the
-    // character to the table ("Level 3 Guardian — Stalwart"), and it's the only line that says
-    // which subclass the tier cards in the rest of the deck belong to.
-    subtitle: `Level ${s.level} ${s.className} — ${s.subclassName}`,
+    // The level rides on the title's own row, right-aligned, and there is no subtitle at all.
+    // Class and subclass used to sit here — "Level 3 Guardian — Stalwart" — but both have cards
+    // of their own a few slots later in this same deck, so the line restated what the deck
+    // already says and cost the body a row it needed.
+    titleRight: `Level ${s.level}`,
+    subtitle: "",
     bands,
-    footer: PERMANENT_ONLY_NOTE,
+    // One line, carrying both footnotes. The asterisk half only appears when a trait is actually
+    // starred — a legend for a mark that appears nowhere is worse than no legend, because it
+    // sends a Guardian looking for an asterisk they don't have. Two traits are starred for a
+    // multiclass whose second subclass also casts, which is why spellcastTraitKeys() returns an
+    // array and the grid asterisks every key in it; one legend still covers both.
+    footer: casting.size > 0 ? SPELLCAST_NOTE : PERMANENT_ONLY_NOTE,
   };
 }
 
@@ -397,6 +461,9 @@ export function paginateSections(content, opts) {
       subtitle: content.subtitle || "",
       sections: assemble(pageRows, sections),
     };
+    // Rides along for the same reason the bands do: only the stats card sets it and that card is
+    // always one page, but a card that ever did split should not lose its level on page two.
+    if (content.titleRight) card.titleRight = content.titleRight;
     // Bands aren't paginated — only the stats card has any, and it is bounded by construction so
     // it is always one page. They ride on the first card so nothing is lost if that ever changes.
     if (index === 0 && content.bands) card.bands = content.bands;
