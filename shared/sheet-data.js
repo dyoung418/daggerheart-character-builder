@@ -64,7 +64,13 @@ function prettyEnum(value) {
 //
 // Nothing in derived-stats.js does this: it turns feature prose into stat contributions,
 // it never needs the prose itself, so flattening it stays entirely a sheet concern.
-function features(list) {
+//
+// Exported — not because this file needs it to be, but because shared/card-content.js needs
+// exactly this walk and the alternative is a second implementation of it. There already is a
+// second one (gear.js's featuresText(), which joins a feature down to one "Name: text" CSV
+// cell); a third, drifting from the block shape above, is the bug worth spending one keyword
+// to avoid. It stays module-private in spirit: nothing here is shaped around a card.
+export function flattenFeatures(list) {
   // Falsy entries are dropped rather than walked into. The caller below wraps a class's
   // hopeFeature in an array to reuse this, and validateRecord deliberately doesn't require one
   // — it only checks what would break a PICKER — so a source shipping a class without one used
@@ -115,7 +121,7 @@ function weaponEntry(weapon, attackStat, proficiencyTotal) {
     // so a d8+d6 profile reads 2d8+2d6 rather than 2d8+d6.
     damage: `${damageDice(weapon.damage, proficiencyTotal)}${modifierText}`,
     damageType: prettyEnum(weapon.damage.type),
-    features: features(weapon.features),
+    features: flattenFeatures(weapon.features),
   };
 }
 
@@ -169,7 +175,7 @@ export function deriveSheet(character, db) {
       level: card.level,
       type: titleCase(card.type),
       recallCost: card.recallCost,
-      features: features(card.features),
+      features: flattenFeatures(card.features),
     }));
 
   return {
@@ -216,7 +222,7 @@ export function deriveSheet(character, db) {
       weaponEntry(secondaryWeapon, stats.secondaryAttack, stats.proficiency.total),
     ].filter(Boolean),
     armorName: armor ? armor.name["en-US"] : unarmored ? "Unarmored" : "—",
-    armorFeatures: features(armor?.features),
+    armorFeatures: flattenFeatures(armor?.features),
     potionName: find(db?.consumables, character.equipment?.potionChoice)?.name["en-US"] || "—",
 
     // Experience modifiers come from derivedStats() too: a couple of features (Clank's
@@ -254,17 +260,17 @@ export function deriveSheet(character, db) {
     // Its features, labelled with where they came from, the way subclassFeatures are labelled
     // with their tier. No Hope feature: a multiclass doesn't grant one.
     multiclassFeatures: [
-      ...features(mcClass?.classFeatures).map((f) => ({ ...f, source: mcClass ? titleCase(mcClass.name) : "" })),
+      ...flattenFeatures(mcClass?.classFeatures).map((f) => ({ ...f, source: mcClass ? titleCase(mcClass.name) : "" })),
       ...(mcSub ? subclassTiersUpTo(character.multiclass.tier || "foundation") : []).flatMap((tier) =>
-        features(mcSub[tier]?.features).map((f) => ({
+        flattenFeatures(mcSub[tier]?.features).map((f) => ({
           ...f, source: `${mcSub.name["en-US"]} (${SUBCLASS_TIER_LABELS[tier]})`,
         })),
       ),
     ],
 
     loadout,
-    hopeFeature: cls ? features([cls.hopeFeature])[0] : null,
-    classFeatures: features(cls?.classFeatures),
+    hopeFeature: cls ? flattenFeatures([cls.hopeFeature])[0] : null,
+    classFeatures: flattenFeatures(cls?.classFeatures),
     // Every tier up to the character's current one, not just the current tier: upgrading a
     // subclass card ADDS a tier, it doesn't replace the one below it (characters.js's detail
     // view renders all of them for exactly this reason — subclassTiersUpTo() is the same
@@ -273,7 +279,7 @@ export function deriveSheet(character, db) {
     // three. Each feature carries `source` (the tier's label) the same way ancestryFeatures
     // carries the ancestry's name, so the render layer can label which tier granted it.
     subclassFeatures: subclassTiersUpTo(character.subclassTier).flatMap((tier) =>
-      features(sub?.[tier]?.features).map((f) => ({ ...f, source: SUBCLASS_TIER_LABELS[tier] })),
+      flattenFeatures(sub?.[tier]?.features).map((f) => ({ ...f, source: SUBCLASS_TIER_LABELS[tier] })),
     ),
     // Only the features actually picked in heritage.chosenFeatures print — not every
     // feature of every ancestry in ancestryIds. For a pure-ancestry character
@@ -286,17 +292,17 @@ export function deriveSheet(character, db) {
           .filter((f) => f.ancestryId === a.id)
           .map((f) => f.featureName),
       );
-      return features(a.features)
+      return flattenFeatures(a.features)
         .filter((f) => chosenNames.has(f.name))
         .map((f) => ({ ...f, source: a.name["en-US"] }));
     }),
-    communityFeatures: features(community?.features).map((f) => ({
+    communityFeatures: flattenFeatures(community?.features).map((f) => ({
       ...f, source: community ? community.name["en-US"] : "",
     })),
     // Both features, always — a transformation's drawback is not optional, and one the player
     // forgets is one that never happens at the table. Nothing is chosen between them, so unlike
     // ancestryFeatures above there's no filter here.
-    transformationFeatures: features(transformation?.features).map((f) => ({
+    transformationFeatures: flattenFeatures(transformation?.features).map((f) => ({
       ...f, source: transformation ? transformation.name["en-US"] : "",
     })),
 

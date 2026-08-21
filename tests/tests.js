@@ -120,6 +120,40 @@ const {
   transferFilename,
 } = await import(`../shared/transfer.js${RUN}`);
 const { titleCase } = await import(`../shared/text.js${RUN}`);
+const {
+  asciiBytes,
+  buildPdf,
+  formatNumber,
+  pageContentStream,
+} = await import(`../shared/pdf.js${RUN}`);
+const {
+  CARDS_PER_PAGE,
+  CARD_HEIGHT,
+  CARD_WIDTH,
+  GRID_X,
+  GRID_Y_FROM_TOP,
+  MARGIN_X,
+  MARGIN_Y,
+  MARK_GAP,
+  MARK_LENGTH,
+  PAGE_HEIGHT,
+  PAGE_WIDTH,
+  cropMarks,
+  paginate,
+  slotRect,
+} = await import(`../shared/card-layout.js${RUN}`);
+const {
+  cardSheet,
+} = await import(`../shared/card-sheet.js${RUN}`);
+const {
+  classCardContents,
+  fallbackCardContent,
+  paginateSections,
+  statsCardContent,
+} = await import(`../shared/card-content.js${RUN}`);
+const {
+  MAX_HOPE,
+} = await import(`../shared/advancement.js${RUN}`);
 
 // ---------- tiny runner ----------
 
@@ -3612,6 +3646,815 @@ group("A transformation prints on the sheet and exports to the GM");
   // A character whose only non-SRD content is a transformation still has to report the source.
   eq("and the source it came from", row["Content"], "My Homebrew");
   eq("a character without one leaves the columns empty", tfRow(tfChar())["Transformation"], "");
+}
+
+{
+  group("A PDF number is not a JavaScript number");
+  eq("no exponential notation: 1e-7 rounds away rather than printing \"1e-7\"", formatNumber(1e-7), "0");
+  check("nothing formatNumber emits ever contains an 'e'",
+    ![1e-7, 1e-21, 0.00004, 12345678.9, 1e20].some((n) => formatNumber(n).includes("e")));
+  eq("float noise is rounded off: 13.68 - 4.32 is 9.36, not 9.360000000000001", formatNumber(13.68 - 4.32), "9.36");
+  eq("negative zero prints as zero", formatNumber(-0), "0");
+  eq("and so does a negative value that rounds to zero", formatNumber(-0.00001), "0");
+  // The trailing-zero trim must only eat digits after the decimal point. A blanket /0+$/ turns
+  // this into "1", which would put a card 999 points off the page.
+  eq("a round number keeps its zeros", formatNumber(1000), "1000");
+  eq("a whole number loses its decimal point entirely", formatNumber(180), "180");
+  eq("four decimal places survive", formatNumber(0.24), "0.24");
+  eq("a fifth decimal place is rounded away", formatNumber(778.32456), "778.3246");
+  const throws = (fn) => {
+    try { fn(); return false; } catch { return true; }
+  };
+  check("a non-finite number is refused rather than written as \"NaN\"",
+    [NaN, Infinity, -Infinity].every((n) => throws(() => formatNumber(n))));
+
+  group("asciiBytes refuses to guess an encoding");
+  eq("plain ASCII is one byte per character", Array.from(asciiBytes("/Im0 Do")), [47, 73, 109, 48, 32, 68, 111]);
+  eq("the last legal code point is 0x7F", Array.from(asciiBytes("\x7f")), [127]);
+  check("\"é\" throws — UTF-8 would write two bytes for one character and shift every later xref offset",
+    throws(() => asciiBytes("Café")));
+  check("so does the first non-ASCII code point, U+0080", throws(() => asciiBytes("")));
+  check("and so does an emoji, which would cost four bytes", throws(() => asciiBytes("cards \u{1f0a1}")));
+
+  group("A page's operators");
+  const oneCard = {
+    draws: [{ image: 0, x: 36, y: 522, width: 180, height: 252 }],
+    lines: [{ x1: 36, y1: 778.32, x2: 36, y2: 785.52 }],
+    lineWidth: 0.24,
+    lineGray: 0,
+  };
+  eq("an image is placed by the matrix alone, saved and restored around",
+    pageContentStream(oneCard),
+    "q 180 0 0 252 36 522 cm /Im0 Do Q\nq 0 G 0.24 w\n36 778.32 m 36 785.52 l\nS Q\n");
+  const twoCards = pageContentStream({
+    draws: [
+      { image: 0, x: 36, y: 522, width: 180, height: 252 },
+      { image: 1, x: 216, y: 522, width: 180, height: 252 },
+    ],
+    lines: [],
+  });
+  // Each image needs its OWN q…Q: cm multiplies into the CTM, so a shared save/restore would
+  // place the second card in the first card's coordinate system.
+  eq("two images are two independent q…Q pairs, so no CTM leaks into the next card",
+    twoCards.split("\n").filter(Boolean).map((line) => `${line.slice(0, 1)}…${line.slice(-1)}`),
+    ["q…Q", "q…Q"]);
+  const marks = pageContentStream({
+    draws: [],
+    lines: [{ x1: 1, y1: 2, x2: 3, y2: 4 }, { x1: 5, y1: 6, x2: 7, y2: 8 }],
+    lineWidth: 0.24,
+  });
+  eq("every segment is a subpath of ONE path, stroked once",
+    [marks.split(" m ").length - 1, marks.split(" l").length - 1, marks.split("S Q").length - 1],
+    [2, 2, 1]);
+  eq("a page with no lines emits no path and no stroke",
+    pageContentStream({ draws: [{ image: 0, x: 0, y: 0, width: 1, height: 1 }], lines: [] }),
+    "q 1 0 0 1 0 0 cm /Im0 Do Q\n");
+  eq("an empty page is an empty stream, not whitespace", pageContentStream({ draws: [], lines: [] }), "");
+
+  group("The bytes of a document");
+  // Deliberately hostile fixture: bytes in 0x80-0xFF (which UTF-8 would double), a newline, and
+  // the literal ASCII "endstream". A writer that finds a stream's end by searching for that word
+  // truncates this image; a writer that runs any string through TextEncoder corrupts it.
+  const trap = (tail) => Uint8Array.from([
+    0xff, 0xd8, 0xff, 0xe0, // JPEG SOI + APP0, every byte above 0x7F
+    0x0a,
+    ...Array.from("endstream", (c) => c.charCodeAt(0)),
+    0x0a, 0x80, 0xfe, 0x00, 0x41, tail,
+    0xff, 0xd9, // EOI
+  ]);
+  const artA = trap(0x9c);
+  const artB = trap(0x5c);
+  const page = (draws) => ({ draws, lines: [{ x1: 36, y1: 778.32, x2: 36, y2: 785.52 }], lineWidth: 0.24, lineGray: 0 });
+  const doc = {
+    width: 612,
+    height: 792,
+    images: [
+      { bytes: artA, width: 660, height: 924 },
+      { bytes: artB, width: 660, height: 924 },
+    ],
+    pages: [
+      page([{ image: 0, x: 36, y: 522, width: 180, height: 252 }, { image: 1, x: 216, y: 522, width: 180, height: 252 }]),
+      // Page 2 reuses image 0: art the character owns twice must be embedded once.
+      page([{ image: 0, x: 36, y: 270, width: 180, height: 252 }]),
+    ],
+  };
+  const out = buildPdf(doc);
+  // Byte n of the file is character n of this string, so every index below is a byte offset.
+  const text = Array.from(out, (b) => String.fromCharCode(b)).join("");
+
+  check("the file is a Uint8Array", out instanceof Uint8Array);
+  check("it starts with the version header", text.startsWith("%PDF-1.4\n"));
+  eq("followed by a binary comment of four bytes above 0x7F, so nothing treats the file as text",
+    [out[9], ...Array.from(out.slice(10, 14), (b) => b >= 0x80), out[14]],
+    [0x25, true, true, true, true, 0x0a]);
+
+  // ---- the cross-reference table ----
+  const startxrefAt = text.lastIndexOf("startxref");
+  const xrefAt = Number(/^\s*(\d+)/.exec(text.slice(startxrefAt + "startxref".length))[1]);
+  check("the last startxref points at the xref table", text.startsWith("xref\n", xrefAt));
+  const countLineEnd = text.indexOf("\n", xrefAt + "xref\n".length);
+  const [firstObj, size] = text.slice(xrefAt + "xref\n".length, countLineEnd).split(" ").map(Number);
+  eq("the subsection starts at object 0", firstObj, 0);
+  // 1 Catalog + 1 Pages + M images + 2 objects per page, and /Size is one past the highest.
+  eq("/Size is 3 + M + 2P", size, 3 + doc.images.length + 2 * doc.pages.length);
+  check("the trailer agrees with the table", text.includes(`trailer\n<< /Size ${size} /Root 1 0 R >>`));
+  const entriesAt = countLineEnd + 1;
+  const trailerAt = text.indexOf("trailer", entriesAt);
+  // A reader is entitled to seek straight to entry k at entriesAt + 20k; a 19-byte entry (LF
+  // alone, the tempting simplification) makes the whole table unreadable to anything that does.
+  eq("the xref section is exactly 20 bytes per object", trailerAt - entriesAt, 20 * size);
+  const entry = (i) => text.slice(entriesAt + 20 * i, entriesAt + 20 * (i + 1));
+  eq("object 0 is the head of the free list", entry(0), "0000000000 65535 f\r\n");
+  check("every other entry is %010d SP %05d SP n CR LF",
+    Array.from({ length: size - 1 }, (_, k) => entry(k + 1)).every((e) => /^\d{10} 00000 n\r\n$/.test(e)));
+  // The test that catches an off-by-one anywhere in the writer: an offset one byte wide lands
+  // mid-object, and the file then opens blank rather than failing.
+  const misplaced = [];
+  for (let i = 1; i < size; i++) {
+    const offset = Number(entry(i).slice(0, 10));
+    if (!text.startsWith(`${i} 0 obj\n`, offset)) misplaced.push(`${i}@${offset}`);
+  }
+  eq("every xref offset lands exactly on its own \"N 0 obj\"", misplaced, []);
+
+  // ---- streams, bounded by arithmetic ----
+  const objectAt = (i) => Number(entry(i).slice(0, 10));
+  // Objects are written in numeric order, so the next one's offset bounds this one. Reading the
+  // region this way rather than searching for "endobj" is the same discipline the writer itself
+  // follows: binary payloads can contain any keyword you care to look for.
+  const objectEnd = (i) => (i + 1 < size ? objectAt(i + 1) : xrefAt);
+  const streamOf = (i) => {
+    const start = objectAt(i);
+    const region = text.slice(start, objectEnd(i));
+    const dictEnd = region.indexOf(">>\nstream\n");
+    if (dictEnd < 0) return null;
+    return {
+      dict: region.slice(0, dictEnd),
+      length: Number(/\/Length (\d+)/.exec(region.slice(0, dictEnd))[1]),
+      from: start + dictEnd + ">>\nstream\n".length,
+    };
+  };
+  const streamObjects = Array.from({ length: size - 1 }, (_, k) => k + 1).filter((i) => streamOf(i));
+  // 3 and 4 are the images; 6 and 8 are the two content streams. Nothing else is a stream.
+  eq("the two images and the two content streams are the only streams", streamObjects, [3, 4, 6, 8]);
+  const wrong = streamObjects.filter((i) => {
+    const s = streamOf(i);
+    return !text.startsWith("\nendstream\n", s.from + s.length);
+  });
+  // /Length counts the bytes between the \n that ends "stream" and the \n before "endstream", so
+  // stepping exactly /Length bytes from the payload's start must land on that newline.
+  eq("every stream's /Length is exact — endstream sits precisely where the arithmetic says", wrong, []);
+
+  // ---- the image bytes themselves ----
+  const bytesOf = (i) => {
+    const s = streamOf(i);
+    return Array.from(out.slice(s.from, s.from + s.length));
+  };
+  eq("image 0 round-trips byte for byte", bytesOf(3), Array.from(artA));
+  eq("image 1 round-trips byte for byte", bytesOf(4), Array.from(artB));
+  check("the fixture really does contain bytes UTF-8 would have doubled", Array.from(artA).some((b) => b > 0x7f));
+  // The trap stated as an assertion: the first "endstream" inside the payload is NOT the end of
+  // the stream, so an implementation that searched for it would have truncated the image above.
+  const img0 = streamOf(3);
+  const searched = text.indexOf("endstream", img0.from);
+  check("searching for \"endstream\" would have found the JPEG's own copy first",
+    searched > -1 && searched < img0.from + img0.length);
+
+  // ---- the object graph ----
+  check("object 1 is the Catalog",
+    text.startsWith("1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n", objectAt(1)));
+  const pagesNode = text.slice(objectAt(2), objectEnd(2));
+  check("object 2 is the Pages node, counting both pages",
+    pagesNode.includes("/Type /Pages") && pagesNode.includes("/Count 2"));
+  // Image i is object 3+i and page i is object 3+M+2i, so with two images the pages are 5 and 7.
+  check("its /Kids are the page objects in order", pagesNode.includes("/Kids [ 5 0 R 7 0 R ]"));
+  check("/MediaBox is on the Pages node, so every page inherits the same paper",
+    pagesNode.includes("/MediaBox [ 0 0 612 792 ]"));
+  const pageOne = text.slice(objectAt(5), objectEnd(5));
+  check("a Page carries no /MediaBox of its own", !pageOne.includes("/MediaBox"));
+  check("a Page names its content stream, which is the next object", pageOne.includes("/Contents 6 0 R"));
+  check("and lists the images it draws as /Im<index>", pageOne.includes("/Im0 3 0 R /Im1 4 0 R"));
+  const pageTwo = text.slice(objectAt(7), objectEnd(7));
+  // Page 2 draws only the first image; art owned twice is one XObject referenced twice, not a
+  // second copy of 150KB of JPEG.
+  check("a page lists only the images it actually draws",
+    pageTwo.includes("/XObject << /Im0 3 0 R >>") && !pageTwo.includes("/Im1"));
+  eq("the content stream in the file is the one pageContentStream describes",
+    text.slice(streamOf(6).from, streamOf(6).from + streamOf(6).length),
+    pageContentStream(doc.pages[0]));
+
+  check("the file ends with %%EOF", text.trimEnd().endsWith("%%EOF"));
+  check("no /Info and no /ID, so the same character exports byte-identically every time",
+    !text.includes("/Info") && !text.includes("/ID"));
+  eq("and it does: two builds of the same document are the same bytes",
+    Array.from(buildPdf(doc)), Array.from(out));
+
+  group("What buildPdf refuses");
+  check("a document with no pages, rather than an invalid PDF for the viewer to complain about",
+    throws(() => buildPdf({ width: 612, height: 792, images: [], pages: [] })));
+  check("a draw naming an image the document doesn't have",
+    throws(() => buildPdf({
+      width: 612, height: 792, images: [{ bytes: artA, width: 660, height: 924 }],
+      pages: [{ draws: [{ image: 1, x: 0, y: 0, width: 180, height: 252 }], lines: [] }],
+    })));
+  check("a string where image bytes should be — we can't know what encoding was meant",
+    throws(() => buildPdf({
+      width: 612, height: 792, images: [{ bytes: "ÿØ", width: 1, height: 1 }],
+      pages: [{ draws: [], lines: [] }],
+    })));
+}
+
+{
+  group("card layout: slots on the page");
+
+  // The four corners of the measurement. If the y-flip is ever duplicated or reversed these are
+  // the first things to move.
+  eq("the top-left slot is the measured 180x252 at (36, 522)", slotRect(0), { x: 36, y: 522, width: 180, height: 252 });
+  eq("the bottom-right slot is at (396, 18)", slotRect(8), { x: 396, y: 18, width: 180, height: 252 });
+  eq("slot 8 sits in the last column", slotRect(8).x, 396);
+  eq("the middle slot is at (216, 270)", slotRect(4), { x: 216, y: 270, width: 180, height: 252 });
+
+  // A mirrored page reads as plausible slot-by-slot, so the check has to be about direction:
+  // row 0 must be the *high* y, and its top edge must be one top margin below the page top.
+  check("the first row is the top of the page, not the bottom", slotRect(0).y > slotRect(6).y);
+  eq("row 0's top edge is one top margin down from the page top", slotRect(0).y + CARD_HEIGHT, PAGE_HEIGHT - MARGIN_Y);
+  eq("row 2's bottom edge is the bottom margin", slotRect(6).y, MARGIN_Y);
+
+  // Edge to edge, no gutter: neighbours share a cut line in both axes.
+  eq("columns abut with no gutter", slotRect(1).x, slotRect(0).x + CARD_WIDTH);
+  eq("rows abut with no gutter", slotRect(0).y - slotRect(3).y, CARD_HEIGHT);
+  eq("the block is centred left to right", PAGE_WIDTH - (slotRect(2).x + CARD_WIDTH), MARGIN_X);
+
+  // Nine distinct rectangles: a wrong modulus would deal the same slot twice.
+  const rects = [0, 1, 2, 3, 4, 5, 6, 7, 8].map((s) => JSON.stringify(slotRect(s)));
+  eq("all nine slots are distinct", new Set(rects).size, 9);
+
+  let ranged = false;
+  try {
+    slotRect(CARDS_PER_PAGE);
+  } catch (e) {
+    ranged = e instanceof RangeError;
+  }
+  check("a slot off the end of the page throws rather than returning NaN coordinates", ranged);
+}
+
+{
+  group("card layout: crop marks");
+
+  const marks = cropMarks();
+  eq("four grid lines per axis means sixteen marks", marks.length, 16);
+
+  // One mark from each margin, spelled out, so the numbers can be checked against the reference
+  // sheet without running the arithmetic.
+  const at = (x1, y1, x2, y2) => marks.some((m) => m.x1 === x1 && m.y1 === y1 && m.x2 === x2 && m.y2 === y2);
+  check("the top margin ticks run 778.32 -> 785.52 at x = 36", at(36, 778.32, 36, 785.52));
+  check("the bottom margin ticks run 13.68 -> 6.48 at x = 576", at(576, 13.68, 576, 6.48));
+  check("the left margin ticks run 31.68 -> 24.48 at y = 774", at(31.68, 774, 24.48, 774));
+  check("the right margin ticks run 580.32 -> 587.52 at y = 18", at(580.32, 18, 587.52, 18));
+
+  // Interior grid lines get marks too — there is no gutter to draw them in, so the outer margin
+  // is the only place a cutter can be told where the middle seams are.
+  const vertical = marks.filter((m) => m.x1 === m.x2);
+  const horizontal = marks.filter((m) => m.y1 === m.y2);
+  eq("every mark is axis-aligned: eight vertical", vertical.length, 8);
+  eq("...and eight horizontal", horizontal.length, 8);
+  eq("the vertical marks stand on all four column lines", [...new Set(vertical.map((m) => m.x1))].sort((a, b) => a - b), GRID_X);
+  eq(
+    "the horizontal marks stand on all four row lines",
+    [...new Set(horizontal.map((m) => m.y1))].sort((a, b) => a - b),
+    GRID_Y_FROM_TOP.map((fromTop) => PAGE_HEIGHT - fromTop).sort((a, b) => a - b),
+  );
+
+  const lengths = marks.map((m) => Math.round((Math.abs(m.x2 - m.x1) + Math.abs(m.y2 - m.y1)) * 100) / 100);
+  eq("every mark is exactly one MARK_LENGTH long", [...new Set(lengths)], [MARK_LENGTH]);
+
+  // The gap is what keeps the ink off the card face; without it a mark would print inside the
+  // art and survive the cut.
+  const block = { left: 36, right: 576, bottom: 18, top: 774 };
+  const gaps = marks.map((m) => {
+    if (m.x1 === m.x2) return m.y1 > block.top ? m.y1 - block.top : block.bottom - m.y1;
+    return m.x1 < block.left ? block.left - m.x1 : m.x1 - block.right;
+  });
+  eq("every mark's inner end stands off the card block by MARK_GAP", [...new Set(gaps.map((g) => Math.round(g * 100) / 100))], [MARK_GAP]);
+
+  // THE PROPERTY. Someone will edit a constant one day; this is the check that notices, whether
+  // they moved a margin, a card size, the mark length or the gap.
+  const endpoints = marks.flatMap((m) => [[m.x1, m.y1], [m.x2, m.y2]]);
+  const insideBlock = endpoints.filter(([x, y]) => x >= block.left && x <= block.right && y >= block.bottom && y <= block.top);
+  eq("no crop mark touches the card block — nothing prints on a card", insideBlock, []);
+  const offPage = endpoints.filter(([x, y]) => x < 0 || x > PAGE_WIDTH || y < 0 || y > PAGE_HEIGHT);
+  eq("no crop mark runs off the paper", offPage, []);
+}
+
+{
+  group("card layout: pagination");
+
+  eq("nine cards fill exactly one page", paginate(9).length, 1);
+  eq("a tenth card starts a second page", paginate(10).length, 2);
+  eq("nineteen cards need three pages", paginate(19).length, 3);
+  eq("a character with no cards gets no pages at all", paginate(0), []);
+
+  const two = paginate(10);
+  eq("the first page is full", two[0].slots.length, 9);
+  eq("the short last page carries only the card it has", two[1].slots.length, 1);
+  eq("cards are dealt in order, page 1 taking 0-8", two[0].slots.map((s) => s.card), [0, 1, 2, 3, 4, 5, 6, 7, 8]);
+  eq("the tenth card is card index 9", two[1].slots[0].card, 9);
+
+  // The leftover card goes top-left, not into slot 9 of an imaginary page — the deck is read in
+  // slot order, so a short page has to start at the beginning of the grid.
+  eq("a short page starts at the top-left slot", two[1].slots[0].rect, slotRect(0));
+  eq("every page reuses the same nine rectangles", paginate(19)[2].slots[0].rect, paginate(19)[0].slots[0].rect);
+
+  const rects = two[0].slots.map((s) => JSON.stringify(s.rect));
+  eq("no two cards on a page share a rectangle", new Set(rects).size, 9);
+  eq("a full page's slots are the nine slot rects in order", rects, [0, 1, 2, 3, 4, 5, 6, 7, 8].map((s) => JSON.stringify(slotRect(s))));
+}
+
+{
+  group("The card export prints one deck, in the order you'd stack it");
+
+  // Fixtures are the smallest records the deck reads: an id, a name, and whatever the face
+  // prints. Nothing here is fetched from data/ — the rules under test are about records.
+  const cardFeature = (text) => [{ description: [{ paragraph: { "en-US": text } }] }];
+  const namedFeature = (featureName, text) => ({
+    name: { "en-US": featureName },
+    description: [{ paragraph: { "en-US": text } }],
+  });
+  const domainCard = (id, cardName, domain, level, recallCost) => ({
+    id, name: { "en-US": cardName }, domain, type: "ABILITY", level, recallCost,
+    features: cardFeature(`${cardName} does something.`),
+  });
+
+  const TROUBADOUR = {
+    id: "core_subclass_troubadour", name: { "en-US": "Troubadour" }, class: "BARD",
+    foundation: { features: [namedFeature("Gifted Performer", "Play to inspire.")] },
+    specialization: { features: [namedFeature("Maestro", "Your rallies hit harder.")] },
+    mastery: { features: [namedFeature("Virtuoso", "You are the best there is.")] },
+  };
+  const CALL_OF_THE_BRAVE = {
+    id: "core_subclass_call_of_the_brave", name: { "en-US": "Call of the Brave" }, class: "WARRIOR",
+    foundation: { features: [namedFeature("Courage", "Take a Hope.")] },
+    specialization: { features: [namedFeature("Battle Ritual", "Clear 2 Stress.")] },
+  };
+  const HIGHBORNE = {
+    id: "core_community_highborne", name: { "en-US": "Highborne" },
+    features: [namedFeature("Privilege", "You have advantage on rolls to haggle.")],
+  };
+  const ELF = { id: "core_ancestry_elf", name: { "en-US": "Elf" }, features: [namedFeature("Quick Reactions", "Mark a Stress.")] };
+  const HUMAN = { id: "core_ancestry_human", name: { "en-US": "Human" }, features: [namedFeature("High Stamina", "Gain an extra Stress slot.")] };
+  const TIDE_MARKED = {
+    id: "myhomebrew_transformation_a", name: { "en-US": "Tide-Marked" },
+    features: [namedFeature("The Gift", "You breathe water as easily as air.")],
+  };
+
+  const WHIRLWIND = domainCard("core_card_whirlwind", "Whirlwind", "BLADE", 1, 0);
+  const NOT_GOOD_ENOUGH = domainCard("core_card_not_good_enough", "Not Good Enough", "BLADE", 1, 1);
+  const A_SOLDIERS_BOND = domainCard("core_card_a_soldiers_bond", "A Soldier's Bond", "BLADE", 2, 1);
+  const DEFT_DECEIVER = domainCard("core_card_deft_deceiver", "Deft Deceiver", "GRACE", 1, 1);
+
+  const db = {
+    classes: [{ id: "core_class_bard" }, { id: "core_class_warrior" }],
+    subclasses: [TROUBADOUR, CALL_OF_THE_BRAVE],
+    communities: [HIGHBORNE],
+    ancestries: [ELF, HUMAN],
+    transformations: [TIDE_MARKED],
+    weapons: [{ id: "core_weapon_shortsword" }],
+    armors: [{ id: "core_armor_leather" }],
+    domainCards: [WHIRLWIND, NOT_GOOD_ENOUGH, A_SOLDIERS_BOND, DEFT_DECEIVER],
+  };
+
+  const character = (over = {}) => ({
+    classId: "core_class_bard",
+    subclassId: "core_subclass_troubadour",
+    subclassTier: "foundation",
+    heritage: {
+      communityId: "core_community_highborne",
+      ancestryIds: ["core_ancestry_elf"],
+      chosenFeatures: [{ ancestryId: "core_ancestry_elf", featureName: "Quick Reactions" }],
+    },
+    transformationId: null,
+    equipment: { primaryWeaponId: "core_weapon_shortsword", armorId: "core_armor_leather" },
+    creationDomainCardIds: ["core_card_whirlwind", "core_card_deft_deceiver"],
+    domainCardIds: ["core_card_deft_deceiver", "core_card_whirlwind"],
+    ...over,
+  });
+
+  // The two generated cards are handed in, not built here — that inversion is the whole reason
+  // this module has no dependency on card-content.js — so a test can prove the deck order with
+  // fakes this thin.
+  const GENERATED = [{ kind: "stats", key: "stats" }, { kind: "class", key: "class-1" }];
+  const keys = (result) => result.cards.map((c) => c.key);
+
+  const level1 = cardSheet(character(), db, { generated: GENERATED });
+  eq("a level 1 character's deck is stats, class, subclass, community, ancestry, then cards",
+    keys(level1),
+    ["stats", "class-1", "core_subclass_troubadour-foundation", "core_community_highborne",
+      "core_ancestry_elf", "core_card_whirlwind", "core_card_deft_deceiver"]);
+  eq("the generated cards lead, so page 1 top-left is always the stats card",
+    level1.cards[0].kind, "stats");
+  eq("nothing is missing when every id resolves", level1.missing, []);
+  eq("a level 1 character with no generated cards is all record-backed",
+    cardSheet(character(), db).cards.length, 5);
+
+  // An upgrade adds a card rather than replacing the one below it, so the earlier tiers still
+  // print — and they print bottom-up, the order they were earned in.
+  const mastery = cardSheet(character({ subclassTier: "mastery" }), db, { generated: [] });
+  eq("mastery prints all three subclass tiers, in the order they were earned",
+    mastery.cards.slice(0, 3).map((c) => c.key),
+    ["core_subclass_troubadour-foundation", "core_subclass_troubadour-specialization",
+      "core_subclass_troubadour-mastery"]);
+  eq("each tier card is titled with its own tier",
+    mastery.cards.slice(0, 3).map((c) => c.title),
+    ["Troubadour (Foundation)", "Troubadour (Specialization)", "Troubadour (Mastery)"]);
+  eq("a tier card carries only its own tier's features, not a summary of the subclass",
+    mastery.cards[2].fallback.sections.map((s) => s.name), ["Virtuoso"]);
+
+  // A subclass upgrade at level-up can name EITHER subclass, so the two ladders are independent.
+  // If they ever share a variable this is the test that catches it.
+  const multi = cardSheet(character({
+    subclassTier: "mastery",
+    multiclass: { classId: "core_class_warrior", subclassId: "core_subclass_call_of_the_brave", tier: "foundation", domain: "BLADE" },
+  }), db, { generated: [] });
+  eq("a mastery character multiclassed at foundation gets three cards plus one",
+    multi.cards.filter((c) => c.kind === "subclass").map((c) => c.key),
+    ["core_subclass_troubadour-foundation", "core_subclass_troubadour-specialization",
+      "core_subclass_troubadour-mastery", "core_subclass_call_of_the_brave-foundation"]);
+  eq("the multiclass's cards say which class they came from",
+    multi.cards.filter((c) => c.kind === "subclass").map((c) => c.origin),
+    ["class", "class", "class", "multiclass"]);
+  const mcSpec = cardSheet(character({
+    subclassTier: "foundation",
+    multiclass: { classId: "core_class_warrior", subclassId: "core_subclass_call_of_the_brave", tier: "specialization" },
+  }), db, { generated: [] });
+  eq("and the multiclass can be the further along of the two",
+    mcSpec.cards.filter((c) => c.kind === "subclass").map((c) => c.key),
+    ["core_subclass_troubadour-foundation", "core_subclass_call_of_the_brave-foundation",
+      "core_subclass_call_of_the_brave-specialization"]);
+
+  // There is no composite art for a mixed heritage, so both faces print in full and the player
+  // reads their two chosen features off them.
+  const mixed = cardSheet(character({
+    heritage: {
+      communityId: "core_community_highborne",
+      ancestryMode: "mixed",
+      ancestryIds: ["core_ancestry_elf", "core_ancestry_human"],
+      chosenFeatures: [
+        { ancestryId: "core_ancestry_elf", featureName: "Quick Reactions" },
+        { ancestryId: "core_ancestry_human", featureName: "High Stamina" },
+      ],
+    },
+  }), db, { generated: [] });
+  eq("a mixed heritage prints two whole ancestry cards, in the order they're stored",
+    mixed.cards.filter((c) => c.kind === "ancestry").map((c) => c.key),
+    ["core_ancestry_elf", "core_ancestry_human"]);
+
+  // Usually null — the SRD ships no transformations at all — but when there is one it sits with
+  // the heritage cards, which is where the rules put it.
+  const transformed = cardSheet(character({ transformationId: "myhomebrew_transformation_a" }), db, { generated: [] });
+  eq("a transformation prints after the heritage and before the domain cards",
+    transformed.cards.map((c) => c.kind),
+    ["subclass", "community", "ancestry", "transformation", "domain", "domain"]);
+  check("a character without one has no transformation card",
+    cardSheet(character(), db).cards.every((c) => c.kind !== "transformation"));
+
+  // Domain, then level, then name. The two Blade level 1s are the pair that proves the name
+  // tiebreak is doing work rather than the storage order leaking through.
+  // The homebrew card is here so the name tiebreak is doing work rather than agreeing with the
+  // id by accident: an SRD id is its own name in snake_case, so those two sort alike and a
+  // comparator missing the name step would still pass. This one's id sorts last and its name
+  // sorts first.
+  const BLADED_WIND = { ...domainCard("hb_card_002", "Bladed Wind", "BLADE", 1, 1), contentSource: "homebrew" };
+  const sortDb = { ...db, domainCards: [...db.domainCards, BLADED_WIND] };
+  const sortedIds = ["core_card_deft_deceiver", "core_card_a_soldiers_bond", "hb_card_002", "core_card_whirlwind", "core_card_not_good_enough"];
+  const sorted = cardSheet(character({ domainCardIds: sortedIds, creationDomainCardIds: [] }), sortDb, { generated: [] });
+  eq("domain cards come out by domain, then level, then name",
+    sorted.cards.filter((c) => c.kind === "domain").map((c) => c.title),
+    ["Bladed Wind", "Not Good Enough", "Whirlwind", "A Soldier's Bond", "Deft Deceiver"]);
+  eq("and stacking them the other way round gives the same deck",
+    cardSheet(character({ domainCardIds: [...sortedIds].reverse(), creationDomainCardIds: [] }), sortDb, { generated: [] })
+      .cards.filter((c) => c.kind === "domain").map((c) => c.title),
+    ["Bladed Wind", "Not Good Enough", "Whirlwind", "A Soldier's Bond", "Deft Deceiver"]);
+  // Vaulting a card doesn't stop you owning it, and you print once.
+  check("a vaulted card is still in the deck",
+    cardSheet(character({ domainVaultIds: ["core_card_whirlwind"] }), db)
+      .cards.some((c) => c.key === "core_card_whirlwind"));
+
+  // A cost of 0 is a real and common answer — every Level 1 card in the SRD has one — so the
+  // subtitle has to test for null rather than for truthiness.
+  const whirlwind = level1.cards.find((c) => c.key === "core_card_whirlwind");
+  eq("a recall cost of 0 prints as 0, not as no cost at all",
+    whirlwind.fallback.subtitle, "Level 1 Ability · Recall 0");
+  eq("the fallback names the domain the printed card shows as a glyph",
+    whirlwind.fallback.footer, "Blade");
+  eq("a card with no recall cost at all says nothing about one",
+    cardSheet(character({ domainCardIds: ["core_card_x"], creationDomainCardIds: [] }),
+      { ...db, domainCards: [{ id: "core_card_x", name: { "en-US": "X" }, domain: "BONE", type: "SPELL", level: 3 }] })
+      .cards.find((c) => c.kind === "domain").fallback.subtitle, "Level 3 Spell");
+
+  // The fallback IS the card for anyone without the art — .gitignore excludes data/*/card-art —
+  // so it carries the record's own features, bullets included.
+  eq("a fallback keeps a feature's name and its paragraphs",
+    level1.cards.find((c) => c.key === "core_community_highborne").fallback,
+    {
+      title: "Highborne",
+      subtitle: "Community",
+      sections: [{ name: "Privilege", blocks: [{ type: "paragraph", text: "You have advantage on rolls to haggle." }] }],
+      footer: "",
+    });
+  eq("a bulleted description stays a list rather than running into the paragraph",
+    cardSheet(character({ heritage: { ancestryIds: ["a_1"], chosenFeatures: [] } }), {
+      ...db,
+      ancestries: [{
+        id: "a_1", name: { "en-US": "Channeler" },
+        features: [{
+          name: { "en-US": "Channel" },
+          description: [
+            { paragraph: { "en-US": "Choose an element:" } },
+            { list: [{ "en-US": "Earth" }, { "en-US": "Water" }] },
+          ],
+        }],
+      }],
+    }).cards.find((c) => c.kind === "ancestry").fallback.sections[0].blocks,
+    [{ type: "paragraph", text: "Choose an element:" },
+      { type: "list", items: ["Earth", "Water"] }]);
+
+  // A blank card in a printed deck is indistinguishable from a printer fault, so an id with no
+  // record behind it is dropped — and the modal has to be able to say what went.
+  const orphaned = cardSheet(character({
+    subclassId: "myhomebrew_subclass_gone",
+    domainCardIds: ["core_card_whirlwind", "myhomebrew_card_gone"],
+    creationDomainCardIds: [],
+  }), db, { generated: [] });
+  eq("an id with no record behind it is never drawn as a blank card",
+    keys(orphaned), ["core_community_highborne", "core_ancestry_elf", "core_card_whirlwind"]);
+  eq("but the export says what it dropped",
+    orphaned.missing,
+    [{ kind: "subclass", id: "myhomebrew_subclass_gone" }, { kind: "domain card", id: "myhomebrew_card_gone" }]);
+  // The default only checks the two cards taken at creation; this deck prints the vault too.
+  eq("a vaulted card that no longer exists is reported like any other",
+    cardSheet(character({ domainCardIds: ["myhomebrew_card_vaulted"], creationDomainCardIds: [] }), db).missing,
+    [{ kind: "domain card", id: "myhomebrew_card_vaulted" }]);
+  // The generated stats card was built from the weapon, so a missing one isn't noise here.
+  eq("a missing weapon is reported too, because the stats card was built from it",
+    cardSheet(character({ equipment: { primaryWeaponId: "myhomebrew_weapon_gone" } }), db).missing,
+    [{ kind: "weapon", id: "myhomebrew_weapon_gone" }]);
+
+  // Art lives with the content it belongs to, so the path builders take the RECORD: a bare id
+  // would emit data/srd/… for homebrew content and 404 on every card of it.
+  const hbSub = { ...TROUBADOUR, id: "hb_subclass_hex", name: { "en-US": "Hexweaver" }, contentSource: "homebrew" };
+  const hbCard = { ...WHIRLWIND, id: "hb_card_hex", name: { "en-US": "Hex" }, contentSource: "homebrew" };
+  const hbAnc = { ...ELF, id: "hb_ancestry_tide", name: { "en-US": "Tideborn" }, contentSource: "homebrew" };
+  const homebrew = cardSheet(character({
+    subclassId: "hb_subclass_hex",
+    heritage: { communityId: "core_community_highborne", ancestryIds: ["hb_ancestry_tide"], chosenFeatures: [] },
+    domainCardIds: ["hb_card_hex"], creationDomainCardIds: [],
+  }), {
+    ...db,
+    subclasses: [...db.subclasses, hbSub],
+    ancestries: [...db.ancestries, hbAnc],
+    domainCards: [...db.domainCards, hbCard],
+  });
+  eq("homebrew art is looked for in the folder its own source shipped",
+    homebrew.cards.map((c) => c.art),
+    ["data/homebrew/card-art/subclass/hb_subclass_hex-foundation.png",
+      "data/srd/card-art/community/core_community_highborne.png",
+      "data/homebrew/card-art/ancestry/hb_ancestry_tide.png",
+      "data/homebrew/card-art/domain/hb_card_hex.png"]);
+
+  // A draft is offered this export too, matching the Print sheet link beside it, so half a
+  // character has to come out as half a deck rather than as a throw.
+  eq("a bare draft prints whatever it has, and nothing else", cardSheet({}, db).cards, []);
+  eq("a draft with only a community prints one card",
+    keys(cardSheet({ heritage: { communityId: "core_community_highborne" } }, db)), ["core_community_highborne"]);
+}
+
+{
+  // ---------- card-content.js ----------
+  //
+  // The generated cards. Everything here is data a renderer walks, so all of it is assertable —
+  // which is the reason the decisions (which bonuses count, which trait is starred, where the
+  // text breaks) live in the pure module and not in card-pdf.js's canvas walk.
+
+  // SHEET_DB plus the three things these cards turn on: a second class to multiclass into, the
+  // two SRD domain cards that sit on either side of the permanent/loadout line, and a class
+  // track. Real ids on the cards, because they're what effects.js's catalogue is keyed by —
+  // a fixture card called "vitality" would collect nothing and the group below would pass by
+  // testing nothing at all.
+  const CARD_DB = {
+    ...SHEET_DB,
+    classes: [...SHEET_DB.classes, {
+      id: "cls2", name: "SORCERER", domains: ["ARCANA", "MIDNIGHT"], startingHitPoints: 6, startingEvasion: 10,
+      hopeFeature: { name: { "en-US": "Volatile Magic" }, description: [{ paragraph: { "en-US": "Reroll a damage die." } }] },
+      classFeatures: [{ name: { "en-US": "Arcane Sense" }, description: [{ paragraph: { "en-US": "Sense magic nearby." } }] }],
+    }],
+    subclasses: [...SHEET_DB.subclasses,
+      { id: "sub2", name: { "en-US": "Elemental Origin" }, spellcastTrait: "INSTINCT" },
+      { id: "nocast", name: { "en-US": "Stonewall" } }],
+    domainCards: [...SHEET_DB.domainCards,
+      // "permanently gain two of the following benefits... then place this card in your vault
+      // permanently" — so it counts from the vault, and must survive the card being vaulted.
+      { id: "core_domain_card_vitality", name: { "en-US": "Vitality" }, domain: "VALOR", level: 2, type: "ABILITY", recallCost: 0, features: [] },
+      // "gain a bonus to your Evasion equal to half your Agility" — a loadout card, and the one
+      // that must NOT count.
+      { id: "core_domain_card_untouchable", name: { "en-US": "Untouchable" }, domain: "MIDNIGHT", level: 1, type: "ABILITY", recallCost: 1, features: [] }],
+    effects: { "cls:Frontline Tank": { track: { id: "unstoppable_die", label: "Unstoppable Die", steps: ["d4", "d6", "d8"] } } },
+  };
+
+  // deriveSheet() reads nothing else off a multiclass, so the four fields are the whole of it.
+  const MULTICLASSED = { classId: "cls2", subclassId: "sub2", tier: "foundation", domain: "ARCANA" };
+
+  const band = (card, label) => card.bands.find((b) => b.label === label);
+  const boxesOn = (card, label) => band(card, "Slots").cells.find((c) => c.label === label).boxes;
+  const traitLabels = (card) => band(card, "Traits").cells.map((c) => c.label);
+
+  group("The stats card counts permanent bonuses only");
+  {
+    const held = ["core_domain_card_vitality", "core_domain_card_untouchable"];
+    const holder = sheetChar({
+      domainCardIds: held, creationDomainCardIds: held, domainVaultIds: [],
+      // Vitality grants nothing until its choice is answered, so answer it: a Stress slot and a
+      // Hit Point slot.
+      effectChoices: { core_domain_card_vitality: { optionIds: ["stress", "hitPoint"] } },
+    });
+    const owns = deriveSheet(sheetChar(), CARD_DB); // the same character owning neither card
+    const inPlay = deriveSheet(holder, CARD_DB);
+    const printed = statsCardContent(holder, CARD_DB);
+
+    // The pair that pins the rule. Both cards are in the loadout; one prints, one doesn't.
+    eq("Vitality's permanent Hit Point slot is on the card", boxesOn(printed, "Hit Points"), owns.hitPoints + 1);
+    eq("and its permanent Stress slot", boxesOn(printed, "Stress"), owns.stress + 1);
+    eq("Untouchable, which works only from the loadout, is not in the printed Evasion",
+      band(printed, "Defense").cells[0].value, String(owns.evasion));
+    eq("even though it IS in play, which is the difference the footer warns about",
+      inPlay.evasion, owns.evasion + 1);
+    eq("and the footer says so", printed.footer, "Permanent bonuses only — loadout card bonuses not counted.");
+
+    // The substitution is on a copy. A stats card that vaulted the character's cards for real
+    // would empty the loadout of every screen that redrew after it.
+    eq("the character handed in is not modified", holder.domainVaultIds, []);
+    eq("nor is its collection", holder.domainCardIds, held);
+  }
+
+  group("The asterisk follows the Spellcast trait, however many there are");
+  {
+    const one = statsCardContent(sheetChar(), CARD_DB); // "sub" casts with Knowledge
+    eq("one subclass, one starred trait", traitLabels(one),
+      ["Agility", "Strength", "Finesse", "Instinct", "Presence", "Knowledge*"]);
+    check("with a legend saying what the mark means", !!band(one, "* Spellcast trait"));
+    check("and no Spellcast row restating a value the grid already prints",
+      !one.bands.some((b) => b.label === "Spellcast"));
+
+    // Two foundation cards naming different traits is a choice per roll, not a sum, so both are
+    // marked and the player picks one at the table.
+    const two = statsCardContent(sheetChar({ multiclass: MULTICLASSED }), CARD_DB);
+    eq("a second casting subclass stars its trait too", traitLabels(two),
+      ["Agility", "Strength", "Finesse", "Instinct*", "Presence", "Knowledge*"]);
+
+    const none = statsCardContent(sheetChar({ subclassId: "nocast" }), CARD_DB);
+    eq("a Guardian's grid carries no mark", traitLabels(none),
+      ["Agility", "Strength", "Finesse", "Instinct", "Presence", "Knowledge"]);
+    check("and no legend for a mark that isn't there", !band(none, "* Spellcast trait"));
+  }
+
+  group("Slot rows print empty boxes, at the counts the rules give");
+  {
+    const card = statsCardContent(sheetChar(), CARD_DB);
+    const cells = band(card, "Slots").cells;
+    eq("the four tracks, in the order a sheet prints them", cells.map((c) => c.label),
+      ["Armor", "Hit Points", "Stress", "Hope"]);
+    eq("Armor Score boxes come from the armor", boxesOn(card, "Armor"), 3);
+    eq("Hit Point boxes from the class", boxesOn(card, "Hit Points"), 7);
+    eq("Stress boxes from the base every character shares", boxesOn(card, "Stress"), 6);
+    eq("Hope from the rules maximum rather than deriveSheet's own hardcoded pair",
+      boxesOn(card, "Hope"), MAX_HOPE);
+    // Including Hope. Printed-in starting Hope is true until the first roll and wrong after it.
+    check("every box is empty", cells.every((c) => c.marked === 0));
+
+    // 4 of 15 classes have a track; the other 11 must not print an empty label.
+    eq("a class with a track prints it", band(card, "Class track").cells[0].value, "d4");
+    const trackless = statsCardContent(sheetChar(), { ...CARD_DB, effects: {} });
+    check("a class without one prints no band at all", !band(trackless, "Class track"));
+  }
+
+  group("The weapon block prints strings, and is the only band a renderer may shrink");
+  {
+    const unarmed = statsCardContent(sheetChar({ equipment: { primaryWeaponId: UNARMED, armorId: "gambeson" } }), CARD_DB);
+    const attack = band(unarmed, "Unarmed").cells[0].value;
+    check("an unarmed attack prints the profile's own two-trait string", attack.includes("Strength") && attack.includes("Finesse"));
+    check("never the object it came from", !attack.includes("[object"));
+
+    const listed = statsCardContent(sheetChar({ equipment: { primaryWeaponId: "listed", armorId: "gambeson" } }), CARD_DB);
+    const shrinkable = listed.bands.filter((b) => b.shrink);
+    eq("exactly one band is marked shrinkable", shrinkable.length, 1);
+    eq("and it is the weapon feature, not the numbers above it", shrinkable[0].cells[0].label, "Options");
+    eq("a list keeps its markers where there's no room to be a list",
+      shrinkable[0].cells[0].value, "• Choose fire. • Choose frost.");
+
+    const plain = statsCardContent(sheetChar({ equipment: { primaryWeaponId: "plain", armorId: "gambeson" } }), CARD_DB);
+    eq("a weapon with no feature prints no shrinkable band", plain.bands.filter((b) => b.shrink).length, 0);
+    eq("the attack modifier is the weapon's trait, effective", band(plain, "Shortsword").cells[0].value, "+1");
+  }
+
+  group("Class cards: one per class, and a multiclass grants no Hope feature");
+  {
+    const cards = classCardContents(sheetChar({ multiclass: MULTICLASSED }), CARD_DB);
+    eq("one card per class", cards.length, 2);
+    eq("the first is the class you started as", cards[0].title, "Guardian");
+    eq("its Hope feature leads, then its class features", cards[0].sections.map((s) => s.name),
+      ["Unstoppable", "Frontline Tank"]);
+    eq("and the Hope feature says which it is", cards[0].sections[0].tag, "Hope Feature");
+    eq("the second class gets a card of its own", cards[1].title, "Sorcerer");
+    eq("holding only its class features", cards[1].sections.map((s) => s.name), ["Arcane Sense"]);
+    check("its Hope feature is nowhere on it — multiclassing doesn't hand one over",
+      !JSON.stringify(cards[1]).includes("Volatile Magic"));
+    // deriveSheet().multiclassFeatures would have brought the subclass tiers along, and each of
+    // those already has its own art card in the deck.
+    check("nor are its subclass tier features, which are cards in their own right",
+      !JSON.stringify(cards[1]).includes("Elemental Origin"));
+
+    eq("a single-class character gets one card", classCardContents(sheetChar(), CARD_DB).length, 1);
+    eq("a feature keeps its blocks rather than being joined into one CSV-shaped line",
+      cards[0].sections[1].blocks, [{ type: "paragraph", text: "You mark 1 fewer Stress." }]);
+  }
+
+  group("Cards split when the text won't fit, and only then");
+  {
+    // A measurer of exactly ten characters to the line, so every break below can be read off
+    // the fixture by counting.
+    const measure = (text) => text.length * 10;
+    const opts = { width: 100, height: 40, lineHeight: 10, bodySize: 10, headingSize: 10, measure };
+    const content = (sections, title = "Druid") => ({ title, subtitle: "Class Features", sections, footer: "" });
+
+    const short = paginateSections(content([{ name: "Beastform", blocks: [{ type: "paragraph", text: "aaaa bbbb" }] }]), opts);
+    eq("one card is one card", short.length, 1);
+    eq("and carries no (n/m) suffix sending a reader after a card that doesn't exist",
+      short[0].title, "Druid");
+
+    // Heading + four wrapped lines against a four-line card.
+    const spilled = paginateSections(
+      content([{ name: "Beastform", tag: "Hope Feature", blocks: [{ type: "paragraph", text: "aaaa bbbb cccc dddd eeee ffff gggg" }] }]),
+      opts,
+    );
+    eq("a section longer than the card continues on a second one", spilled.map((c) => c.title),
+      ["Druid (1/2)", "Druid (2/2)"]);
+    eq("the first card fills to the line that fits", spilled[0].sections[0].blocks[0].text,
+      "aaaa bbbb cccc dddd eeee ffff");
+    eq("the rest carries over", spilled[1].sections[0].blocks[0].text, "gggg");
+    eq("and picks its name back up, so the second card isn't anonymous prose",
+      spilled[1].sections[0].name, "Beastform (cont.)");
+    eq("the subtitle repeats — each card is cut out and read on its own", spilled[1].subtitle, "Class Features");
+
+    // Widow control: "Bee" would fit on the first card, its first line of prose wouldn't.
+    const widowed = paginateSections(content([
+      { name: "Aye", blocks: [{ type: "paragraph", text: "aaaa bbbb cccc dddd" }] },
+      { name: "Bee", blocks: [{ type: "paragraph", text: "xxxx" }] },
+    ], "Two"), opts);
+    eq("a heading never prints as the last thing on a card", widowed.map((c) => c.sections.map((s) => s.name)),
+      [["Aye"], ["Bee"]]);
+
+    // One line to a card, and a word twice that long: it has to be cut, and nothing may be lost.
+    const cut = paginateSections(
+      { title: "Word", subtitle: "", sections: [{ name: "", blocks: [{ type: "paragraph", text: "supercalifragilistic" }] }] },
+      { ...opts, height: 10 },
+    );
+    eq("a word wider than the line hard-breaks rather than vanishing",
+      cut.map((c) => c.sections[0].blocks[0].text), ["supercalif", "ragilistic"]);
+    eq("and the halves rejoin with nothing inserted between them",
+      cut.map((c) => c.sections[0].blocks[0].text).join(""), "supercalifragilistic");
+
+    // Blocks survive the round trip in source order, bullets still bullets.
+    const mixed = paginateSections(content([{ name: "Edge", blocks: [
+      { type: "paragraph", text: "Choose one:" },
+      { type: "list", items: ["Clear a Hit Point.", "Clear an Armor Slot."] },
+      { type: "paragraph", text: "Not twice." },
+    ] }]), { ...opts, width: 200, height: 1000 });
+    eq("blocks come back out in source order, a list still a list", mixed[0].sections[0].blocks, [
+      { type: "paragraph", text: "Choose one:" },
+      { type: "list", items: ["Clear a Hit Point.", "Clear an Armor Slot."] },
+      { type: "paragraph", text: "Not twice." },
+    ]);
+
+    // The stats card is bounded by construction, so it goes through untouched.
+    const stats = paginateSections(statsCardContent(sheetChar(), CARD_DB), { ...opts, width: 200, height: 1000 });
+    eq("a card with no sections is one card", stats.length, 1);
+    eq("with its bands intact", stats[0].bands.length, statsCardContent(sheetChar(), CARD_DB).bands.length);
+  }
+
+  group("Missing art falls back to the card's own text");
+  {
+    const fallback = fallbackCardContent({
+      kind: "domain", key: "core_domain_card_untouchable", title: "Untouchable",
+      record: { ...CARD_DB.domainCards[2], features: [{ name: { "en-US": "Untouchable" }, description: [{ paragraph: { "en-US": "Gain a bonus to your Evasion." } }] }] },
+    });
+    eq("the frame's own line reads back off the record", fallback.subtitle, "Midnight 1 · Ability · Recall 1");
+    eq("and the rules text is the card", fallback.sections[0].blocks[0].text, "Gain a bonus to your Evasion.");
+
+    // A subclass card's features hang off the tier, not off the record.
+    const tier = fallbackCardContent({
+      kind: "subclass", key: "sub", title: "Stalwart (Foundation)", tier: "foundation", record: SHEET_DB.subclasses[0],
+    });
+    eq("a subclass card prints the tier it is, not every tier the subclass has",
+      tier.sections.map((s) => s.name), ["Unwavering"]);
+  }
 }
 
 // ---------- report ----------

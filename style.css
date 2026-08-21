@@ -554,6 +554,15 @@ h1, h2, h3, .btn-primary, .btn-ghost, .btn-small, .top-nav a {
 /* Both buttons size to their label — .btn-ghost is full-width elsewhere, which would put the
    two choices on separate lines and make the second look like the only one. */
 .export-choices button { width: auto; }
+/* The card PDF renders one card at a time, several seconds for a full deck, so the modal shows
+   a real bar rather than a spinner. <progress> is inline-level with an intrinsic width of about
+   10em, so without this it sits stubby in the middle of the panel however wide the modal is. */
+.export-progress { margin-top: 0.9rem; }
+.export-progress progress { display: block; width: 100%; }
+/* The card being drawn, named under the bar. A <p>'s default margin is a full 1em top and
+   bottom, which floats one changing line of text away from the thing it captions; .hint only
+   dims and shrinks it, so the spacing has to be dealt with here. */
+.export-progress p { margin: 0.4rem 0 0; }
 /* One row per character the imported file already has here. The two dated lines are the whole
    point of the row — they're what tells you which copy is the one you want to keep. */
 .import-clash { display: flex; justify-content: space-between; align-items: center; gap: 0.6rem; flex-wrap: wrap; padding: 0.5rem 0; border-bottom: 1px solid var(--border); }

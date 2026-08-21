@@ -52,6 +52,11 @@ import {
 import { closePopover, openModal } from "./shared/popover.js";
 import { classFeatureSections } from "./shared/class-detail.js";
 import { escapeHtml } from "./shared/escape.js";
+// The only import here that isn't from shared/, and deliberately so: card-pdf.js fetches art
+// and draws it on a canvas, which is exactly what shared/ modules are forbidden to do. Every
+// rule it applies — which cards, where they land on the page, what the generated cards say —
+// lives in the pure modules underneath it, where tests/ can reach it.
+import { buildCardPdf } from "./card-pdf.js";
 
 const signed = (n) => (n > 0 ? `+${n}` : String(n));
 
@@ -550,6 +555,18 @@ function renderDetail() {
   printSheetLink.textContent = "Print sheet";
   container.appendChild(printSheetLink);
 
+  // Beside Print sheet, because they're the two ways to get this character onto paper and the
+  // sheet is deliberately art-free. Detail view only: the roster row already carries four
+  // buttons and a fifth wraps on a narrow screen, and the toolbar above the roster is for
+  // exports that cover every character, which this one can't be — it's one character's deck.
+  // Borrowing .detail-print-link because .btn-ghost is width: 100% and would otherwise drop
+  // this onto a line of its own; --spaced for the gap from the link it follows.
+  container.appendChild(button(
+    "Export cards (PDF)",
+    "btn-ghost detail-print-link detail-print-link--spaced",
+    () => openCardPdfModal(ch),
+  ));
+
   const cardsRow = document.createElement("div");
   cardsRow.className = "tile-grid";
   // Every subclass card the character has, not just the newest: a Specialization or Mastery
@@ -930,9 +947,11 @@ function openExportPicker() {
   openModal("Export CSV for the GM", body);
 }
 
-// The only thing in the app that writes a file. Both exports go through it.
-function downloadFile(filename, text, mime) {
-  const blob = new Blob([text], { type: mime });
+// The only thing in the app that writes a file. All three exports go through it: the CSV and
+// the transfer file hand it a string, the card PDF hands it a Uint8Array. Blob takes either
+// without being told which, so nothing here has to branch — hence `data` rather than `text`.
+function downloadFile(filename, data, mime) {
+  const blob = new Blob([data], { type: mime });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -951,6 +970,162 @@ function downloadCsv(loadout) {
     "\ufeff" + buildCsv(characters, db, { loadout }), // BOM so Excel recognizes accented characters
     "text/csv;charset=utf-8;",
   );
+}
+
+// ---------- card PDF export ----------
+//
+// Everything with a rule in it — which cards a character owns, where they land on the page,
+// what the generated stats and class cards say — is in card-pdf.js and the pure modules it
+// calls. What's left here is the parts that need a page: the button, the progress the render
+// reports back, and saving the bytes.
+
+// No format picker, unlike the CSV: there is nothing to ask. Every card the character owns
+// goes in, vault included, so once you've printed and cut them you own the physical objects
+// and swapping a loadout never means a reprint. One button, one action.
+function openCardPdfModal(ch) {
+  const body = document.createElement("div");
+
+  const hint = document.createElement("p");
+  hint.className = "hint";
+  hint.textContent = "Every card this character owns — loadout and vault alike — plus a stats " +
+    "card and the class features, nine to a US Letter page with crop marks.";
+  body.appendChild(hint);
+
+  const wrap = document.createElement("div");
+  wrap.className = "export-progress";
+  // Created with neither max nor value, so it renders indeterminate until the first card
+  // reports in — which is the honest state. How many cards there are is the card sheet's
+  // answer, arriving with that first callback; a bar starting at 0 of a guessed maximum would
+  // be a lie that then visibly jumps when the real total lands.
+  const bar = document.createElement("progress");
+  const line = document.createElement("p");
+  line.className = "hint";
+  line.textContent = "Reading your cards…";
+  wrap.appendChild(bar);
+  wrap.appendChild(line);
+  body.appendChild(wrap);
+
+  openModal("Export cards (PDF)", body);
+  runCardPdf(ch, body, bar, line);
+}
+
+// Split out so the modal above is just markup: this is the half that can fail. Each card is an
+// image decode plus a JPEG encode, both of which yield, so the bar repaints on its own without
+// anything here having to hand control back to the browser.
+async function runCardPdf(ch, body, bar, line) {
+  let result;
+  try {
+    result = await buildCardPdf(ch, db, {
+      onProgress: (done, total, title) => {
+        bar.max = total;
+        bar.value = done;
+        line.textContent = title
+          ? `Rendering card ${done} of ${total} — ${title}`
+          : `Rendering card ${done} of ${total}`;
+      },
+    });
+  } catch (err) {
+    showCardPdfProblem(body, "The cards couldn't be rendered, so nothing was saved. " +
+      (err && err.message ? err.message : String(err)));
+    return;
+  }
+
+  // A character with nothing chosen yet would export a page of blank slots, so say so instead
+  // of saving one. Read off the result rather than counted again up here: which cards exist is
+  // the card sheet's answer to give, and a second opinion is a second thing to get wrong.
+  if (!result.cardCount) {
+    showCardPdfProblem(body, "There are no cards to print yet. Pick a class, a heritage and at " +
+      "least one domain card, then export again.");
+    return;
+  }
+
+  downloadFile(cardPdfFilename(ch), result.bytes, "application/pdf");
+  showCardPdfAdvice(body, result);
+}
+
+// Both endings rewrite the body of the modal that's already open rather than opening a new
+// one. If the render outlasted the modal — Escape, or the close button — this body is detached
+// and writing to it does nothing, which is the right outcome: reopening would shove a panel
+// back over whatever the user went off and did instead.
+function showCardPdfProblem(body, message) {
+  body.innerHTML = "";
+  const box = document.createElement("div");
+  box.className = "problem-box";
+  box.textContent = message;
+  body.appendChild(box);
+  appendCardPdfClose(body);
+}
+
+// The modal stays open on success. A self-closing one would fire the download and take the
+// print settings away with it in the same instant, and those settings are the difference
+// between cards that fit a card sleeve and cards that don't.
+function showCardPdfAdvice(body, result) {
+  body.innerHTML = "";
+
+  const advice = document.createElement("p");
+  advice.appendChild(document.createTextNode(
+    `${plural(result.cardCount, "card")} over ${plural(result.pageCount, "page")}. Print at `,
+  ));
+  // The one instruction that ruins the export if it's missed: "fit to page" is most printers'
+  // default and it scales everything down a few percent, which is invisible until you measure
+  // a cut card against a sleeve. Emphasised rather than merely stated.
+  const scale = document.createElement("strong");
+  scale.textContent = "100%";
+  advice.appendChild(scale);
+  advice.appendChild(document.createTextNode(
+    ", not “fit to page”, and cut along the crop marks — each card comes out 2.5 × 3.5 in. " +
+    "There is no bleed, so cut on the marks: misregistration shows a sliver of the neighbouring card.",
+  ));
+  body.appendChild(advice);
+
+  // Named, not silent. A deck that's quietly two cards short reads as a bug in the export;
+  // knowing the count and the cause points at the content settings, which is where the fix is.
+  const missing = result.missing || [];
+  if (missing.length > 0) {
+    const note = document.createElement("p");
+    note.className = "hint";
+    note.textContent = `${plural(missing.length, "card")} couldn't be included — a content ` +
+      "source this character was built with is switched off, renamed or missing.";
+    body.appendChild(note);
+  }
+
+  // A different failure with a different fix: the card is in the deck, it just printed as its
+  // rules text instead of its picture. Worth saying, because a mixed deck otherwise looks like
+  // the renderer gave up halfway.
+  const fellBack = result.fellBack || [];
+  if (fellBack.length > 0) {
+    const note = document.createElement("p");
+    note.className = "hint";
+    note.textContent = `${plural(fellBack.length, "card")} printed as text because ` +
+      `${fellBack.length === 1 ? "its" : "their"} art wasn't found.`;
+    body.appendChild(note);
+  }
+
+  appendCardPdfClose(body);
+}
+
+function appendCardPdfClose(body) {
+  const row = document.createElement("div");
+  row.className = "export-choices";
+  row.appendChild(button("Close", "btn-primary", closePopover));
+  body.appendChild(row);
+}
+
+// daggerheart-cards-<name>-<stamp>.pdf, to sit beside daggerheart-characters-<stamp>.csv. The
+// download attribute would carry the name in full, but the filesystem it lands on may not, so
+// it's reduced to [a-z0-9-]. Accents are folded rather than dropped: without the NFD pass
+// Élodie saves as "lodie", which looks like the export mangled it.
+function cardPdfFilename(ch) {
+  const slug = (ch.name || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  // Same stamp downloadCsv writes, for the same reason: today's print run shouldn't overwrite
+  // the one you did before you levelled up.
+  const stamp = new Date().toISOString().slice(0, 10);
+  return `daggerheart-cards-${slug || "character"}-${stamp}.pdf`;
 }
 
 // ---------- backup & transfer ----------
