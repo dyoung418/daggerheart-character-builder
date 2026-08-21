@@ -11,7 +11,6 @@ import {
   nextSubclassTier,
   optionCost,
   optionFor,
-  remainingSlots,
   slotsPerPick,
   tierForLevel,
 } from "./shared/advancement.js";
@@ -120,10 +119,6 @@ function budgetSpent() {
 function slotsTakenInTier(key, tier) {
   const already = context.slotsUsed?.[key]?.[tier] || 0;
   return already + picksFor(key, tier).length * slotsPerPick(key);
-}
-
-function totalRemainingAcrossAllOptions() {
-  return options.reduce((sum, option) => sum + remainingSlots(option, context.slotsUsed), 0);
 }
 
 // What `options` is built from: the slots every level below this one marked, plus the ones being
@@ -892,12 +887,16 @@ function commitCardChoices() {
 // that's missing is usually scrolled off. A click on it looks like a click that didn't register.
 // Every other refusal here explains itself (see markBlockedReason), and now so does this one.
 function confirmBlockedReason(newLevel) {
+  // Always exactly 2, with no allowance for a sheet with fewer boxes left than that — the same
+  // unconditional rule validateEntry applies, so a level this screen confirms can't then be
+  // flagged by the history list. There used to be an allowance here; it was unreachable. A choice
+  // point marks exactly one box (optionCost and slotsPerPick agree by key), so the sheet holds 40
+  // boxes by tier 4 against the 18 points nine level ups grant, less at most 3 crossed out. The
+  // tightest it ever gets is 6 free boxes at level 4. Re-check that if TIER_SLOT_TABLE shrinks or
+  // CROSS_OUTS grows.
   const spent = budgetSpent();
-  const totalRemaining = totalRemainingAcrossAllOptions();
-  const budgetOk = spent === 2 || (totalRemaining < 2 && spent === totalRemaining);
-  if (!budgetOk) {
-    const want = Math.min(2, totalRemaining);
-    return `Mark ${want} advancement slot${want === 1 ? "" : "s"} above — ${spent} of ${want} chosen.`;
+  if (spent !== 2) {
+    return `Mark 2 advancement slots above — ${spent} of 2 chosen.`;
   }
 
   for (const pick of picks) {
