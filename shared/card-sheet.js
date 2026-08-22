@@ -141,7 +141,7 @@ export function cardSheet(character, db, { generated = [] } = {}) {
     });
   }
 
-  // A mixed heritage yields TWO full ancestry cards, in the order the character stores them. There
+  // A mixed ancestry yields TWO full ancestry cards, in the order the character stores them. There
   // is no composite art to print — the mix is a pick of one feature from each — so the deck shows
   // both faces and the player reads their own two chosen features off them, mirroring
   // characters.js:576-579.
@@ -158,8 +158,8 @@ export function cardSheet(character, db, { generated = [] } = {}) {
     });
   }
 
-  // With the heritage cards, which is where the rules put it: a transformation joins the loadout
-  // "as if it were part of your character's heritage". Usually null — the SRD ships none.
+  // With the ancestry cards, which is where the rules put it: a transformation joins the loadout
+  // "as if it were part of your character's ancestry". Usually null — the SRD ships none.
   const transformation = find(db?.transformations, character?.transformationId);
   if (transformation) {
     cards.push({

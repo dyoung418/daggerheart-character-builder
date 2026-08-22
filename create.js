@@ -152,7 +152,7 @@ function buildSteps() {
   }
   const at = BASE_STEPS.findIndex((s) => s.key === "heritage");
   STEPS = [...BASE_STEPS];
-  // Straight after the heritage, which is where the rules put it.
+  // Straight after the ancestry, which is where the rules put it.
   STEPS.splice(at + 1, 0, { key: "transformation", label: "Transformation" });
 }
 
@@ -515,7 +515,7 @@ function renderTransformationStep(panel) {
   info.className = "hint";
   info.textContent = "Optional, and you can have only one. A transformation gives you a benefit " +
     "and a drawback together, and the card doesn't count against your loadout — it sits with your " +
-    "heritage. Your GM may hand you one during play instead, and you can come back here for it.";
+    "ancestry. Your GM may hand you one during play instead, and you can come back here for it.";
   panel.appendChild(info);
 
   const transformations = pickable(db.transformations);
@@ -902,7 +902,7 @@ function renderExperiencesStep(panel) {
   renderExperienceChoices(panel);
 }
 
-// An ancestry feature that says "choose" gets asked here rather than on the heritage step:
+// An ancestry feature that says "choose" gets asked here rather than on the ancestry step:
 // Clank's Purposeful Design picks one of your Experiences, and those don't exist until now.
 //
 // Nothing here knows which feature that is. Anything in effects.js sourced from an ancestry

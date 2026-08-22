@@ -831,7 +831,7 @@ export async function buildCardPdf(character, db, opts = {}) {
   const { cards, missing } = cardSheet(character, db, { generated: generatedDescriptors(ctx, character, db) });
   if (!cards.length) {
     // A guard, not a path anything takes today: the stats card is generated rather than owned, so
-    // even a draft with no class, no heritage and no cards comes back with one card in the deck
+    // even a draft with no class, no ancestry and no cards comes back with one card in the deck
     // (dashes where the numbers aren't known yet, and empty slot boxes, which is a usable thing to
     // print). Kept because buildPdf() would otherwise refuse the zero-page document with a message
     // about PDFs rather than about the character.
@@ -841,7 +841,7 @@ export async function buildCardPdf(character, db, opts = {}) {
   const images = [];
   const imageForCard = [];
   const fellBack = [];
-  // Two cards sharing one art file (a heritage that names the same ancestry twice) embed one
+  // Two cards sharing one art file (a mixed ancestry that names the same one twice) embed one
   // XObject: the JPEG for a decoded art file is a pure function of the file, so the second card
   // can point at the first one's bytes. Only for art — a generated card's pixels depend on the
   // character, and a fallback's on the descriptor.

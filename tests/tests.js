@@ -880,23 +880,29 @@ group("A second class shows up wherever the first one does");
   const cell = (who, header) => CSV_COLUMNS.find((c) => c.header === header)
     .value(rowContext(who, showDb, true));
   const at = (h) => cell(ch, h);
-  eq("the export carries the class", at("Multiclass"), "Spark");
-  eq("the domain", at("Multiclass Domain"), "Arcana");
-  eq("and the subclass", at("Multiclass Subclass"), "Spark Sub");
+  eq("the export carries the class", at("multiclass"), "Spark");
+  eq("the domain", at("multiclass-domain"), "Arcana");
+  eq("and the subclass", at("multiclass-subclass"), "Spark Sub");
+  // The second subclass climbs its own ladder, so it exports its own rung rather than borrowing
+  // the first one's: this character is at Foundation in both, and the two can differ.
+  eq("and the rung that subclass is on", at("multiclass-subclass-tier"), "Foundation");
   // A pair per group rather than one combined cell, so a consumer with a slot for each can
   // fill them without guessing where the class's features end and the subclass's begin.
-  eq("the class's own features get their own pair", at("Multiclass feature name"), "Gizmo");
-  has("with their text", [at("Multiclass feature text")], "It whirrs.");
+  eq("the class's own features get their own pair", at("multiclass-feature-names"), "Gizmo");
+  has("with their text", [at("multiclass-feature-texts")], "It whirrs.");
   eq("and the subclass's foundation another",
-    at("Multiclass Foundation feature name"), "Groundwork");
-  has("with its text", [at("Multiclass Foundation feature text")], "Groundwork:");
+    at("multiclass-subclass-foundation-feature-names"), "Groundwork");
+  has("with its text", [at("multiclass-subclass-foundation-feature-texts")], "Groundwork:");
   eq("a tier this character hasn't reached is empty",
-    at("Multiclass Specialization feature name"), "");
+    at("multiclass-subclass-specialization-feature-names"), "");
   check("and the Hope feature is in none of them",
-    !["Multiclass feature text", "Multiclass Foundation feature text"]
+    !["multiclass-feature-texts", "multiclass-subclass-foundation-feature-texts"]
       .some((h) => at(h).includes("Hopeful")));
-  eq("a character without one leaves them empty", cell(plain, "Multiclass"), "");
-  eq("and their feature columns too", cell(plain, "Multiclass Foundation feature name"), "");
+  eq("a character without one leaves them empty", cell(plain, "multiclass"), "");
+  // Empty rather than "Foundation": a character with no second subclass is not standing on the
+  // bottom rung of one.
+  eq("and says nothing about a rung that isn't there", cell(plain, "multiclass-subclass-tier"), "");
+  eq("and their feature columns too", cell(plain, "multiclass-subclass-foundation-feature-names"), "");
 
   // Both ids are reported, so a renamed folder says what went missing rather than quietly
   // dropping the features. The domain isn't an id and needs no check.
@@ -2639,9 +2645,11 @@ function parseCsv(text) {
   return rows;
 }
 
-// One character's row as { header: value }, which is how the renderer reads it.
-function exportRow(ch, opts) {
-  const rows = parseCsv(buildCsv([ch], CSV_DB, opts));
+// One character's row as { header: value }, which is how the renderer reads it. `db` is the
+// shared fixture unless a check needs content it hasn't got — a second Spellcast trait, a dice
+// track, a second content folder.
+function exportRow(ch, opts, db = CSV_DB) {
+  const rows = parseCsv(buildCsv([ch], db, opts));
   return Object.fromEntries(rows[1].map((value, i) => [rows[0][i], value]));
 }
 
@@ -2750,24 +2758,31 @@ group("Every column is filled, and named once");
   // A consumer looks columns up by header, so two of a name means one of them is unreachable.
   eq("every column has a header and something to put in it",
     CSV_COLUMNS.filter((c) => !c.header || typeof c.value !== "function"), []);
+
+  // The spelling is part of the contract now, not just tidiness: the renderer derives its merge
+  // tag from the header, so one stray capital or space is a tag nothing in the template matches.
+  // The generated columns — the feature pairs, the weapon slots, the card numbers — are the ones
+  // that drifted before, which is why this asks the resolved list rather than the source.
+  eq("and every header is a lowercase, hyphenated slug",
+    headers.filter((h) => !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(h)), []);
 }
 
 group("Feature prose is exported, not just feature names");
 {
   const row = exportRow(csvChar());
-  eq("a community feature comes back name-first", row["Community feature text"], "Privilege: You have advantage on rolls to consort with nobles.");
-  eq("and its name is exported on its own too", row["Community feature name"], "Privilege");
+  eq("a community feature comes back name-first", row["community-feature-texts"], "Privilege: You have advantage on rolls to consort with nobles.");
+  eq("and its name is exported on its own too", row["community-feature-names"], "Privilege");
 
   // Only the feature the player picked, not both of the ancestry's.
-  eq("a heritage exports the chosen feature", row["Heritage feature name"], "Purposeful Design");
+  eq("a heritage exports the chosen feature", row["ancestry-feature-names"], "Purposeful Design");
 
   // A class's domains are derivable from its name, and exported anyway: the renderer can't
   // read classes.json.
-  eq("the class's domains are spelled out", row["Domains"], "Valor, Blade");
-  eq("the Hope feature is a pair like any other", row["Class Hope feature text"], "Frontline Tank: Spend 3 Hope to clear 2 Armor Slots.");
+  eq("the class's domains are spelled out", row["class-domains"], "Valor\nBlade");
+  eq("the Hope feature is a pair like any other", row["class-hope-feature-text"], "Frontline Tank: Spend 3 Hope to clear 2 Armor Slots.");
 
   // A list-only feature used to export an empty cell, because featureText read only paragraphs.
-  const classText = row["Class feature text"].split("\n");
+  const classText = row["class-feature-texts"].split("\n");
   eq("several class features are one per line, each named", classText[0], "Unstoppable: Once per long rest, you can become Unstoppable.");
   eq("a name that is already a sentence doesn't gain a second colon", classText[1], "While Unstoppable, you gain the following benefits:");
   eq("and its bullets are exported as bullets", classText.slice(2), ["• You reduce the severity of physical damage.", "• You can't be Restrained."]);
@@ -2779,22 +2794,25 @@ group("Feature prose is exported, not just feature names");
       chosenFeatures: [{ ancestryId: "clank", featureName: "Efficient" }, { ancestryId: "human", featureName: "High Stamina" }],
     },
   }));
-  eq("a mixed heritage names both ancestries", mixed["Heritage"], "Clank + Human");
-  eq("both chosen features are exported, one per line", mixed["Heritage feature name"], "Efficient\nHigh Stamina");
+  // Singular header, singular value: a mixed heritage is one ancestry line on the sheet, so this
+  // is the one list-shaped cell that is joined inline rather than one per line.
+  eq("a mixed heritage names both ancestries", mixed["ancestry"], "Clank + Human");
+  eq("both chosen features are exported, one per line", mixed["ancestry-feature-names"], "Efficient\nHigh Stamina");
   eq("and each line of text says which feature it is",
-    mixed["Heritage feature text"], "Efficient: Choose a long rest move.\nHigh Stamina: Gain an additional Stress slot.");
+    mixed["ancestry-feature-texts"], "Efficient: Choose a long rest move.\nHigh Stamina: Gain an additional Stress slot.");
 }
 {
   // Upgrading a subclass adds a card rather than replacing the one below it, so the tiers below
   // always print — and the tiers above haven't happened yet.
   const foundation = exportRow(csvChar());
-  eq("a Foundation character exports their Foundation feature", foundation["Foundation feature name"], "Unwavering");
-  eq("and nothing for the tier they haven't reached", foundation["Specialization feature text"], "");
+  eq("a Foundation character exports their Foundation feature", foundation["subclass-foundation-feature-names"], "Unwavering");
+  eq("and nothing for the tier they haven't reached", foundation["subclass-specialization-feature-texts"], "");
+  eq("with the rung they're on named in the sheet's words", foundation["subclass-tier"], "Foundation");
 
   const mastered = exportRow(csvChar({ subclassTier: "mastery" }));
-  eq("at Mastery the tiers below are still theirs", mastered["Foundation feature name"], "Unwavering");
-  eq("a tier holding two features exports both", mastered["Specialization feature name"], "Expert Training\nBattle-Bonded");
-  eq("with the texts in the same order", mastered["Specialization feature text"].split("\n").length, 2);
+  eq("at Mastery the tiers below are still theirs", mastered["subclass-foundation-feature-names"], "Unwavering");
+  eq("a tier holding two features exports both", mastered["subclass-specialization-feature-names"], "Expert Training\nBattle-Bonded");
+  eq("with the texts in the same order", mastered["subclass-specialization-feature-texts"].split("\n").length, 2);
 }
 
 group("A weapon exports the numbers the sheet prints beside it");
@@ -2802,14 +2820,27 @@ group("A weapon exports the numbers the sheet prints beside it");
   const armed = exportRow(csvChar({
     equipment: { primaryWeaponId: "longsword", secondaryWeaponId: null, armorId: "gambeson", potionChoice: "potion" },
   }));
-  eq("the primary weapon's name", armed["Primary weapon name"], "Longsword");
-  eq("its range, in the sheet's words rather than the JSON's", armed["Primary range"], "Melee");
-  eq("its damage, modifier included", armed["Primary damage"], "d10+3 phy");
-  eq("and its feature", armed["Primary feature"], "Reliable: +1 to attack rolls.");
+  eq("the primary weapon's name", armed["primary-weapon-name"], "Longsword");
+  eq("its range, in the sheet's words rather than the JSON's", armed["primary-range"], "Melee");
+  eq("its damage, modifier included", armed["primary-damage"], "d10+3 phy");
+  eq("and its feature", armed["primary-feature"], "Reliable: +1 to attack rolls.");
+  // A column each rather than a slice of a " · " string, because the form the renderer fills has
+  // a box for each. A weapon out of data/ names exactly one trait.
+  eq("the trait it rolls, named", armed["primary-trait"], "Agility");
+  eq("and how many hands it takes", armed["primary-burden"], "Two-handed");
   eq("an empty secondary slot exports blanks, not 'undefined'",
-    [armed["Secondary weapon name"], armed["Secondary range"], armed["Secondary damage"], armed["Secondary feature"]], ["", "", "", ""]);
-  eq("armor is named and its feature exported", [armed["Armor name"], armed["Armor feature"]], ["Gambeson", "Flexible: +1 to Evasion."]);
-  eq("Hope is two numbers rather than the string 2/6", [armed["Hope"], armed["Hope Max"]], ["2", "6"]);
+    [armed["secondary-weapon-name"], armed["secondary-range"], armed["secondary-damage"], armed["secondary-feature"]], ["", "", "", ""]);
+  eq("including the two columns a weapon would have filled",
+    [armed["secondary-trait"], armed["secondary-burden"]], ["", ""]);
+  eq("armor is named and its feature exported", [armed["armor-name"], armed["armor-feature"]], ["Gambeson", "Flexible: +1 to Evasion."]);
+  // The armor as printed, beside the totals: a sheet with a box for each can't get back to the
+  // base from the total, and Gambeson's own numbers are not the ones the character ends up with.
+  eq("the armor's own numbers, beside the ones it adds up to",
+    [armed["armor-base-score"], armed["armor-base-damage-threshold-major"], armed["armor-base-damage-threshold-severe"]],
+    ["3", "5", "11"]);
+  eq("Hope is two numbers rather than the string 2/6", [armed["hope-slots"], armed["hope-current"]], ["6", "2"]);
+  // The one inventory item the app tracks, in a column shaped like the list it will become.
+  eq("the potion is the inventory", armed["inventory-items"], "Minor Health Potion");
 }
 {
   // Bare hands are a choice with rules of their own, not an empty slot.
@@ -2817,16 +2848,44 @@ group("A weapon exports the numbers the sheet prints beside it");
     equipment: { primaryWeaponId: UNARMED, secondaryWeaponId: null, armorId: UNARMORED, potionChoice: null },
   }));
   eq("an unarmed attack still has a weapon's columns",
-    [barehanded["Primary weapon name"], barehanded["Primary range"], barehanded["Primary damage"]], ["Unarmed", "Melee", "d4 phy"]);
-  eq("and no feature", barehanded["Primary feature"], "");
-  eq("choosing to wear nothing says so", barehanded["Armor name"], "Unarmored");
-  eq("with no armor feature to report", barehanded["Armor feature"], "");
+    [barehanded["primary-weapon-name"], barehanded["primary-range"], barehanded["primary-damage"]], ["Unarmed", "Melee", "d4 phy"]);
+  eq("and no feature", barehanded["primary-feature"], "");
+  // The SRD hands bare hands to the GM's choice of trait rather than naming one, so this column
+  // holds a list where a weapon holds a word — the same string the sheet prints.
+  eq("with a choice of traits rather than one", barehanded["primary-trait"], "Strength or Finesse");
+  eq("and no burden at all: nothing is in your hands", barehanded["primary-burden"], "");
+  eq("choosing to wear nothing says so", barehanded["armor-name"], "Unarmored");
+  eq("with no armor feature to report", barehanded["armor-feature"], "");
+  // EMPTY, never 0: 0 is a real armor score, and a sheet reading a blank as 0 would be right by
+  // accident here and wrong the first time a piece of armor scored 0.
+  eq("and no base numbers, because there is no armor to have them",
+    [barehanded["armor-base-score"], barehanded["armor-base-damage-threshold-major"], barehanded["armor-base-damage-threshold-severe"]],
+    ["", "", ""]);
+  eq("an empty potion slot is an empty inventory", barehanded["inventory-items"], "");
+}
+{
+  // Columns the app has no model behind, declared anyway: a form-filler needs to know the field
+  // exists and that we have nothing to say about it. A missing column and an empty one are
+  // different answers.
+  const row = exportRow(csvChar());
+  eq("nothing is marked, because the builder tracks no play",
+    [row["hp-marked-current"], row["stress-marked-current"], row["armor-marked-current"]], ["0", "0", "0"]);
+  eq("scars are a blank the sheet still has a box for", row["scars"], "");
+  // One string with commas in it, not a list: the header is singular, so nothing should read
+  // those commas as separators.
+  eq("and money is three named piles at zero", row["gold"], "handfuls: 0, bags: 0, chests: 0");
+
+  // Derivable from the level and the class, and exported anyway — nothing downstream has the
+  // tier table, and a sheet printing a base beside a total can't work back to the base.
+  eq("the tier the level falls in", row["tier"], "1");
+  eq("and the numbers the class is printed with",
+    [row["class-starting-evasion"], row["class-starting-hp-slots"]], ["9", "7"]);
 }
 
 group("A domain card says what it does, not just what it's called");
 {
   const row = exportRow(csvChar());
-  const cell = row["Domain Card 1"].split("\n");
+  const cell = row["domain-card-1"].split("\n");
   eq("the card names itself first", cell[0], "A Soldier's Bond");
   eq("then domain, type, level and recall cost, in that order", cell[1], "Blade · Ability · Level 2 · Recall Cost 1");
   eq("a blank line separates the details from the text", cell[2], "");
@@ -2834,21 +2893,22 @@ group("A domain card says what it does, not just what it's called");
 
   // The collection's order, not the loadout/vault split: Book of Ava is vaulted and still second.
   eq("every card the character owns gets a column, in collection order",
-    [1, 2, 3].map((n) => row[`Domain Card ${n}`].split("\n")[0]),
+    [1, 2, 3].map((n) => row[`domain-card-${n}`].split("\n")[0]),
     ["A Soldier's Bond", "Book of Ava", "Arcana-Touched"]);
-  eq("a character with fewer cards than columns trails blanks", row["Domain Card 4"], "");
+  eq("a character with fewer cards than columns trails blanks", row["domain-card-4"], "");
 
-  // The name-only columns say the same as they always did.
-  eq("the loadout list still names what's in the loadout", row["Domain Cards (loadout)"], "A Soldier's Bond; Arcana-Touched");
-  eq("and the vault list what's set aside", row["Domain Cards (vault)"], "Book of Ava");
+  // The name-only columns still say which cards are where — one name per line, as a plural
+  // header promises, so a card whose name has a semicolon in it can't split a list in two.
+  eq("the loadout list still names what's in the loadout", row["domain-cards-loadout"], "A Soldier's Bond\nArcana-Touched");
+  eq("and the vault list what's set aside", row["domain-cards-vault"], "Book of Ava");
 }
 {
-  const blocks = exportRow(csvChar())["Domain Card 2"].split("\n\n");
+  const blocks = exportRow(csvChar())["domain-card-2"].split("\n\n");
   eq("a Grimoire's three features are three blocks after the heading", blocks.length, 4);
   eq("each named, the way every other feature cell names them", blocks[1], "Power Push: Make a Spellcast Roll against a target within Melee range.");
   eq("down to the last", blocks[3], "Ice Spike: Make a Spellcast Roll (12) to summon a large ice spike.");
 
-  const bulleted = exportRow(csvChar())["Domain Card 3"].split("\n\n");
+  const bulleted = exportRow(csvChar())["domain-card-3"].split("\n\n");
   eq("a card whose text introduces bullets keeps them in its own block", bulleted.length, 2);
   eq("one bullet per line", bulleted[1].split("\n").slice(1),
     ["• +1 bonus to your Spellcast Rolls", "• Once per rest, you can switch the results of your Hope and Fear Dice."]);
@@ -2861,7 +2921,7 @@ group("A domain card says what it does, not just what it's called");
   // Companion and Wizard's Strange Patterns were the two that showed it there.
   const vitality = exportRow(csvChar({ domainCardIds: ["fx_vitality"], domainVaultIds: [] }));
   eq("a paragraph after a bullet list starts its own line",
-    vitality["Domain Card 1"].split("\n\n")[1].split("\n"),
+    vitality["domain-card-1"].split("\n\n")[1].split("\n"),
     [
       "When you choose this card, permanently gain two of the following benefits:",
       "• One Stress slot",
@@ -2872,7 +2932,7 @@ group("A domain card says what it does, not just what it's called");
 {
   // 0 is a real Recall Cost and a common one; a falsy check would have dropped the whole piece.
   const free = exportRow(csvChar({ domainCardIds: ["fx_free"], domainVaultIds: [] }));
-  eq("a Recall Cost of 0 is stated rather than left out", free["Domain Card 1"].split("\n")[1], "Splendor · Spell · Level 1 · Recall Cost 0");
+  eq("a Recall Cost of 0 is stated rather than left out", free["domain-card-1"].split("\n")[1], "Splendor · Spell · Level 1 · Recall Cost 0");
 }
 {
   // A file written by a browser whose data/ knew a card this one doesn't. Dropping it would
@@ -2880,23 +2940,23 @@ group("A domain card says what it does, not just what it's called");
   const stranger = exportRow(csvChar({
     domainCardIds: ["fx_bond", "core_domain_card_from_the_future", "fx_free"], domainVaultIds: [],
   }));
-  eq("a card this browser doesn't have is exported as its id", stranger["Domain Card 2"], "core_domain_card_from_the_future");
-  eq("and the cards after it keep their columns", stranger["Domain Card 3"].split("\n")[0], "Wellspring");
+  eq("a card this browser doesn't have is exported as its id", stranger["domain-card-2"], "core_domain_card_from_the_future");
+  eq("and the cards after it keep their columns", stranger["domain-card-3"].split("\n")[0], "Wellspring");
 }
 {
   // Which cards you own doesn't depend on where they're sitting, so the permanent-only export —
   // which vaults every card — has to leave these columns alone.
   const ch = csvChar();
   eq("the card columns read the same in both exports",
-    exportRow(ch)["Domain Card 2"], exportRow(ch, { loadout: false })["Domain Card 2"]);
+    exportRow(ch)["domain-card-2"], exportRow(ch, { loadout: false })["domain-card-2"]);
 }
 {
   // Fourteen is what the rules can give you, and it's a floor rather than a width: a collection
   // this app couldn't have built still exports whole instead of being cut off.
   const hoarder = csvChar({ domainCardIds: Array.from({ length: 16 }, () => "fx_bond"), domainVaultIds: [] });
   const rows = parseCsv(buildCsv([hoarder, csvChar()], CSV_DB));
-  eq("sixteen cards means sixteen card columns", rows[0].filter((h) => h.startsWith("Domain Card ")).length, 16);
-  eq("the last is named for its position", rows[0][rows[0].length - 1], "Domain Card 16");
+  eq("sixteen cards means sixteen card columns", rows[0].filter((h) => h.startsWith("domain-card-")).length, 16);
+  eq("the last is named for its position", rows[0][rows[0].length - 1], "domain-card-16");
   eq("and every row is as wide as the header", [rows[1].length, rows[2].length], [rows[0].length, rows[0].length]);
   eq("including the character who has three", rows[2][rows[0].length - 1], "");
 }
@@ -2908,14 +2968,14 @@ group("Two exports, and the column that tells them apart");
   const permanent = exportRow(untouchable, { loadout: false });
 
   // Agility is +1 in the fixture, and Untouchable is half of it rounded up.
-  eq("with the loadout, the card's bonus is in the number", withLoadout["Evasion"], "10");
-  eq("without it, the number is what's permanently true", permanent["Evasion"], "9");
-  eq("and each row says which it is", [withLoadout["Includes loadout bonuses"], permanent["Includes loadout bonuses"]], ["true", "false"]);
+  eq("with the loadout, the card's bonus is in the number", withLoadout["evasion"], "10");
+  eq("without it, the number is what's permanently true", permanent["evasion"], "9");
+  eq("and each row says which it is", [withLoadout["includes-loadout-bonuses"], permanent["includes-loadout-bonuses"]], ["true", "false"]);
 
   // Permanent only means every card is in the vault — so the card lists move rather than empty.
-  eq("with the loadout, the card is in the loadout", withLoadout["Domain Cards (loadout)"], "Untouchable");
-  eq("without it, the loadout is empty", permanent["Domain Cards (loadout)"], "");
-  eq("and the card is reported in the vault instead", permanent["Domain Cards (vault)"], "Untouchable");
+  eq("with the loadout, the card is in the loadout", withLoadout["domain-cards-loadout"], "Untouchable");
+  eq("without it, the loadout is empty", permanent["domain-cards-loadout"], "");
+  eq("and the card is reported in the vault instead", permanent["domain-cards-vault"], "Untouchable");
 }
 {
   // Vitality is permanent and tells you to vault it, so it applies either way.
@@ -2924,7 +2984,7 @@ group("Two exports, and the column that tells them apart");
     effectChoices: { core_domain_card_vitality: { optionIds: ["stress", "hitPoint"] } },
   });
   eq("a permanent card counts in both exports",
-    [exportRow(vitality)["Hit Points"], exportRow(vitality, { loadout: false })["Hit Points"]], ["8", "8"]);
+    [exportRow(vitality)["hp-slots"], exportRow(vitality, { loadout: false })["hp-slots"]], ["8", "8"]);
 }
 {
   // Bare Bones is a loadout card whose effect is a base rather than a bonus. A base a card was
@@ -2934,22 +2994,112 @@ group("Two exports, and the column that tells them apart");
     domainCardIds: ["core_domain_card_bare_bones"], domainVaultIds: [],
   });
   eq("with the loadout, Bare Bones stands in for armor",
-    [exportRow(bones)["Armor Score"], exportRow(bones)["Major Threshold"], exportRow(bones)["Severe Threshold"]], ["5", "10", "20"]);
+    [exportRow(bones)["armor-score"], exportRow(bones)["damage-threshold-major"], exportRow(bones)["damage-threshold-severe"]], ["5", "10", "20"]);
   const permanent = exportRow(bones, { loadout: false });
   eq("without it, an unarmored character is unarmored",
-    [permanent["Armor Score"], permanent["Major Threshold"], permanent["Severe Threshold"]], ["0", "1", "2"]);
+    [permanent["armor-score"], permanent["damage-threshold-major"], permanent["damage-threshold-severe"]], ["0", "1", "2"]);
+}
+
+group("A plural header means one value per line");
+{
+  // The convention the whole file rests on. These cells were joined with ", ", "; " and " / " —
+  // three spellings of one idea, and each of them a character that can legitimately appear
+  // inside a value. A consumer splits on "\n" and never has to know which cell used which.
+  const row = exportRow(csvChar({ domainVaultIds: ["fx_ava", "fx_touched"] }));
+  eq("the class's domains", row["class-domains"].split("\n"), ["Valor", "Blade"]);
+  eq("the Experiences, each with the total it's at", row["experiences"].split("\n"), ["A (+2)", "B (+2)"]);
+  eq("the cards in the loadout", row["domain-cards-loadout"].split("\n"), ["A Soldier's Bond"]);
+  eq("and the ones set aside", row["domain-cards-vault"].split("\n"), ["Book of Ava", "Arcana-Touched"]);
+}
+{
+  // The last three need content the shared fixture hasn't got: a second Spellcast trait, a pair
+  // of dice tracks, and records out of two different folders.
+  const castDb = {
+    ...CSV_DB,
+    subclasses: [...CSV_DB.subclasses, { id: "sub2", name: { "en-US": "Elemental Origin" }, spellcastTrait: "INSTINCT" }],
+  };
+  const twoCast = csvChar({ multiclass: { classId: "cls2", subclassId: "sub2", domain: "ARCANA", tier: "foundation" } });
+  // The app prints these as "Knowledge / Instinct"; that slash is a display choice and stays in
+  // the app. Splitting it back apart here would make it a format two projects had to agree on.
+  eq("two Spellcast traits are alternatives, one per line",
+    exportRow(twoCast, {}, castDb)["spellcast-traits"].split("\n"), ["Knowledge", "Instinct"]);
+
+  const trackDb = {
+    ...CSV_DB,
+    effects: {
+      "cls:Unstoppable": { track: { id: "rally_die", label: "Rally Die", byLevel: { 1: "d6", 5: "d8" } } },
+      "sub:foundation": { track: { id: "guard_die", label: "Guard Die", value: "d10" } },
+    },
+  };
+  eq("a track each, named and at the rung the character is on",
+    exportRow(csvChar(), {}, trackDb)["class-tracks"].split("\n"), ["Rally Die: d6", "Guard Die: d10"]);
+
+  const sourcedDb = {
+    ...CSV_DB,
+    classes: CSV_DB.classes.map((c) => ({ ...c, contentSource: "srd" })),
+    armors: CSV_DB.armors.map((a) => ({ ...a, contentSource: "my-homebrew" })),
+    sourceLabels: { srd: "Daggerheart SRD", "my-homebrew": "My Homebrew" },
+  };
+  const twoSources = csvChar({
+    equipment: { primaryWeaponId: null, secondaryWeaponId: null, armorId: "gambeson", potionChoice: null },
+  });
+  eq("and every folder the character is built from, in manifest order",
+    exportRow(twoSources, {}, sourcedDb)["sources"].split("\n"), ["Daggerheart SRD", "My Homebrew"]);
+}
+
+group("The level up grid exports three lists a sheet can draw boxes from");
+{
+  // Multiclassing is the pick that strikes rows out, and it takes the whole of level 5.
+  const struck = csvChar();
+  struck.level = 4;
+  record(struck, 5, [MULTICLASS], "fx_free");
+  const row = exportRow(struck);
+
+  const lines = (header) => row[header].split("\n");
+  const tier2 = ["levelup-tier2-options", "levelup-tier2-available-counts", "levelup-tier2-crossed-out"];
+  eq("the three lists are index-aligned, so line N of each is the same advancement",
+    tier2.map((header) => lines(header).length), [6, 6, 6]);
+  // The apostrophe is the formula guard, which fires on the cell rather than the line: this one
+  // opens with "+1", and a spreadsheet evaluates a leading + even inside quotes.
+  eq("in the order the level up screen draws them", lines("levelup-tier2-options").slice(0, 3),
+    ["'+1 to two unmarked traits", "+1 permanent Hit Point slot", "+1 permanent Stress slot"]);
+  eq("with the boxes still markable on each, as a number the sheet can draw",
+    lines("levelup-tier2-available-counts"), ["3", "2", "2", "1", "1", "1"]);
+  eq("and nothing struck out at this tier", lines("levelup-tier2-crossed-out"), ["", "", "", "", "", ""]);
+
+  // A struck row and a spent row both count 0, and the sheet draws them differently — which is
+  // why the third list exists. Multiclassing crosses out the subclass upgrade in its own tier.
+  const tier3 = lines("levelup-tier3-options");
+  const at = (header) => lines(header)[tier3.indexOf("Upgrade subclass card (Foundation → Specialization → Mastery)")];
+  eq("the row the strike hit has no boxes left", at("levelup-tier3-available-counts"), "0");
+  eq("and says which pick struck it, where a spent row says nothing",
+    at("levelup-tier3-crossed-out"), "multiclass");
+  eq("while the pick that did it has spent its own boxes, unstruck",
+    [lines("levelup-tier3-available-counts")[tier3.indexOf("Multiclass — a second class, one of its domains, and a foundation card")],
+      lines("levelup-tier3-crossed-out")[tier3.indexOf("Multiclass — a second class, one of its domains, and a foundation card")]],
+    ["0", ""]);
+
+  // A tier 4 row exists in the table at every level, so filtering on the slot counts alone would
+  // export the whole tier to a level 5 character who can't touch any of it.
+  eq("a tier this character can't have reached is three empty cells",
+    [row["levelup-tier4-options"], row["levelup-tier4-available-counts"], row["levelup-tier4-crossed-out"]], ["", "", ""]);
+
+  // The traits already raised this tier, which no free box makes eligible again.
+  const marked = csvChar({ traitMarks: { agility: true, strength: false, finesse: false, instinct: false, presence: true, knowledge: false } });
+  eq("the traits already marked are listed by name", exportRow(marked)["levelup-marked-traits"], "Agility\nPresence");
+  eq("and an unmarked character's cell is empty", exportRow(csvChar())["levelup-marked-traits"], "");
 }
 
 group("The GM's spreadsheet is handed data, never a program");
 {
   // Quoting alone doesn't stop this: a spreadsheet evaluates a leading = even inside quotes.
   const hostile = exportRow(csvChar({ name: '=HYPERLINK("http://evil","click")' }));
-  check("a name that looks like a formula is neutralised", hostile["Name"].startsWith("'="), `got ${hostile["Name"]}`);
-  eq("a quote inside a field survives the round trip", hostile["Name"].includes('"http://evil"'), true);
+  check("a name that looks like a formula is neutralised", hostile["name"].startsWith("'="), `got ${hostile["name"]}`);
+  eq("a quote inside a field survives the round trip", hostile["name"].includes('"http://evil"'), true);
 
   // Knowledge is -1 in the fixture. Prefixing a plain number would turn every negative trait
   // into text and break sorting for the GM.
-  eq("a negative number is left alone", exportRow(csvChar())["Knowledge"], "-1");
+  eq("a negative number is left alone", exportRow(csvChar())["knowledge"], "-1");
   eq("a comma in a field doesn't split it", csvField("a,b"), '"a,b"');
 }
 
@@ -3077,7 +3227,12 @@ group("A file that isn't from this app is refused with a reason");
 
   // The likeliest mistake of all: two files in one downloads folder, both named
   // daggerheart-characters-<date>. The CSV has to be recognised, not just rejected.
-  has("the GM's CSV is named as the GM's CSV", why('﻿"Name","Pronouns","Level"\r\n'), "GM's CSV");
+  has("the GM's CSV is named as the GM's CSV", why('﻿"name","pronouns","level"\r\n'), "GM's CSV");
+  // The headers became slugs, and this recognises the new spelling only: a CSV written before
+  // that is no more readable than any other stray file, and claiming to know it would promise a
+  // friendliness the app can't follow through on.
+  has("a CSV from before the headers were slugs is just an unreadable file",
+    why('﻿"Name","Pronouns","Level"\r\n'), "couldn't be read as JSON");
   has("something that isn't JSON says so", why("not json at all"), "couldn't be read as JSON");
   has("JSON from somewhere else is turned away", why("{}"), "not one from this app");
   has("and so is a file wearing another format", why(envelope([], { format: "something-else" })), "not one from this app");
@@ -3639,13 +3794,13 @@ group("A transformation prints on the sheet and exports to the GM");
     [none.transformationName, none.transformationFeatures], [null, []]);
 
   const row = tfRow(tfChar({ transformationId: TF_GIFT.id }));
-  eq("the CSV names it", row["Transformation"], "Tide-Marked");
-  eq("with both feature names", row["Transformation feature name"], "The Gift\nThe Price");
+  eq("the CSV names it", row["transformation"], "Tide-Marked");
+  eq("with both feature names", row["transformation-feature-names"], "The Gift\nThe Price");
   check("and the drawback's text, not just the benefit's",
-    row["Transformation feature text"].includes("A day on dry land leaves you parched."));
+    row["transformation-feature-texts"].includes("A day on dry land leaves you parched."));
   // A character whose only non-SRD content is a transformation still has to report the source.
-  eq("and the source it came from", row["Content"], "My Homebrew");
-  eq("a character without one leaves the columns empty", tfRow(tfChar())["Transformation"], "");
+  eq("and the source it came from", row["sources"], "My Homebrew");
+  eq("a character without one leaves the columns empty", tfRow(tfChar())["transformation"], "");
 }
 
 {

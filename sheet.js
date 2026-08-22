@@ -59,8 +59,8 @@ function tickRow(label, count, note) {
 function renderIdentity(s) {
   const box = el("header", "sheet-identity");
   box.appendChild(el("h1", "sheet-name", s.name));
-  // A transformation joins the heritage rather than getting a line of its own — "add the card to
-  // your loadout as if it were part of your character's heritage" — and is simply absent for the
+  // A transformation joins the ancestry rather than getting a line of its own — "add the card to
+  // your loadout as if it were part of your character's ancestry" — and is simply absent for the
   // characters (almost all of them) who have none.
   const heritage = [s.ancestryNames.join(" + ") || "—", s.communityName, s.transformationName]
     .filter(Boolean).join(" · ");

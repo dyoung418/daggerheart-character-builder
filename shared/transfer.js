@@ -70,11 +70,15 @@ export function transferFilename(now = new Date()) {
 
 // ---------- reading ----------
 
-// The GM's CSV opens with a BOM and a quoted Name column. Worth recognising: two files in one
+// The GM's CSV opens with a BOM and a quoted `name` column. Worth recognising: two files in one
 // downloads folder, both starting "daggerheart-characters-", is the likeliest mistake there is,
 // and "unexpected token" would be a useless thing to say about it.
+//
+// The new spelling only. A CSV written before the headers became slugs isn't a file this app can
+// do anything with either, and pretending to recognise it buys a friendlier message for a file
+// that is equally unreadable.
 function looksLikeTheGmCsv(text) {
-  return /^"?Name"?\s*,/.test(String(text).replace(/^\uFEFF/, ""));
+  return /^"?name"?\s*,/.test(String(text).replace(/^\uFEFF/, ""));
 }
 
 // Deliberately loose. Admitting a junk entry costs one confusing row that can be deleted;

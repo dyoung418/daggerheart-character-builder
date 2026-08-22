@@ -507,7 +507,7 @@ export function collectEffects(ch, db) {
   }
 
   // A transformation reads next, because the rules place it with the heritage: "add the card to
-  // your loadout as if it were part of your character's heritage". Keyed per FEATURE, like an
+  // your loadout as if it were part of your character's ancestry". Keyed per FEATURE, like an
   // ancestry rather than like a domain card — a transformation's features are a benefit and a
   // drawback, and each may want its own entry or its own `excluded` note. Both always apply;
   // unlike a mixed ancestry there's nothing to choose between them. There's no entry for any of

@@ -89,11 +89,18 @@ function traitsLabel(weapon) {
   return traits.map(enumLabel).join(" or ");
 }
 
+// Which trait a weapon rolls, in words. An unarmed profile offers a choice of traits rather than
+// naming one, because the SRD hands that pick to the GM per roll — and a profile a class grants
+// may hand it to the player; a weapon from data/ names exactly one. Stated here rather than
+// inline in weaponStats() because the CSV export needs the same answer in a column of its own,
+// and two spellings of "which trait?" is one spelling too many.
+export function weaponTraitText(weapon) {
+  return traitsLabel(weapon) || enumLabel(weapon?.trait);
+}
+
 export function weaponStats(weapon) {
   return [
-    // An unarmed profile offers a choice of traits rather than naming one, because the SRD hands
-    // that pick to the GM per roll — and a profile a class grants may hand it to the player.
-    traitsLabel(weapon) || enumLabel(weapon?.trait),
+    weaponTraitText(weapon),
     enumLabel(weapon?.range),
     damageText(weapon),
     burdenLabel(weapon),

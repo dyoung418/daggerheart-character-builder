@@ -645,12 +645,17 @@ function spellcastStat(keys, traits, contributions, ctx) {
   const bonusParts = partsFor(contributions, "spellcast", ctx);
   const bonus = bonusParts.reduce((sum, p) => sum + p.value, 0);
   const named = (key) => (bonus ? `${TRAIT_LABELS[key]} ${signed(bonus)}` : TRAIT_LABELS[key]);
+  const displays = keys.map(named);
   const bonusNote = "This bonus applies to Spellcast Rolls only — a plain roll of that trait doesn't get it.";
   return {
     traitKey: keys[0],
     traitLabel: keys.length === 1 ? TRAIT_LABELS[keys[0]] : undefined,
     bonus,
-    display: keys.map(named).join(" / "),
+    // One entry per trait, and `display` is those entries joined. The CSV export wants the same
+    // names under a different separator; splitting the joined string back apart would turn " / "
+    // into a format two files have to agree on rather than a choice this one makes.
+    displays,
+    display: displays.join(" / "),
     parts: [
       ...keys.map((key) => ({ label: `Spellcast trait: ${TRAIT_LABELS[key]}`, value: traits[key]?.total ?? 0 })),
       ...bonusParts,

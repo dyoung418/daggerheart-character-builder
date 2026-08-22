@@ -594,8 +594,8 @@ function renderDetail() {
     const anc = findAncestry(ancId);
     if (anc) cardsRow.appendChild(cardBlock({ id: anc.id, name: anc.name["en-US"], art: ancestryCardArtPath(anc), type: "Ancestry", features: anc.features }, `Ancestry: ${anc.name["en-US"]}`));
   }
-  // With the heritage cards, which is where the rules put it: a transformation card joins the
-  // loadout "as if it were part of your character's heritage".
+  // With the ancestry cards, which is where the rules put it: a transformation card joins the
+  // loadout "as if it were part of your character's ancestry".
   const transformation = findTransformation(ch.transformationId);
   if (transformation) {
     cardsRow.appendChild(cardBlock({
@@ -623,7 +623,7 @@ function renderDetail() {
   summary.className = "detail-summary";
   summary.innerHTML = `
     <p><strong>Class:</strong> ${cls ? escapeHtml(titleCase(cls.name)) : "—"} ${sub ? "— " + escapeHtml(sub.name["en-US"]) : ""}</p>
-    <p><strong>Heritage:</strong> ${ch.heritage.ancestryMode === "mixed" ? "Mixed ancestry" : "Pure ancestry"} — features: ${escapeHtml(ch.heritage.chosenFeatures.map((f) => f.featureName).join(", ")) || "—"}</p>
+    <p><strong>Ancestry:</strong> ${ch.heritage.ancestryMode === "mixed" ? "Mixed ancestry" : "Pure ancestry"} — features: ${escapeHtml(ch.heritage.chosenFeatures.map((f) => f.featureName).join(", ")) || "—"}</p>
   `;
   container.appendChild(summary);
 
@@ -1034,7 +1034,7 @@ async function runCardPdf(ch, body, bar, line) {
   // of saving one. Read off the result rather than counted again up here: which cards exist is
   // the card sheet's answer to give, and a second opinion is a second thing to get wrong.
   if (!result.cardCount) {
-    showCardPdfProblem(body, "There are no cards to print yet. Pick a class, a heritage and at " +
+    showCardPdfProblem(body, "There are no cards to print yet. Pick a class, an ancestry and at " +
       "least one domain card, then export again.");
     return;
   }

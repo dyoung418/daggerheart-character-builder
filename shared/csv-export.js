@@ -1,15 +1,23 @@
-// The CSV the GM gets.
+// The CSV the GM gets — and the interchange format everything downstream reads.
 //
 // Two jobs: summarising a party for the GM, and feeding whatever prints a character sheet — a
-// mail merge, a spreadsheet, a script nobody here has seen. So it's written for a stranger.
-// Headers say what a player would call the thing, values are plain text a person could check by
-// eye, and nothing is shaped around one particular consumer.
+// mail merge, a form-filler, a script nobody here has seen. So it's written for a machine first
+// and a reader second. Every header is a stable slug: lowercase, hyphenated, one per field, and
+// a PLURAL header means the cell holds a newline-separated list. The values are plain text a
+// person can still check by eye, but they aren't phrased for one — `hp-slots` and
+// `levelup-tier2-available-counts` name a key, not a thing a player would say out loud.
+// Turning these back into a player's vocabulary — "Hit Points", a row of checkboxes, a heading —
+// is the consumer's business.
+//
+// The header strings are the contract, and the only part of the layout that is: a consumer may
+// depend on `armor-score` meaning what it meant last time, but never on which column it sits in,
+// and never on the file being a fixed number of columns wide (see cardColumns()).
 //
 // WHY SOME COLUMNS LOOK REDUNDANT
 // -------------------------------
 // Nothing downstream can read data/. A tool holding this file knows a character's class but
-// can't look up which domains that class has, so Domains is a column even though it follows
-// from the class — and the same goes for every piece of feature prose.
+// can't look up which domains that class has, so class-domains is a column even though it
+// follows from the class — and the same goes for every piece of feature prose.
 //
 // The rule: reproducing a value needs the game data → it's a column. Formatting a value that's
 // already here — drawing checkboxes from a number, composing a heading, deciding what to put in
@@ -20,20 +28,24 @@
 
 import {
   MAX_HOPE,
+  SLOT_TIERS,
   STARTING_HOPE,
   SUBCLASS_TIER_LABELS,
   activeDomainCardIds,
   subclassTiersUpTo,
+  tierForLevel,
 } from "./advancement.js";
-import { TRAIT_KEYS, TRAIT_LABELS, derivedStats } from "./derived-stats.js";
+import { TRAIT_KEYS, TRAIT_LABELS, advancementOptionsFor, derivedStats } from "./derived-stats.js";
 import { titleCase } from "./text.js";
 import {
   UNARMED,
   UNARMORED,
+  burdenLabel,
   damageText,
   enumLabel,
   featureNamesText,
   featuresText,
+  weaponTraitText,
 } from "./gear.js";
 
 const signed = (n) => (n > 0 ? `+${n}` : String(n));
@@ -80,7 +92,7 @@ export function rowContext(ch, db, loadout) {
     ancestries: (ch.heritage?.ancestryIds || []).map((id) => find(db?.ancestries, id)).filter(Boolean),
     // The features the player picked, not every feature the ancestries have: a mixed-ancestry
     // character takes one from each, and it isn't always the first.
-    heritageFeatures: (ch.heritage?.chosenFeatures || []).map((chosen) => {
+    ancestryFeatures: (ch.heritage?.chosenFeatures || []).map((chosen) => {
       const ancestry = find(db?.ancestries, chosen.ancestryId);
       return (ancestry?.features || []).find((f) => f.name?.["en-US"] === chosen.featureName);
     }).filter(Boolean),
@@ -109,6 +121,9 @@ export function rowContext(ch, db, loadout) {
     // is kept beside the card because a card this browser's data doesn't have still gets a
     // column — see cardCell().
     cards: (ch.domainCardIds || []).map((id) => ({ id, card: find(db?.domainCards, id) })),
+    // The advancement grid, resolved once: nine columns read it, and answering it means walking
+    // the whole level history and every source that declares a row.
+    advancementOptions: advancementOptionsFor(ch, db),
   };
 }
 
@@ -121,23 +136,78 @@ function total(stat) {
   return stat ? stat.total : "";
 }
 
-function weaponColumns(slot, headerPrefix) {
+// The weapon's whole line, in the order the printed sheet reads it. `trait` and `burden` are
+// columns rather than parts of a stats string because a form-filler has a box for each, and
+// re-splitting weaponStats()' " · " would make that separator a format two projects agree on.
+function weaponColumns(slot) {
   return [
-    { header: `${headerPrefix} weapon name`, value: (r) => name(r[slot]) },
-    { header: `${headerPrefix} range`, value: (r) => enumLabel(r[slot]?.range) },
-    { header: `${headerPrefix} damage`, value: (r) => damageText(r[slot]) },
-    { header: `${headerPrefix} feature`, value: (r) => featuresText(r[slot]?.features) },
+    { header: `${slot}-weapon-name`, value: (r) => name(r[slot]) },
+    { header: `${slot}-trait`, value: (r) => weaponTraitText(r[slot]) },
+    { header: `${slot}-range`, value: (r) => enumLabel(r[slot]?.range) },
+    { header: `${slot}-damage`, value: (r) => damageText(r[slot]) },
+    { header: `${slot}-feature`, value: (r) => featuresText(r[slot]?.features) },
+    // Empty for an unarmed profile, which has no burden at all.
+    { header: `${slot}-burden`, value: (r) => burdenLabel(r[slot]) },
   ];
 }
 
 // A name/text pair, the shape every feature on the sheet takes. The text repeats each feature's
 // own name in front of it rather than relying on the name column, because a slot can hold two —
-// a mixed heritage, or a tier like Beastbound's Specialization — and they would otherwise run
+// a mixed ancestry, or a tier like Beastbound's Specialization — and they would otherwise run
 // together with no way to tell which paragraph belongs to which.
-function featurePair(headerPrefix, features) {
+//
+// Plural, because a slot holding several is the normal case and a plural header is this file's
+// promise of a newline list. `single` is for the one pair that can never hold two: a class's
+// Hope feature is one feature, wrapped in an array only to reuse this.
+function featurePair(headerPrefix, features, { single = false } = {}) {
+  const s = single ? "" : "s";
   return [
-    { header: `${headerPrefix} feature name`, value: (r) => featureNamesText(features(r)) },
-    { header: `${headerPrefix} feature text`, value: (r) => featuresText(features(r)) },
+    { header: `${headerPrefix}-feature-name${s}`, value: (r) => featureNamesText(features(r)) },
+    { header: `${headerPrefix}-feature-text${s}`, value: (r) => featuresText(features(r)) },
+  ];
+}
+
+// ---------- the level up grid ----------
+
+// The advancement rows in play for one tier, in the order the level up screen draws them, so
+// that the three columns below line up row for row: line N of each is the same advancement.
+//
+// A tier the character can't have reached yet exports empty. The slots[] filter alone won't do
+// that — advancementOptions() fills slots for every tier in SLOT_TIERS whatever the level, and
+// only the row's `total` is summed over the tiers actually in play — so the level is checked
+// here, once, rather than trusted to fall out of the numbers.
+function advancementRows(r, tier) {
+  if (tier > tierForLevel(r.ch.level)) return [];
+  return r.advancementOptions.filter((option) => option.slots[tier] > 0);
+}
+
+// Three parallel lists per tier. Not one column of "label: 2" pairs, because the sheet this
+// feeds draws a row of boxes per advancement and needs the count as a number.
+//
+// `crossed-out` is a column of its own because a struck row and a fully-spent row both have 0
+// boxes left, and the official sheet draws them differently: struck through, versus filled in.
+// It holds the key of whatever struck it — only `subclass` and `multiclass` ever do — and is
+// empty otherwise. The blanks are load-bearing: they keep the three lists aligned.
+function levelupColumns(tier) {
+  return [
+    {
+      header: `levelup-tier${tier}-options`,
+      value: (r) => advancementRows(r, tier).map((option) => option.label).join("\n"),
+    },
+    {
+      // Boxes still markable on that row in that tier. remainingSlots() sums across every tier
+      // and answers a different question — the level up screen's "have you points left at all?"
+      header: `levelup-tier${tier}-available-counts`,
+      value: (r) => advancementRows(r, tier)
+        .map((option) => option.slots[tier]
+          - (r.ch.advancementSlotsUsed?.[option.key]?.[tier] ?? 0)
+          - option.crossedOut[tier])
+        .join("\n"),
+    },
+    {
+      header: `levelup-tier${tier}-crossed-out`,
+      value: (r) => advancementRows(r, tier).map((option) => option.crossedBy[tier] ?? "").join("\n"),
+    },
   ];
 }
 
@@ -164,7 +234,7 @@ function featurePair(headerPrefix, features) {
 // would renumber every card after it, and it's still a card the player owns.
 //
 // Column ORDER is the collection's order, and the headers are the stable part: nothing may
-// depend on a card being in a particular column, only on `Domain Card 3` meaning what it did
+// depend on a card being in a particular column, only on `domain-card-3` meaning what it did
 // last time. Levelling up appends, and exchanging a card replaces it in place, so a card keeps
 // its column across re-exports of the same character.
 
@@ -195,7 +265,7 @@ function cardCell({ id, card } = {}) {
 
 function cardColumns(count) {
   return Array.from({ length: count }, (_, i) => ({
-    header: `Domain Card ${i + 1}`,
+    header: `domain-card-${i + 1}`,
     value: (r) => cardCell(r.cards[i]),
   }));
 }
@@ -219,75 +289,93 @@ function contentSourcesText(r) {
   return [...used]
     .sort((a, b) => order.indexOf(a) - order.indexOf(b))
     .map((source) => labels[source] || source)
-    .join(", ");
+    .join("\n");
 }
 
 // ---------- the columns ----------
 
 export const CSV_COLUMNS = [
-  { header: "Name", value: (r) => r.ch.name },
-  { header: "Pronouns", value: (r) => r.ch.pronouns },
-  { header: "Level", value: (r) => r.ch.level },
-  { header: "Proficiency", value: (r) => r.ch.proficiency },
+  { header: "name", value: (r) => r.ch.name },
+  { header: "pronouns", value: (r) => r.ch.pronouns },
+  { header: "level", value: (r) => r.ch.level },
+  // Derivable from the level, and exported anyway: the tier is what the printed sheet groups its
+  // advancement rows by, and nothing downstream has the table that maps one to the other.
+  { header: "tier", value: (r) => tierForLevel(r.ch.level) },
+  { header: "proficiency", value: (r) => r.ch.proficiency },
 
-  { header: "Class", value: (r) => titleCase(r.cls?.name) },
+  { header: "class", value: (r) => titleCase(r.cls?.name) },
+  // The numbers the class is printed with, beside the totals they're the start of: `evasion` and
+  // `hp-slots` below have every advancement and effect already folded in, and a sheet showing the
+  // base in one box and the total in another can't get back to the base from the total.
+  { header: "class-starting-evasion", value: (r) => r.cls?.startingEvasion },
+  { header: "class-starting-hp-slots", value: (r) => r.cls?.startingHitPoints },
   // Derivable from the class, and exported anyway: nothing downstream can read classes.json.
-  { header: "Domains", value: (r) => (r.cls?.domains || []).map(enumLabel).join(", ") },
-  ...featurePair("Class", (r) => r.cls?.classFeatures),
+  { header: "class-domains", value: (r) => (r.cls?.domains || []).map(enumLabel).join("\n") },
+  ...featurePair("class", (r) => r.cls?.classFeatures),
   // hopeFeature is a bare feature rather than an array, so it's wrapped to match.
-  ...featurePair("Class Hope", (r) => (r.cls?.hopeFeature ? [r.cls.hopeFeature] : [])),
+  ...featurePair("class-hope", (r) => (r.cls?.hopeFeature ? [r.cls.hopeFeature] : []), { single: true }),
 
-  { header: "Subclass", value: (r) => name(r.sub) },
-  { header: "Subclass tier", value: (r) => SUBCLASS_TIER_LABELS[r.ch.subclassTier] ?? r.ch.subclassTier },
-  ...featurePair("Foundation", (r) => r.tierFeatures.foundation),
-  ...featurePair("Specialization", (r) => r.tierFeatures.specialization),
-  ...featurePair("Mastery", (r) => r.tierFeatures.mastery),
+  { header: "subclass", value: (r) => name(r.sub) },
+  { header: "subclass-tier", value: (r) => SUBCLASS_TIER_LABELS[r.ch.subclassTier] ?? r.ch.subclassTier },
+  ...featurePair("subclass-foundation", (r) => r.tierFeatures.foundation),
+  ...featurePair("subclass-specialization", (r) => r.tierFeatures.specialization),
+  ...featurePair("subclass-mastery", (r) => r.tierFeatures.mastery),
 
-  { header: "Heritage", value: (r) => names(r.ancestries).join(" + ") },
-  ...featurePair("Heritage", (r) => r.heritageFeatures),
-  { header: "Community", value: (r) => name(r.com) },
-  ...featurePair("Community", (r) => r.com?.features),
-  // Beside the heritage, where the rules place it, and blank for the great majority of
+  // Singular, and joined rather than listed: a mixed ancestry is one line on the sheet,
+  // not two ancestries.
+  { header: "ancestry", value: (r) => names(r.ancestries).join(" + ") },
+  ...featurePair("ancestry", (r) => r.ancestryFeatures),
+  { header: "community", value: (r) => name(r.com) },
+  ...featurePair("community", (r) => r.com?.features),
+  // Beside the ancestry, where the rules place it, and blank for the great majority of
   // characters — no SRD content provides one. Both features export: the drawback is half of what
   // a transformation is, and a GM reading this row needs it as much as the player does.
-  { header: "Transformation", value: (r) => name(r.transformation) },
-  ...featurePair("Transformation", (r) => r.transformation?.features),
+  { header: "transformation", value: (r) => name(r.transformation) },
+  ...featurePair("transformation", (r) => r.transformation?.features),
 
   // Effective traits, matching the sheet: the GM wants the number the player rolls with, which
-  // includes their armor's -1 Agility.
-  ...TRAIT_KEYS.map((key) => ({ header: TRAIT_LABELS[key], value: (r) => trait(r, key) })),
+  // includes their armor's -1 Agility. The key is already the slug, and it's the catalogue's own
+  // order, so nothing here restates either.
+  ...TRAIT_KEYS.map((key) => ({ header: key, value: (r) => trait(r, key) })),
 
-  { header: "Evasion", value: (r) => total(r.stats.evasion) },
-  { header: "Hit Points", value: (r) => total(r.stats.hitPoints) },
-  { header: "Stress", value: (r) => r.stats.stress.total },
+  { header: "evasion", value: (r) => total(r.stats.evasion) },
+  // Every track the sheet draws boxes for comes as a pair: how many boxes, and how many are
+  // marked. The builder tracks no in-play damage, so the marked half is a literal 0 — a number,
+  // because 0 marked is the true answer and a blank would read as "unknown".
+  { header: "hp-slots", value: (r) => total(r.stats.hitPoints) },
+  { header: "hp-marked-current", value: () => 0 },
+  { header: "stress-slots", value: (r) => r.stats.stress.total },
+  { header: "stress-marked-current", value: () => 0 },
   // Hope is the same for everyone and nothing changes it, but it's still two numbers rather than
-  // one: how much you start with, and how much you can hold. Exported as a pair instead of the
+  // one: how much you can hold, and how much you start with. Exported as a pair instead of the
   // string "2/6" so neither has to be parsed back out.
-  { header: "Hope", value: () => STARTING_HOPE },
-  { header: "Hope Max", value: () => MAX_HOPE },
-  { header: "Major Threshold", value: (r) => total(r.stats.majorThreshold) },
-  { header: "Severe Threshold", value: (r) => total(r.stats.severeThreshold) },
-  { header: "Armor Score", value: (r) => total(r.stats.armorScore) },
+  { header: "hope-slots", value: () => MAX_HOPE },
+  { header: "hope-current", value: () => STARTING_HOPE },
+  { header: "damage-threshold-major", value: (r) => total(r.stats.majorThreshold) },
+  { header: "damage-threshold-severe", value: (r) => total(r.stats.severeThreshold) },
+  { header: "armor-score", value: (r) => total(r.stats.armorScore) },
+  { header: "armor-marked-current", value: () => 0 },
 
   // An unarmed attack offers two traits rather than one, so it carries a display string instead
   // of a total — the GM's choice per roll, which is the SRD's rule, not a number we can pick.
+  // Which is why the header says what the cell usually is and not always what it is.
   {
-    header: "Primary Attack",
-   
+    header: "primary-attack-bonus",
     value: (r) => (r.stats.primaryAttack ? (r.stats.primaryAttack.display ?? signed(r.stats.primaryAttack.total)) : ""),
   },
   {
-    header: "Secondary Attack",
-   
+    header: "secondary-attack-bonus",
     value: (r) => (r.stats.secondaryAttack ? signed(r.stats.secondaryAttack.total) : ""),
   },
-  { header: "Spellcast Trait", value: (r) => r.stats.spellcast?.display ?? "" },
+  // A multiclassed character can cast with either of two traits, so this is a list. The names
+  // come from derivedStats() already labelled and already carrying any Spellcast-only bonus;
+  // taking `displays` rather than splitting `display` keeps the app's " / " a display choice.
+  { header: "spellcast-traits", value: (r) => (r.stats.spellcast?.displays ?? []).join("\n") },
 
   // A second class is half of what a character is, so it gets columns beside the first's rather
   // than being folded into them. Empty for everyone who hasn't multiclassed.
-  { header: "Multiclass", value: (r) => (r.multiclass?.cls ? titleCase(r.multiclass.cls.name) : "") },
-  { header: "Multiclass Domain", value: (r) => enumLabel(r.ch.multiclass?.domain || "") },
-  { header: "Multiclass Subclass", value: (r) => (r.multiclass ? name(r.multiclass.sub) : "") },
+  { header: "multiclass", value: (r) => (r.multiclass?.cls ? titleCase(r.multiclass.cls.name) : "") },
+  { header: "multiclass-domain", value: (r) => enumLabel(r.ch.multiclass?.domain || "") },
   // A name/text pair per group, the shape the primary class's features already take, because a
   // consumer laying out a sheet has a separate slot for each: the second class's own features,
   // its subclass's foundation, its subclass's specialization. One combined cell ran them
@@ -295,57 +383,85 @@ export const CSV_COLUMNS = [
   //
   // No Mastery pair: Multiclass marks both slots of its tier (advancement.js), so the second
   // subclass can be upgraded at most once and never reaches mastery.
-  ...featurePair("Multiclass", (r) => r.multiclass?.cls?.classFeatures || []),
-  ...featurePair("Multiclass Foundation", (r) => r.multiclassTierFeatures.foundation || []),
-  ...featurePair("Multiclass Specialization", (r) => r.multiclassTierFeatures.specialization || []),
+  ...featurePair("multiclass", (r) => r.multiclass?.cls?.classFeatures || []),
+  { header: "multiclass-subclass", value: (r) => (r.multiclass ? name(r.multiclass.sub) : "") },
+  // The second subclass climbs its own ladder, so it has its own rung. `foundation` when the
+  // multiclass records none, which is what rowContext reads it as.
+  {
+    header: "multiclass-subclass-tier",
+    value: (r) => {
+      if (!r.multiclass) return "";
+      const tier = r.ch.multiclass?.tier || "foundation";
+      return SUBCLASS_TIER_LABELS[tier] ?? tier;
+    },
+  },
+  ...featurePair("multiclass-subclass-foundation", (r) => r.multiclassTierFeatures.foundation || []),
+  ...featurePair("multiclass-subclass-specialization", (r) => r.multiclassTierFeatures.specialization || []),
 
   // The dice a class rolls, "Rally Die: d8". One column rather than a name and a value, because a
   // character can hold more than one and the header is shared by the whole party — the same
-  // reason Experiences is one column. Nothing downstream can derive these: the ladder is in the
+  // reason experiences is one column. Nothing downstream can derive these: the ladder is in the
   // game data, and the rung is in the character's advancement history.
   {
-    header: "Class Tracks",
-    value: (r) => (r.stats.tracks || []).map((t) => `${t.label}: ${t.value}`).join("; "),
+    header: "class-tracks",
+    value: (r) => (r.stats.tracks || []).map((t) => `${t.label}: ${t.value}`).join("\n"),
   },
 
-  ...weaponColumns("primary", "Primary"),
-  ...weaponColumns("secondary", "Secondary"),
+  ...weaponColumns("primary"),
+  ...weaponColumns("secondary"),
 
   // Choosing to wear nothing is a choice, not a blank — the sheet says so rather than leaving
   // the reader to wonder whether the player forgot.
-  { header: "Armor name", value: (r) => (r.unarmored ? "Unarmored" : name(r.armor)) },
-  { header: "Armor feature", value: (r) => featuresText(r.armor?.features) },
-  { header: "Potion", value: (r) => name(r.potion) },
+  { header: "armor-name", value: (r) => (r.unarmored ? "Unarmored" : name(r.armor)) },
+  // The armor as printed, beside the totals above. EMPTY and never 0 when there's no armor:
+  // 0 is a real armor score, and a sheet that reads a blank as 0 would be right by accident for
+  // an unarmored character and wrong the first time a piece of armor scored 0. rowContext()
+  // already nulls `armor` when unarmored, so one optional chain covers both cases.
+  { header: "armor-base-damage-threshold-major", value: (r) => r.armor?.baseMajorThreshold },
+  { header: "armor-base-damage-threshold-severe", value: (r) => r.armor?.baseSevereThreshold },
+  { header: "armor-base-score", value: (r) => r.armor?.baseScore },
+  { header: "armor-feature", value: (r) => featuresText(r.armor?.features) },
 
   {
-    header: "Experiences",
-   
-    value: (r) => r.stats.experiences.map((e) => `${e.name || "(unnamed)"} (+${e.total})`).join("; "),
+    header: "experiences",
+    value: (r) => r.stats.experiences.map((e) => `${e.name || "(unnamed)"} (+${e.total})`).join("\n"),
   },
+  // The potion is the whole of the app's inventory model, so the cell is one line or none — but
+  // the sheet's inventory is a list, and the header promises the shape the column will keep when
+  // the app grows one.
+  { header: "inventory-items", value: (r) => name(r.potion) },
+  // Always empty: the app has no scars model at all. A declared empty column rather than a
+  // missing one, because a form-filler reading this file needs to know the field exists and that
+  // we have nothing to say about it.
+  { header: "scars", value: () => "" },
 
-  {
-    header: "Domain Cards (loadout)",
-   
-    value: (r) => cardNames(activeDomainCardIds(r.ch), r.db),
-  },
-  {
-    header: "Domain Cards (vault)",
-   
-    value: (r) => cardNames(r.ch.domainVaultIds, r.db),
-  },
+  { header: "domain-cards-loadout", value: (r) => cardNames(activeDomainCardIds(r.ch), r.db) },
+  { header: "domain-cards-vault", value: (r) => cardNames(r.ch.domainVaultIds, r.db) },
   // Which of the two exports this is. Without it, two printouts of the same character disagree
   // about her Evasion and nothing on either says why.
+  { header: "includes-loadout-bonuses", value: (r) => String(r.loadout) },
+
+  { header: "background", value: (r) => r.ch.background?.description },
+  { header: "appearance", value: (r) => r.ch.background?.answers },
+  { header: "connections", value: (r) => r.ch.connectionsNotes },
+
+  // A fixed literal: the app tracks no money, and the sheet has three boxes for it. The ", "
+  // inside the value is part of one string rather than a list separator — a singular header, so
+  // nothing should read it as a newline list that happens to have commas in it.
+  { header: "gold", value: () => "handfuls: 0, bags: 0, chests: 0" },
+
+  // ---- the level up sheet ----
+  //
+  // The traits already given a +1 in this tier, and so ineligible for "+1 to two unmarked traits"
+  // even where a box is free. Cleared at levels 5 and 8 (history.js) before that level's picks
+  // are made, so a trait freed at 5 can be raised again at 5.
   {
-    header: "Includes loadout bonuses",
-   
-    value: (r) => String(r.loadout),
+    header: "levelup-marked-traits",
+    value: (r) => TRAIT_KEYS.filter((key) => r.ch.traitMarks?.[key]).map((key) => TRAIT_LABELS[key]).join("\n"),
   },
+  ...SLOT_TIERS.flatMap(levelupColumns),
 
-  { header: "Background", value: (r) => r.ch.background?.description },
-  { header: "Appearance", value: (r) => r.ch.background?.answers },
-  { header: "Connections", value: (r) => r.ch.connectionsNotes },
-
-  { header: "Content", value: contentSourcesText },
+  { header: "sources", value: contentSourcesText },
 
   // Last, so every column above keeps the position it has always had: these are wide, and there
   // are fourteen of them.
@@ -364,7 +480,7 @@ export function csvColumns(characters = []) {
 }
 
 function cardNames(ids, db) {
-  return (ids || []).map((id) => name(find(db?.domainCards, id))).filter(Boolean).join("; ");
+  return (ids || []).map((id) => name(find(db?.domainCards, id))).filter(Boolean).join("\n");
 }
 
 // ---------- escaping ----------
