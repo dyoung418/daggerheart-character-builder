@@ -1857,7 +1857,7 @@ group("A weapon can boost the OTHER hand's attacks");
   const fists = derivedStats(statChar({
     equipment: { primaryWeaponId: UNARMED, secondaryWeaponId: "src_offhand" },
   }), SRC_DB);
-  eq("bare hands are in the primary slot too", fists.primaryAttack.display, "Strength +3 / Finesse +1");
+  eq("bare hands are in the primary slot too", fists.primaryAttack.display, "(+3) Strength / (+1) Finesse");
 }
 
 group("Choosing to wear nothing");
@@ -1891,7 +1891,7 @@ group("Fighting with nothing in your hands");
   // strength is +2 in the fixture, finesse 0.
   const bare = derivedStats(statChar({ equipment: { primaryWeaponId: UNARMED } }), FX_DB);
   // signed() writes zero as "0", the same as every other stat box on the sheet.
-  eq("both traits are offered, neither is chosen", bare.primaryAttack.display, "Strength +2 / Finesse 0");
+  eq("both traits are offered, neither is chosen", bare.primaryAttack.display, "(+2) Strength / (0) Finesse");
   eq("and the breakdown shows each of them",
     bare.primaryAttack.parts.map((p) => p.label), ["Strength (unarmed)", "Finesse (unarmed)"]);
   check("with a note saying whose choice it is", /GM/.test(bare.primaryAttack.note));
@@ -1944,7 +1944,7 @@ group("A class can put its own weapon in your empty hands");
   const bare = derivedStats(statChar({ equipment: { primaryWeaponId: UNARMED } }), PROFILE_DB);
   eq("the declared profile stands in for the SRD's", bare.primaryAttack.weaponName, "Practised Strike");
   eq("and it can name more than two traits",
-    bare.primaryAttack.display, "Agility +1 / Strength +2 / Finesse 0 / Instinct +1 / Presence 0 / Knowledge -1");
+    bare.primaryAttack.display, "(+1) Agility / (+2) Strength / (0) Finesse / (+1) Instinct / (0) Presence / (-1) Knowledge");
   // The +1 Evasion rides on the same entry, and needs no `when` to be conditional: the entry is
   // only consulted while the profile is in use.
   eq("what the same feature grants alongside it counts too", bare.evasion.total, 10);
@@ -2581,7 +2581,7 @@ group("Sheet: a class-granted pair of fists prints as the weapon it is");
   eq("with Proficiency copies of every die", sheet.weapons[0].damage, "2d8+2d6");
   eq("at the range the profile gives it", sheet.weapons[0].range, "Melee");
   // Two traits and no single total, the same way the SRD's profile prints.
-  eq("naming every trait it can be rolled with", sheet.weapons[0].attack, "Strength +2 / Agility +1");
+  eq("naming every trait it can be rolled with", sheet.weapons[0].attack, "(+2) Strength / (+1) Agility");
   eq("and no bracketed trait after a string that already names them", sheet.weapons[0].traitLabel, "");
 
   const plain = deriveSheet(sheetChar({
@@ -2606,7 +2606,7 @@ group("Sheet: fighting unarmed and going unarmored print as the choices they are
   eq("at melee range", barehanded.weapons[0].range, "Melee");
   // Strength 2, Finesse 0 in the fixture. The GM calls which one per roll, so both print — and
   // a zero prints bare, the same as everywhere else a modifier is signed.
-  eq("and both traits the GM can call for", barehanded.weapons[0].attack, "Strength +2 / Finesse 0");
+  eq("and both traits the GM can call for", barehanded.weapons[0].attack, "(+2) Strength / (0) Finesse");
   // That string names its own traits, so sheet.js must not print a bracketed trait after it.
   eq("with no single trait to name in brackets", barehanded.weapons[0].traitLabel, "");
 
@@ -4530,11 +4530,11 @@ group("A transformation prints on the sheet and exports to the GM");
 
     const plain = statsCardContent(sheetChar({ equipment: { primaryWeaponId: "plain", armorId: "gambeson" } }), CARD_DB);
     eq("a weapon with no feature prints no shrinkable band", plain.bands.filter((b) => b.shrink).length, 0);
-    // "Primary weapon - Shortsword: Agility +1 | 1d6 Physical" — the four values a weapon has, on
+    // "Primary weapon - Shortsword: +1 Agility | 1d6 Physical" — the four values a weapon has, on
     // the one row that used to be three.
     const first = gearLines(plain)[0];
     check("the line leads with which hand, not which sword", first.startsWith("Primary weapon -"));
-    check("and carries name, trait, attack and damage", /Shortsword: Agility \+1 \| .*Physical/.test(first));
+    check("and carries name, trait, attack and damage", /Shortsword: \+1 Agility \| .*Physical/.test(first));
   }
 
   group("Damage thresholds print as one scale, not two rows");

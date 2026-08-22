@@ -113,8 +113,8 @@ function weaponEntry(weapon, attackStat, proficiencyTotal) {
     // draft, armed or not. "—" then, rather than a number that isn't real.
     //
     // An unarmed attack has no single total to sign. The SRD hands the GM the choice of Strength
-    // or Finesse per roll, so derivedStats() reports both as a `display` ("Strength +2 / Finesse
-    // 0") and no total. That string already names its traits, so it prints alone and traitLabel
+    // or Finesse per roll, so derivedStats() reports both as a `display` ("(+2) Strength / (0)
+    // Finesse") and no total. That string already names its traits, so it prints alone and traitLabel
     // stays empty — the same reason the Spellcast box below drops its own traitLabel.
     attack: !attackStat ? "—" : attackStat.unarmed ? attackStat.display : signed(attackStat.total),
     // Proficiency copies of every die the weapon rolls — damageDice() applies the count to each,

@@ -610,7 +610,21 @@ function unarmedAttackStat(profile, traits, contributions, ctx) {
   const options = keys.map((key) => ({
     key, label: TRAIT_LABELS[key], total: traits[key].total + bonus,
   }));
-  const display = options.map((o) => `${o.label} ${signed(o.total)}`).join(" / ");
+  // Bonus first, trait second — "(+4) Agility", not "Agility +4". The number is a TOTAL that
+  // already has the trait inside it, and the trait-first order reads as an instruction to add
+  // the two: take your Agility, add 4. Leading with the bonus says what it is instead — a +4
+  // attack you roll with Agility — which is the order the printed card puts a weapon's single
+  // trait in too.
+  //
+  // The brackets are what separate one alternative from the next, and they earn their place a
+  // second time in the CSV: a cell opening with "+" is a formula to a spreadsheet, so the bare
+  // form tripped csvField()'s guard and exported with a leading apostrophe. "(" does not. A
+  // weapon's single bonus stays unbracketed for the mirror-image reason — a cell holding only
+  // "(+4)" is accounting notation for -4.
+  //
+  // Not the shape spellcastStat uses, deliberately: there the number IS a bonus to add to the
+  // trait, so "Knowledge +1" reads exactly as it should.
+  const display = options.map((o) => `(${signed(o.total)}) ${o.label}`).join(" / ");
   return {
     weaponName: name,
     unarmed: true,

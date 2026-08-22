@@ -10,7 +10,7 @@
 // NUMBERS COME FROM deriveSheet(), NEVER FROM derivedStats() DIRECTLY
 // -------------------------------------------------------------------
 // sheet-data.js already solved every awkward case a printed page has: a null total prints "—",
-// a trait carries a signed `display`, an unarmed attack is already the "Strength +2 / Finesse 0"
+// a trait carries a signed `display`, an unarmed attack is already the "(+2) Strength / (0) Finesse"
 // string rather than an object, and a capped stat carries the `note` explaining the clamp. Going
 // to derivedStats() here would be a sixth place that formats those, and the first one to disagree
 // with the printed sheet — the exact fault sheet-data.js's own header says it was fixed out of.
@@ -224,10 +224,11 @@ export function statsCardContent(character, db) {
   const gear = [];
   const slotName = ["Primary weapon", "Secondary weapon"];
   s.weapons.forEach((weapon, i) => {
-    // traitLabel is empty for an unarmed profile, whose attack string already names both traits
-    // ("Strength +2 / Finesse 0") because the SRD hands the choice to the roll. Prefixing that
-    // with a trait would name three.
-    const attack = weapon.traitLabel ? `${weapon.traitLabel} ${weapon.attack}` : weapon.attack;
+    // Bonus first, trait second — "+1 Agility". The number already has the trait inside it, and
+    // the other order reads as an instruction to add the two. An unarmed profile's attack string
+    // is built that way round in derived-stats.js and names both traits itself, so traitLabel is
+    // empty for one; appending a trait there would name three.
+    const attack = [weapon.attack, weapon.traitLabel].filter(Boolean).join(" ");
     const damage = [weapon.damage, weapon.damageType].filter(Boolean).join(" ");
     gear.push({ lead: `${slotName[i] || "Weapon"} -`, text: `${weapon.name}: ${attack} | ${damage}`,
       features: weapon.features });
