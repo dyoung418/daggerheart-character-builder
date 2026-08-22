@@ -693,13 +693,26 @@ function renderDetail() {
       },
     ));
   }
-  if (stats.primaryAttack) {
-    // Unarmed reports two traits rather than one number, the way Spellcast does.
-    statsBox2.appendChild(statLine("Primary attack",
-      stats.primaryAttack.display ?? signed(stats.primaryAttack.total), stats.primaryAttack));
+  // A weapon whose attack has no number still gets its row, printing "—" the way Evasion and Hit
+  // Points do above and the way the printed sheet always has. There are two ways to arrive there
+  // and both deserve to be visible rather than to make a row disappear: a character whose traits
+  // aren't assigned yet, and a Warrior, Guardian or Brawler in an Arcane-Frame Wheelchair, whose
+  // trait is a Spellcast trait they don't have. The magic-weapon warning below says why for the
+  // second; a row that vanishes says nothing for either.
+  //
+  // Keyed on the SLOT, not on the stat: an empty slot prints nothing, because a secondary weapon
+  // is optional and "Secondary attack —" on every character who chose not to carry one is noise,
+  // not information. `unarmedProfile` is a filled primary slot — fighting bare-handed is a
+  // choice the rules have an answer for.
+  //
+  // display ?? signed(total), because an attack with alternatives instead of a total carries a
+  // string, and signed(undefined) would print the word "undefined".
+  const attackValue = (attack) => (attack ? attack.display ?? signed(attack.total) : "—");
+  if (ch.equipment?.primaryWeaponId) {
+    statsBox2.appendChild(statLine("Primary attack", attackValue(stats.primaryAttack), stats.primaryAttack));
   }
-  if (stats.secondaryAttack) {
-    statsBox2.appendChild(statLine("Secondary attack", signed(stats.secondaryAttack.total), stats.secondaryAttack));
+  if (ch.equipment?.secondaryWeaponId) {
+    statsBox2.appendChild(statLine("Secondary attack", attackValue(stats.secondaryAttack), stats.secondaryAttack));
   }
   if (stats.spellcast) {
     statsBox2.appendChild(statLine("Spellcast", stats.spellcast.display, stats.spellcast));

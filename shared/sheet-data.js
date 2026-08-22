@@ -27,7 +27,7 @@ import { activeDomainCardIds, SUBCLASS_TIER_LABELS, subclassTiersUpTo } from "./
 import { derivedStats, TRAIT_KEYS, TRAIT_LABELS } from "./derived-stats.js";
 import { unresolvedChoices } from "./effects.js";
 import { unresolvedReferences } from "./content-sources.js";
-import { UNARMED, UNARMORED, damageDice } from "./gear.js";
+import { UNARMED, UNARMORED, damageDice, weaponTraitText } from "./gear.js";
 import { titleCase } from "./text.js";
 
 function find(list, id) {
@@ -102,21 +102,34 @@ function weaponEntry(weapon, attackStat, proficiencyTotal) {
   // No "+0" for a weapon with no modifier; a negative one (none exist in data/ today, but the
   // rule doesn't promise that stays true) prints its own sign rather than a doubled one.
   const modifierText = modifier > 0 ? `+${modifier}` : modifier < 0 ? `${modifier}` : "";
-  const traitKey = String(weapon.trait || "").toLowerCase();
   return {
     name: weapon.name["en-US"],
     range: prettyEnum(weapon.range),
     burden: prettyEnum(weapon.burden),
-    // Empty for an unarmed profile, which names two traits rather than one — see `attack`.
-    traitLabel: TRAIT_LABELS[traitKey] || "",
-    // attackStat is null when derivedStats() has nothing to report: no trait assigned yet on a
-    // draft, armed or not. "—" then, rather than a number that isn't real.
+    // What the weapon's card says its trait is, which for an arcane-frame wheelchair is
+    // "Spellcast" — the sentinel, printed as written, whether the character resolves it to one
+    // trait or gets to choose between two. Read through weaponTraitText() rather than looked up
+    // here so the sheet and the CSV's own trait column can't drift apart; the duplication that
+    // function's comment exists to prevent was this line.
     //
-    // An unarmed attack has no single total to sign. The SRD hands the GM the choice of Strength
-    // or Finesse per roll, so derivedStats() reports both as a `display` ("(+2) Strength / (0)
-    // Finesse") and no total. That string already names its traits, so it prints alone and traitLabel
-    // stays empty — the same reason the Spellcast box below drops its own traitLabel.
-    attack: !attackStat ? "—" : attackStat.unarmed ? attackStat.display : signed(attackStat.total),
+    // Empty for an unarmed profile, which names its traits inside `attack` already — see below.
+    traitLabel: weapon.traits ? "" : weaponTraitText(weapon),
+    // attackStat is null when derivedStats() has nothing to report: no trait assigned yet on a
+    // draft, or a magic weapon in the hands of a subclass with no Spellcast trait. "—" then,
+    // rather than a number that isn't real.
+    //
+    // A missing total is the other state, and its absence IS the signal — not a flag beside it.
+    // It means the stat has alternatives rather than a sum: the SRD hands the GM the choice of
+    // Strength or Finesse per unarmed roll, and hands a multiclass caster the choice between
+    // their two Spellcast traits, so derivedStats() reports every option as a `display`
+    // ("(+2) Strength / (0) Finesse") and no total to sign. Branching on `unarmed` instead
+    // printed signed(undefined) the moment a weapon could take that shape too.
+    attack: !attackStat ? "—" : attackStat.total == null ? attackStat.display : signed(attackStat.total),
+    // Whether `attack` above is a string that names traits of its own rather than a single
+    // signed number. Stated here because only this function knows: card-content.js prints the
+    // trait label without brackets, and welding "Spellcast" onto "(+3) Knowledge / (+2) Instinct"
+    // reads as a third alternative rolled with a trait called "Instinct Spellcast".
+    attackNamesTraits: !!attackStat && attackStat.total == null,
     // Proficiency copies of every die the weapon rolls — damageDice() applies the count to each,
     // so a d8+d6 profile reads 2d8+2d6 rather than 2d8+d6.
     damage: `${damageDice(weapon.damage, proficiencyTotal)}${modifierText}`,

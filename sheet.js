@@ -212,8 +212,10 @@ function renderEquipment(s) {
     const row = el("div", "weapon-row");
     row.appendChild(el("strong", null, w.name));
     row.appendChild(el("span", null, w.range));
-    // An unarmed attack carries no single trait to name in brackets — its attack string already
-    // reads "Strength +2 / Finesse +0" — so the bracket is printed only when there's a trait.
+    // The bracket is printed only when there's a trait to name. An unarmed profile has none —
+    // its attack string already reads "(+2) Strength / (0) Finesse" and names them itself. A
+    // Spellcast weapon does have one, "Spellcast", and keeps it even when the string beside it
+    // names the two traits that resolved to: the bracket is what stops them running together.
     row.appendChild(el("span", null, w.traitLabel ? `${w.attack} (${w.traitLabel})` : w.attack));
     row.appendChild(el("span", null, `${w.damage} ${w.damageType}`));
     row.appendChild(el("span", "weapon-burden", w.burden));

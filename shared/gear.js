@@ -28,6 +28,16 @@ export const UNARMORED = "unarmored";
 // failed to fill in.
 export const UNARMED = "unarmed";
 
+// A sentinel in a weapon's `trait` field, meaning "the Spellcast trait this character's subclass
+// names" rather than one of the six. The combat wheelchairs' arcane frames are the first weapons
+// in data/ that don't name a trait outright — the SRD prints their trait as "Spellcast", and
+// which trait that is depends on who's sitting in the chair. Resolved at read time by
+// derived-stats.js, so nothing has to rewrite the record when a character multiclasses.
+//
+// Here for the same reason UNARMED is: gear.js imports nothing but escape.js, so the pages, the
+// rules and the stats can all name it without any two of them importing each other.
+export const SPELLCAST_TRAIT = "SPELLCAST";
+
 // enumLabel would turn TWO_HANDED into "Two Handed"; the book hyphenates, and so does the
 // wizard's own prose.
 const BURDEN_LABELS = { ONE_HANDED: "One-handed", TWO_HANDED: "Two-handed" };
@@ -197,7 +207,19 @@ export function spellcastBadge() {
 const spellcastList = (traits) => [].concat(traits ?? []).filter(Boolean);
 
 export function matchesSpellcast(weapon, spellcastTrait) {
-  return spellcastList(spellcastTrait).includes(weapon?.trait);
+  // Case-folded, because the two sides genuinely disagree and always have: a weapon's `trait`
+  // is the SCREAMING_SNAKE of the data files, while spellcastTraitKeys() returns the lowercase
+  // keys the trait arithmetic is keyed on. Comparing them raw made this return false for every
+  // weapon in the book, so the badge and the trait-match highlight had quietly rendered nothing
+  // since create.js started passing keys rather than the subclass's own uppercase value.
+  const traits = spellcastList(spellcastTrait).map((t) => String(t).toUpperCase());
+  // A weapon whose trait IS "Spellcast" matches every caster by definition — it rolls whatever
+  // they cast with, so there is no character it merely happens to suit. Withholding the badge
+  // from the one weapon that always fits would rank it below weapons that only sometimes do,
+  // which is exactly backwards. A Guardian has no Spellcast trait, so it still lights nothing
+  // for them.
+  if (weapon?.trait === SPELLCAST_TRAIT) return traits.length > 0;
+  return traits.includes(String(weapon?.trait ?? "").toUpperCase());
 }
 
 // The innards of one row, without the element around it: the wizard puts a radio in front of

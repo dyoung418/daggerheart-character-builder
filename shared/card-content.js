@@ -228,7 +228,12 @@ export function statsCardContent(character, db) {
     // the other order reads as an instruction to add the two. An unarmed profile's attack string
     // is built that way round in derived-stats.js and names both traits itself, so traitLabel is
     // empty for one; appending a trait there would name three.
-    const attack = [weapon.attack, weapon.traitLabel].filter(Boolean).join(" ");
+    // ...unless the attack string names traits itself AND a label still applies — a Spellcast
+    // weapon in the hands of a multiclass casting with two. Then the bracket separates them, the
+    // same way sheet.js prints it; without it the line ends "Instinct Spellcast".
+    const attack = weapon.attackNamesTraits && weapon.traitLabel
+      ? `${weapon.attack} (${weapon.traitLabel})`
+      : [weapon.attack, weapon.traitLabel].filter(Boolean).join(" ");
     const damage = [weapon.damage, weapon.damageType].filter(Boolean).join(" ");
     gear.push({ lead: `${slotName[i] || "Weapon"} -`, text: `${weapon.name}: ${attack} | ${damage}`,
       features: weapon.features });

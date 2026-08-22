@@ -199,7 +199,29 @@ What the app does with it:
 { "id": "core_consumable_stride_potion", "name": { "en-US": "Stride Potion" }, "features": [ … ] }
 ```
 
-Enums are SCREAMING_SNAKE and are turned into words for the player. **Required: `id`, `name`.**
+Enums are SCREAMING_SNAKE and are turned into words for the player.
+
+A weapon's `trait` is normally one of the six a character rolls — `AGILITY`, `STRENGTH`, `FINESSE`,
+`INSTINCT`, `PRESENCE`, `KNOWLEDGE`. There is one more legal value, **`SPELLCAST`**, meaning *the
+Spellcast trait this character's subclass names*. It's the SRD's own Arcane-Frame Wheelchair rule
+("uses your Spellcast trait"), and it's the one weapon the six can't express, because the record
+can't know whose hands it ends up in. It's resolved when the sheet is read, so one record serves a
+Wizard rolling Knowledge and a Sorcerer rolling Instinct.
+
+Two answers besides the ordinary one, and neither is an error:
+
+- A character with **two** Spellcast traits — a multiclass whose foundation cards name different
+  ones — gets both, with no single total: `(+3) Knowledge / (+2) Instinct`, and a note to choose per
+  roll. That's the shape a bare-handed attack already prints, for the same reason: these are
+  alternatives, not parts of a sum.
+- A character with **no** Spellcast trait — a Warrior or a Guardian — gets no attack number at all,
+  and the magic-weapon warning that already fires for them says why. They're warned, never stopped:
+  the weapon stays selectable and it's the GM's call, exactly as it is for every other magic weapon.
+
+The bracketed trait beside the attack reads **(Spellcast)** in every case, because that's what the
+weapon says; a character with two traits has nothing else it could name.
+
+**Required: `id`, `name`.**
 
 ### What validation does and doesn't do
 

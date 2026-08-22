@@ -378,7 +378,9 @@ export const CSV_COLUMNS = [
   },
   {
     header: "secondary-attack-bonus",
-    value: (r) => (r.stats.secondaryAttack ? signed(r.stats.secondaryAttack.total) : ""),
+    value: (r) => (r.stats.secondaryAttack
+      ? (r.stats.secondaryAttack.display ?? signed(r.stats.secondaryAttack.total))
+      : ""),
   },
   // A multiclassed character can cast with either of two traits, so this is a list. The names
   // come from derivedStats() already labelled and already carrying any Spellcast-only bonus;

@@ -79,6 +79,7 @@ const {
   deriveSheet,
 } = await import(`../shared/sheet-data.js${RUN}`);
 const {
+  SPELLCAST_TRAIT,
   UNARMED,
   UNARMORED,
   burdenWarning,
@@ -88,7 +89,9 @@ const {
   enumLabel,
   groupByTier,
   magicWeaponWarning,
+  matchesSpellcast,
   weaponStats,
+  weaponTraitText,
 } = await import(`../shared/gear.js${RUN}`);
 const {
   CSV_COLUMNS,
@@ -4732,6 +4735,229 @@ group("A transformation prints on the sheet and exports to the GM");
     eq("a subclass card prints the tier it is, not every tier the subclass has",
       tier.sections.map((s) => s.name), ["Unwavering"]);
   }
+}
+
+// ---------- a weapon whose trait is Spellcast ----------
+//
+// Every weapon in data/ until now named one of the six traits. The combat wheelchairs' arcane
+// frames don't: the SRD prints their trait as "Spellcast", meaning whichever trait the character
+// sitting in the chair casts with, which isn't knowable until a character picks the weapon up.
+// So the record carries a sentinel and derived-stats.js resolves it at read time — and four
+// readers that each treat a weapon differently have to agree about what came back: the attack
+// arithmetic, the picker's badge, the printed sheet and the GM's CSV.
+//
+// Last in the file because the CSV fixture is the last of the four to be declared, and these
+// check one weapon through all of them rather than the same weapon four times over.
+
+const CHAIR = {
+  id: "core_weapon_arcane_frame_wheelchair", name: { "en-US": "Arcane-Frame Wheelchair" },
+  type: "PRIMARY_MAGIC", tier: 1, trait: SPELLCAST_TRAIT, range: "FAR",
+  damage: { dice: "D6", type: "MAGICAL" }, burden: "ONE_HANDED",
+  // Reliable is on the real record, and it earns its place here: a bonus that applies to attacks
+  // with THIS weapon has to survive being routed through a trait nobody wrote on the record —
+  // and has to land on both alternatives when there are two, since it applies whichever one
+  // gets rolled.
+  features: [feat("Reliable", para("+1 to attack rolls"))],
+};
+
+// Instinct is +1 in the fixture and Knowledge -1, so a character casting with both prints one
+// alternative that carries a sign and one that comes out at zero — and with Reliable inside
+// them, no two numbers in these checks are the same number by accident.
+const CASTER = { id: "sub_instinct", name: { "en-US": "Sparkwright" }, spellcastTrait: "INSTINCT" };
+// A multiclass in the shape the replay derives, written out rather than recorded as a level up:
+// what a second Spellcast trait DOES is the subject here, and that a recorded pick is where the
+// second one comes from is already pinned by "Two Spellcast traits are alternatives, not a sum".
+// "sub" is the Knowledge-casting subclass in all three fixture dbs below.
+const SECOND_CASTER = { classId: "cls", subclassId: "sub", domain: "ARCANA", level: 5, tier: "foundation" };
+
+group("A weapon that rolls whichever trait you cast with");
+{
+  const CHAIR_DB = { ...FX_DB, subclasses: [...FX_DB.subclasses, CASTER], weapons: [...FX_DB.weapons, CHAIR] };
+  const inChair = (over = {}) => statChar({
+    subclassId: CASTER.id,
+    equipment: { primaryWeaponId: CHAIR.id, secondaryWeaponId: null, armorId: null, potionChoice: null },
+    ...over,
+  });
+
+  // Stalwart is a Guardian's subclass, and a Guardian casts with nothing at all. There is no
+  // trait to resolve the sentinel to, so there is no number — and inventing one (Knowledge,
+  // say, or 0) would be a sheet quietly answering a question the rules leave to the table.
+  const guardian = derivedStats(inChair({ subclassId: "core_subclass_stalwart" }), CHAIR_DB);
+  check("a subclass with no Spellcast trait gets no attack line at all", guardian.primaryAttack === null);
+  // Warned, never prevented: whether they can wield it is the GM's call, and the warning that
+  // already covered a Guardian holding a staff is what explains the dash here too.
+  check("and the magic-weapon warning is what says why",
+    magicWeaponWarning(CHAIR, null, null).startsWith("Arcane-Frame Wheelchair is a magic weapon"));
+
+  // Instinct +1, Reliable +1.
+  const one = derivedStats(inChair(), CHAIR_DB).primaryAttack;
+  eq("one Spellcast trait resolves to a single total", one.total, 2);
+  eq("with the weapon's own bonus inside it, and the trait it resolved to named as resolved",
+    one.parts.map((p) => p.label),
+    ["Spellcast trait: Instinct (Arcane-Frame Wheelchair)", "Arcane-Frame Wheelchair (Reliable)"]);
+  // Without the "Spellcast trait:" prefix the popover reads "Instinct (Arcane-Frame Wheelchair)"
+  // on a weapon whose card says Spellcast, and nothing on screen connects the two.
+  eq("which a weapon naming its own trait doesn't need",
+    derivedStats(statChar({ equipment: { primaryWeaponId: "dagger" } }), CHAIR_DB).primaryAttack.parts[0].label,
+    "Finesse (Dagger)");
+
+  const two = derivedStats(inChair({ multiclass: SECOND_CASTER }), CHAIR_DB).primaryAttack;
+  eq("two of them are alternatives rather than a sum, each carrying that same bonus",
+    two.display, "(+2) Instinct / (0) Knowledge");
+  // The absence IS the signal — the sheet, the card and the CSV all branch on it, and a boolean
+  // beside it would be a second thing to keep true.
+  eq("and there is no total, which is the only way a reader is told so", two.total, undefined);
+  eq("a part per trait, and one for the bonus that applies whichever you roll",
+    two.parts.map((p) => p.label), [
+      "Spellcast trait: Instinct (Arcane-Frame Wheelchair)",
+      "Spellcast trait: Knowledge (Arcane-Frame Wheelchair)",
+      "Arcane-Frame Wheelchair (Reliable)",
+    ]);
+  has("with a note saying the choice is made per attack", [two.note], "each time you attack");
+
+  // Nothing about the sentinel is tied to the main hand.
+  const offhand = derivedStats(statChar({
+    subclassId: CASTER.id, equipment: { primaryWeaponId: "dagger", secondaryWeaponId: CHAIR.id },
+  }), CHAIR_DB);
+  eq("and the off hand resolves it the same way", offhand.secondaryAttack.total, 2);
+}
+{
+  // The picker's ★ badge. A weapon whose trait IS Spellcast suits every caster by definition, so
+  // withholding the badge would rank the one weapon that always fits below weapons that only
+  // sometimes do.
+  check("it's flagged for a caster", matchesSpellcast(CHAIR, "INSTINCT"));
+  check("for either trait of a multiclassed one", matchesSpellcast(CHAIR, ["INSTINCT", "KNOWLEDGE"]));
+  check("and for nobody who has no Spellcast trait to roll", !matchesSpellcast(CHAIR, null));
+  check("an empty list being the same answer as none", !matchesSpellcast(CHAIR, []));
+
+  // A weapon that names a trait is judged exactly as it was.
+  const staff = { name: { "en-US": "Greatstaff" }, trait: "KNOWLEDGE" };
+  check("an ordinary weapon still matches its own trait", matchesSpellcast(staff, "KNOWLEDGE"));
+  check("and only its own", !matchesSpellcast(staff, "INSTINCT"));
+
+  // The sentinel is spelled like every other SCREAMING_SNAKE value in data/, which is why the
+  // formatter needed no case for it: the word it comes out as is the word the SRD prints.
+  eq("the card prints the trait as the book prints it", weaponTraitText(CHAIR), "Spellcast");
+  eq("and the whole line reads as prose", weaponStats(CHAIR), "Spellcast · Far · d6 mag · One-handed");
+}
+{
+  const CHAIR_SHEET_DB = {
+    ...SHEET_DB, subclasses: [...SHEET_DB.subclasses, CASTER], weapons: [...SHEET_DB.weapons, CHAIR],
+  };
+  const chairSheet = (over = {}) => deriveSheet(sheetChar({
+    subclassId: CASTER.id,
+    equipment: { primaryWeaponId: CHAIR.id, secondaryWeaponId: null, armorId: "gambeson", potionChoice: null },
+    ...over,
+  }), CHAIR_SHEET_DB).weapons[0];
+
+  const one = chairSheet();
+  eq("the printed sheet labels the weapon with what its card says", one.traitLabel, "Spellcast");
+  eq("beside the number that resolving it produced", one.attack, "+2");
+
+  const two = chairSheet({ multiclass: SECOND_CASTER });
+  // "(Instinct or Knowledge)" would be truer about this character and wrong on the page: the
+  // bracketed label says what the weapon is, and the attack beside it already names both.
+  eq("a second Spellcast trait changes nothing about the label", two.traitLabel, "Spellcast");
+  eq("only the attack, which prints the alternatives because there is no total to sign",
+    two.attack, "(+2) Instinct / (0) Knowledge");
+
+  // The other no-total shape, unchanged. A bare-handed profile names its traits inside the
+  // attack string, so a bracketed trait after it would print them twice — which is why the
+  // sheet keys the label off `traits` and not off the missing total.
+  const bare = deriveSheet(sheetChar({
+    equipment: { primaryWeaponId: UNARMED, secondaryWeaponId: null, armorId: UNARMORED, potionChoice: null },
+  }), CHAIR_SHEET_DB).weapons[0];
+  eq("and an unarmed profile still has no trait to put in brackets", bare.traitLabel, "");
+  eq("its attack reading the same shape from the same helper", bare.attack, "(+2) Strength / (0) Finesse");
+}
+{
+  const CHAIR_CSV_DB = {
+    ...CSV_DB, subclasses: [...CSV_DB.subclasses, CASTER], weapons: [...CSV_DB.weapons, CHAIR],
+  };
+  const chairRow = (over = {}) => exportRow(csvChar({
+    subclassId: CASTER.id,
+    equipment: { primaryWeaponId: CHAIR.id, secondaryWeaponId: null, armorId: "gambeson", potionChoice: null },
+    ...over,
+  }), undefined, CHAIR_CSV_DB);
+
+  const one = chairRow();
+  eq("the GM's trait column holds the word off the card", one["primary-trait"], "Spellcast");
+  eq("and the bonus column a number, when there is one number to give", one["primary-attack-bonus"], "+2");
+
+  const two = chairRow({ multiclass: SECOND_CASTER });
+  eq("which the second Spellcast trait doesn't change", two["primary-trait"], "Spellcast");
+  eq("though the bonus column becomes the string the sheet prints",
+    two["primary-attack-bonus"], "(+2) Instinct / (0) Knowledge");
+  // csvField() prefixes an apostrophe to anything a spreadsheet would run, and a cell opening
+  // with "+" is a formula to a spreadsheet. The brackets are load-bearing for exactly this: the
+  // unbracketed form tripped the guard and put a stray quote on the GM's printed sheet.
+  check("with no apostrophe, because a bracket is not the start of a formula",
+    !two["primary-attack-bonus"].startsWith("'"), `got ${two["primary-attack-bonus"]}`);
+  eq("which is what it would have collected without them",
+    csvField("+2 Instinct / 0 Knowledge"), `"'+2 Instinct / 0 Knowledge"`);
+  // A lone "+2" is a plain number, which the guard exempts so the column stays sortable.
+  check("and a single total stays a number the GM can sort on", !one["primary-attack-bonus"].startsWith("'"));
+}
+
+// The three readers that a Spellcast weapon caught out, each fixed after the fact and each
+// pinned here so it stays fixed. All three are cases where a SECOND shape of "an attack with no
+// single total" met code written when the bare-handed profile was the only one.
+
+group("What the Spellcast sentinel broke elsewhere, and no longer does");
+{
+  // The badge compared a weapon's SCREAMING_SNAKE trait against the lowercase keys
+  // spellcastTraitKeys() returns — so it was false for every weapon in the book, and the arcane
+  // chair, whose branch never reaches the comparison, would have been the ONLY weapon a caster
+  // ever saw marked. The checks above pass uppercase because that reads better; production
+  // passes lowercase, so that is what has to be asserted.
+  const staff = { name: { "en-US": "Greatstaff" }, trait: "KNOWLEDGE" };
+  check("an ordinary weapon matches the lowercase keys create.js actually passes",
+    matchesSpellcast(staff, ["knowledge"]));
+  check("and still doesn't match a trait that isn't its own", !matchesSpellcast(staff, ["instinct"]));
+  check("the chair matches those same keys", matchesSpellcast(CHAIR, ["knowledge"]));
+  check("and either spelling is the same answer", matchesSpellcast(staff, ["KNOWLEDGE"]));
+
+  const CHAIR_SHEET_DB2 = {
+    ...SHEET_DB, subclasses: [...SHEET_DB.subclasses, CASTER], weapons: [...SHEET_DB.weapons, CHAIR],
+  };
+  const inChair = (over = {}) => sheetChar({
+    subclassId: CASTER.id,
+    equipment: { primaryWeaponId: CHAIR.id, secondaryWeaponId: null, armorId: "gambeson", potionChoice: null },
+    ...over,
+  });
+
+  // The printed card writes "+1 Agility" with no brackets, which is right until the attack is a
+  // string that names traits of its own: "(0) Knowledge Spellcast" reads as one alternative
+  // rolled with a trait of that name. `attackNamesTraits` is how the card knows to bracket, and
+  // it comes off the missing total rather than off the weapon, because the bare-handed profile
+  // has the same shape for an entirely different reason.
+  const one = deriveSheet(inChair(), CHAIR_SHEET_DB2).weapons[0];
+  const two = deriveSheet(inChair({ multiclass: SECOND_CASTER }), CHAIR_SHEET_DB2).weapons[0];
+  check("one Spellcast trait is a plain total, so the card needs no bracket", !one.attackNamesTraits);
+  check("two make an attack string that names them, so it does", two.attackNamesTraits);
+  const bare = deriveSheet(sheetChar({
+    equipment: { primaryWeaponId: UNARMED, secondaryWeaponId: null, armorId: UNARMORED, potionChoice: null },
+  }), CHAIR_SHEET_DB2).weapons[0];
+  check("as does a bare-handed profile, which has no label to bracket anyway",
+    bare.attackNamesTraits && bare.traitLabel === "");
+
+  // The CSV's secondary column signed a total that a Spellcast weapon in the off hand doesn't
+  // have, and printed the word "undefined" into a file a GM keeps. The primary column beside it
+  // had the fallback; this one didn't.
+  const CHAIR_CSV_DB2 = {
+    ...CSV_DB, subclasses: [...CSV_DB.subclasses, CASTER], weapons: [...CSV_DB.weapons,
+      { ...CHAIR, id: "chair_secondary", type: "SECONDARY" }],
+  };
+  const offhand = exportRow(csvChar({
+    subclassId: CASTER.id,
+    equipment: { primaryWeaponId: null, secondaryWeaponId: "chair_secondary", armorId: "gambeson", potionChoice: null },
+    multiclass: SECOND_CASTER,
+  }), undefined, CHAIR_CSV_DB2);
+  check("the off-hand bonus column never says \"undefined\"",
+    !String(offhand["secondary-attack-bonus"]).includes("undefined"),
+    `got ${offhand["secondary-attack-bonus"]}`);
+  eq("it says what the primary column would have said",
+    offhand["secondary-attack-bonus"], "(+2) Instinct / (0) Knowledge");
 }
 
 // ---------- report ----------

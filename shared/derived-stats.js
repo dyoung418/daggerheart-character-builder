@@ -31,7 +31,7 @@ import {
   effectValue,
   loadoutDomainCounts,
 } from "./effects.js";
-import { UNARMED, UNARMORED } from "./gear.js";
+import { SPELLCAST_TRAIT, UNARMED, UNARMORED } from "./gear.js";
 import { titleCase } from "./text.js";
 
 // Re-exported rather than restated: an effect's `traits` map is keyed by these, so the catalogue
@@ -424,6 +424,15 @@ export function derivedStats(ch, db) {
   ctx.traits = {};
   for (const key of TRAIT_KEYS) ctx.traits[key] = traits[key].total ?? 0;
 
+  // Worked out once and handed to both the Spellcast box and the two attacks, because a weapon
+  // whose trait is the SPELLCAST sentinel has to answer the same question the box does.
+  //
+  // Deliberately not ctx.spellcastTrait: that's spellcastKeyFor()'s answer, the HIGHER of two
+  // when a multiclass brought a second. That's right for a bonus that scales off a trait — one
+  // number, so pick the best — and wrong here, where the two are a per-roll choice the player
+  // owns and the sheet's job is to offer both.
+  const spellcastKeys = spellcastTraitKeys(ch, db);
+
   return {
     traits,
     exclusions,
@@ -452,9 +461,9 @@ export function derivedStats(ch, db) {
     unarmedProfile: barehandedProfile,
     primaryAttack: unarmed
       ? unarmedAttackStat(barehandedProfile, traits, contributions, ctx)
-      : attackStat(primaryWeapon, traits, contributions, ctx, "primary"),
-    secondaryAttack: attackStat(secondaryWeapon, traits, contributions, ctx, "secondary"),
-    spellcast: spellcastStat(spellcastTraitKeys(ch, db), traits, contributions, ctx),
+      : attackStat(primaryWeapon, traits, contributions, ctx, "primary", spellcastKeys),
+    secondaryAttack: attackStat(secondaryWeapon, traits, contributions, ctx, "secondary", spellcastKeys),
+    spellcast: spellcastStat(spellcastKeys, traits, contributions, ctx),
     // A second pass over the effects, and an empty array for almost every character — worth it
     // because a die a class rolls is a value the sheet had no way to state at all before.
     tracks: characterTracks(ch, db),
@@ -576,20 +585,83 @@ function thresholdStats(ch, armor, contributions, ctx) {
   };
 }
 
+// The one spelling of an attack that has alternatives instead of a total: "(+3) Knowledge /
+// (+2) Instinct". Two callers now — a bare-handed profile naming several traits, and a weapon
+// whose trait is the SPELLCAST sentinel in the hands of a multiclass whose two foundations
+// disagree — and a format written out twice is a format the two will eventually spell
+// differently.
+//
+// Bonus first, trait second — "(+4) Agility", not "Agility +4". The number is a TOTAL that
+// already has the trait inside it, and the trait-first order reads as an instruction to add the
+// two: take your Agility, add 4. Leading with the bonus says what it is instead — a +4 attack
+// you roll with Agility — which is the order the printed card puts a weapon's single trait in
+// too.
+//
+// The brackets are what separate one alternative from the next, and they earn their place a
+// second time in the CSV: a cell opening with "+" is a formula to a spreadsheet, so the bare
+// form tripped csvField()'s guard and exported with a leading apostrophe. "(" does not. A
+// weapon's single bonus stays unbracketed for the mirror-image reason — a cell holding only
+// "(+4)" is accounting notation for -4.
+//
+// Not the shape spellcastStat uses, deliberately: there the number IS a bonus to add to the
+// trait, so "Knowledge +1" reads exactly as it should.
+function alternativesDisplay(options) {
+  return options.map((o) => `(${signed(o.total)}) ${o.label}`).join(" / ");
+}
+
 // An attack roll uses the trait the weapon specifies (SRD). Proficiency is not part of it —
 // that scales damage dice, not the roll to hit.
-function attackStat(weapon, traits, contributions, ctx, scope) {
+//
+// `spellcastKeys` is every trait this character can cast with, and it's consulted only for a
+// weapon whose `trait` is the SPELLCAST sentinel — the arcane-frame wheelchairs, which name no
+// trait of their own because the trait is whichever one their wielder casts with. The full list
+// rather than ctx.spellcastTrait, for the reason derivedStats() gives where it resolves them.
+function attackStat(weapon, traits, contributions, ctx, scope, spellcastKeys = []) {
   if (!weapon) return null;
-  const key = String(weapon.trait || "").toLowerCase();
-  const trait = traits[key];
-  if (!trait || trait.total === null) return null;
+  const spellcast = weapon.trait === SPELLCAST_TRAIT;
+  const keys = spellcast ? spellcastKeys : [String(weapon.trait || "").toLowerCase()];
+  // No keys means either a trait not yet assigned on a draft, or — for a SPELLCAST weapon — a
+  // Warrior or Guardian, who has no Spellcast trait to roll. Either way there's no number to
+  // show, so the attack prints "—" and magicWeaponWarning() is what says why. Warned, never
+  // prevented: it's the GM's call whether they can wield it at all.
+  if (!keys.length || keys.some((key) => !traits[key] || traits[key].total === null)) return null;
+  const name = weapon.name["en-US"];
+  const bonusParts = partsFor(contributions, "attack", ctx, scope);
+  // A named trait needs no explaining — it's printed on the weapon. A resolved one does: without
+  // this the popover shows "Knowledge (Arcane-Frame Wheelchair)" on a weapon whose card says
+  // "Spellcast", and a player has no way to tell where the Knowledge came from.
+  const partLabel = (key) =>
+    `${spellcast ? "Spellcast trait: " : ""}${TRAIT_LABELS[key]} (${name})`;
+  if (keys.length === 1) {
+    return {
+      weaponName: name,
+      traitKey: keys[0],
+      ...stat([
+        { label: partLabel(keys[0]), value: traits[keys[0]].total },
+        ...bonusParts,
+      ]),
+    };
+  }
+  // Two Spellcast traits: the SRD makes that a choice per Spellcast roll rather than a thing to
+  // store, so this reports both instead of quietly picking the higher — the same shape a
+  // bare-handed profile takes, and for the same reason.
+  const bonus = bonusParts.reduce((sum, p) => sum + p.value, 0);
+  const options = keys.map((key) => ({
+    key, label: TRAIT_LABELS[key], total: traits[key].total + bonus,
+  }));
   return {
-    weaponName: weapon.name["en-US"],
-    traitKey: key,
-    ...stat([
-      { label: `${TRAIT_LABELS[key]} (${weapon.name["en-US"]})`, value: trait.total },
-      ...partsFor(contributions, "attack", ctx, scope),
-    ]),
+    weaponName: name,
+    display: alternativesDisplay(options),
+    // No total, and that absence IS the state a caller branches on — these are alternatives, not
+    // parts of a sum. The weapon's own attack bonus (Reliable's +1, effects.js:227) is inside
+    // each alternative's total, exactly as it is for the unarmed profile: it applies whichever
+    // trait you end up rolling.
+    parts: [
+      ...options.map((o) => ({ label: partLabel(o.key), value: traits[o.key].total })),
+      ...bonusParts,
+    ],
+    note: `${name} rolls your Spellcast trait, and your two foundations name different ones — ` +
+      `choose which to use each time you attack.`,
   };
 }
 
@@ -610,25 +682,12 @@ function unarmedAttackStat(profile, traits, contributions, ctx) {
   const options = keys.map((key) => ({
     key, label: TRAIT_LABELS[key], total: traits[key].total + bonus,
   }));
-  // Bonus first, trait second — "(+4) Agility", not "Agility +4". The number is a TOTAL that
-  // already has the trait inside it, and the trait-first order reads as an instruction to add
-  // the two: take your Agility, add 4. Leading with the bonus says what it is instead — a +4
-  // attack you roll with Agility — which is the order the printed card puts a weapon's single
-  // trait in too.
-  //
-  // The brackets are what separate one alternative from the next, and they earn their place a
-  // second time in the CSV: a cell opening with "+" is a formula to a spreadsheet, so the bare
-  // form tripped csvField()'s guard and exported with a leading apostrophe. "(" does not. A
-  // weapon's single bonus stays unbracketed for the mirror-image reason — a cell holding only
-  // "(+4)" is accounting notation for -4.
-  //
-  // Not the shape spellcastStat uses, deliberately: there the number IS a bonus to add to the
-  // trait, so "Knowledge +1" reads exactly as it should.
-  const display = options.map((o) => `(${signed(o.total)}) ${o.label}`).join(" / ");
   return {
     weaponName: name,
+    // Still here, and now meaning only what it says: this is a bare-handed profile. It stopped
+    // being how a caller spots the no-total shape the moment a weapon could take that shape too.
     unarmed: true,
-    display,
+    display: alternativesDisplay(options),
     // No total: these aren't parts of a sum, they're alternatives, and the popover skips the
     // Total row for a stat that doesn't have one.
     parts: [
