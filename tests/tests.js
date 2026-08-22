@@ -3059,10 +3059,15 @@ group("The level up grid exports three lists a sheet can draw boxes from");
   const tier2 = ["levelup-tier2-options", "levelup-tier2-available-counts", "levelup-tier2-crossed-out"];
   eq("the three lists are index-aligned, so line N of each is the same advancement",
     tier2.map((header) => lines(header).length), [6, 6, 6]);
-  // The apostrophe is the formula guard, which fires on the cell rather than the line: this one
-  // opens with "+1", and a spreadsheet evaluates a leading + even inside quotes.
-  eq("in the order the level up screen draws them", lines("levelup-tier2-options").slice(0, 3),
-    ["'+1 to two unmarked traits", "+1 permanent Hit Point slot", "+1 permanent Stress slot"]);
+  eq("in the order the level up screen draws them, each as key: label", lines("levelup-tier2-options").slice(0, 3),
+    ["traits: +1 to two unmarked traits", "hitPoint: +1 permanent Hit Point slot",
+      "stress: +1 permanent Stress slot"]);
+  // Leading with the key is what keeps the cell off csvField()'s formula guard. Every core label
+  // begins with "+", the guard fires on the cell rather than the line, and a spreadsheet
+  // evaluates a leading + even inside quotes — so this used to open with an apostrophe that only
+  // a spreadsheet knew to hide, on the first line of the cell and no other.
+  check("and no cell opens with the formula guard's apostrophe",
+    [2, 3, 4].every((t) => !(row[`levelup-tier${t}-options`] || "").startsWith("'")));
   eq("with the boxes still markable on each, as a number the sheet can draw",
     lines("levelup-tier2-available-counts"), ["3", "2", "2", "1", "1", "1"]);
   eq("and nothing struck out at this tier", lines("levelup-tier2-crossed-out"), ["", "", "", "", "", ""]);
@@ -3070,13 +3075,13 @@ group("The level up grid exports three lists a sheet can draw boxes from");
   // A struck row and a spent row both count 0, and the sheet draws them differently — which is
   // why the third list exists. Multiclassing crosses out the subclass upgrade in its own tier.
   const tier3 = lines("levelup-tier3-options");
-  const at = (header) => lines(header)[tier3.indexOf("Upgrade subclass card (Foundation → Specialization → Mastery)")];
+  const at = (header) => lines(header)[tier3.indexOf("subclass: Upgrade subclass card (Foundation → Specialization → Mastery)")];
   eq("the row the strike hit has no boxes left", at("levelup-tier3-available-counts"), "0");
   eq("and says which pick struck it, where a spent row says nothing",
     at("levelup-tier3-crossed-out"), "multiclass");
   eq("while the pick that did it has spent its own boxes, unstruck",
-    [lines("levelup-tier3-available-counts")[tier3.indexOf("Multiclass — a second class, one of its domains, and a foundation card")],
-      lines("levelup-tier3-crossed-out")[tier3.indexOf("Multiclass — a second class, one of its domains, and a foundation card")]],
+    [lines("levelup-tier3-available-counts")[tier3.indexOf("multiclass: Multiclass — a second class, one of its domains, and a foundation card")],
+      lines("levelup-tier3-crossed-out")[tier3.indexOf("multiclass: Multiclass — a second class, one of its domains, and a foundation card")]],
     ["0", ""]);
 
   // A tier 4 row exists in the table at every level, so filtering on the slot counts alone would

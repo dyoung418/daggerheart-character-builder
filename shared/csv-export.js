@@ -188,11 +188,24 @@ function advancementRows(r, tier) {
 // boxes left, and the official sheet draws them differently: struck through, versus filled in.
 // It holds the key of whatever struck it — only `subclass` and `multiclass` ever do — and is
 // empty otherwise. The blanks are load-bearing: they keep the three lists aligned.
+//
+// An option reads "key: label", the shape class-tracks already uses. Both halves earn their
+// place. The key names a row of the printed sheet, so a consumer can match one without parsing
+// prose, and it is the same vocabulary `crossed-out` answers in. The label is the only readable
+// form a class-DECLARED row has — nothing downstream can look one up, and recordedOptionLabels()
+// exists because even this app can't once nothing declares that row any more.
+//
+// It also keeps the cell off csvField()'s formula guard. Every core label begins with "+", which
+// a spreadsheet reads as a formula, so the guard prefixed the whole cell with an apostrophe —
+// correctly, since a field holding newlines is still one cell, but leaving one stray "'" on the
+// first line for every consumer that isn't a spreadsheet. Leading with the key ends that.
 function levelupColumns(tier) {
   return [
     {
       header: `levelup-tier${tier}-options`,
-      value: (r) => advancementRows(r, tier).map((option) => option.label).join("\n"),
+      value: (r) => advancementRows(r, tier)
+        .map((option) => `${option.key}: ${option.label}`)
+        .join("\n"),
     },
     {
       // Boxes still markable on that row in that tier. remainingSlots() sums across every tier
