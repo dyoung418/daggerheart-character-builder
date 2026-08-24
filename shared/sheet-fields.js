@@ -18,18 +18,37 @@
 // trait below instead of sliced off the trait key. "agility" starting with "agi" is a
 // coincidence of the current six, not a naming rule the template ever agreed to.
 //
-// EVERY FIELD, EVERY TIME
-// -----------------------
-// All 52 text fields are answered whether the character has anything to say or not, and "" is
-// that answer for the ones that don't. A field this map simply omitted would look, to the
-// writer, exactly like one this file forgot — and the difference matters, because "" means
-// "leave the box as the template drew it".
+// EVERY FIELD IT ANSWERS, EVERY TIME
+// ----------------------------------
+// A field this map answers, it answers whether the character has anything to say or not, and ""
+// is that answer for the ones that don't. A field simply omitted would look, to the writer,
+// exactly like one this file forgot — and the difference matters, because "" means "leave the box
+// as the template drew it".
 //
-// The 48 checkboxes are NOT all here, and only six ever will be. The trait marks are a durable
-// part of the record. The other 42 — Hit Point, Stress, Armor and Hope slots — are in-play
-// state: a ticked HP box means that slot is SPENT, which the app models nowhere on purpose. This
-// file has nothing true to say about them, so it says nothing and the printed sheet comes out of
-// the printer the way a player wants it, empty and ready to pencil in.
+// WHAT IT DELIBERATELY LEAVES BLANK, and the two different reasons
+// ---------------------------------------------------------------
+// The template has considerably more fields than this map has keys, and the gap is not an
+// oversight in either direction. Two kinds of blank, and they are blank for opposite reasons:
+//
+// IN-PLAY STATE the app models nowhere on purpose — the Hit Point, Stress, Armor and Hope slots.
+// A ticked HP box means that slot is SPENT. The app knows the maxima and never the state, so this
+// file has nothing TRUE to say about them; those boxes come out of the printer the way a player
+// wants them, empty and ready to pencil in. Contrast the trait marks and the level up grid, which
+// ARE answered: a marked advancement is a choice already made and kept, not a resource spent.
+//
+// NOTHING TO SAY YET — boxes the template offers a player that the app has no model behind.
+// `gold-*`, the two `inventory1-`/`inventory2-` weapon blocks, `suggested-traits`,
+// `suggested-primary-weapon`, `suggested-armor` and `inventory-initial-options`. The app tracks
+// no money at all (csv-export.js emits a literal "handfuls: 0, bags: 0, chests: 0" for the same
+// reason), no inventory beyond the one potion, and the book's suggested loadouts aren't in
+// data/ at all. These exist for the player to write in by hand.
+//
+// The second group is the one to check before assuming a bug. `inventory1-*` has exactly the
+// shape of `primary-*` — name, trait-range, damage-and-type, feature, burden — so the day the app
+// grows a weapon inventory, filling them is this file gaining a loop and nothing else. Until then
+// they are left alone deliberately, and NOTHING has to be taught to ignore them: fillForm writes
+// the names it is handed and touches nothing else, so a template can grow fields freely without
+// this module or the writer knowing.
 
 import { advancementOptionsFor, permanentSubject, spellcastTraitKeys } from "./derived-stats.js";
 import { TIER_SLOT_TABLE } from "./advancement.js";
