@@ -62,6 +62,39 @@ export function evasionTotal(cls, bonus, extra = 0) {
   return (cls?.startingEvasion || 0) + bonus + extra;
 }
 
+// ---------- the subject a printed page asks about ----------
+
+/**
+ * The character as a printed page counts them: every card they own, none of them in play.
+ *
+ * The one substitution behind every "permanent bonuses only" export — the official sheet's form
+ * fields, the printed stats card, and the CSV's `includes-loadout-bonuses: false` row. It lives
+ * here because it was written out in all three, rule and reasoning both, and a substitution that
+ * grows a second clause in two files out of three prints a sheet no other export agrees with. The
+ * candidate second clause is `creationDomainCardIds`, the character's other card list
+ * (advancement.js:465 seeds it; history.js:34-42 already builds a hypothetical character by
+ * substituting two card lists at once).
+ *
+ * Vaulting everything is not a trick: vaulted is already what the rules mean by "not in play". A
+ * vaulted card contributes only if its effects entry says `permanent`, so Vitality and Master of
+ * the Craft keep applying — precisely where their own text tells you to put the card — while
+ * Untouchable stops, with no second code path through the rest of this file. The *-Touched
+ * requirement counts loadout cards, so it falls to zero on its own with nothing here knowing
+ * those cards exist.
+ *
+ * The vault is substituted and never the collection: which cards you own doesn't depend on where
+ * they're sitting, so the per-card CSV columns and the printed card list come out identical under
+ * both exports.
+ *
+ * The consequence worth knowing before reading the numbers: this also unwinds Bare Bones, so an
+ * unarmored character reads the SRD's unarmored rule, and their printed Evasion, thresholds and
+ * Armor Score can be genuinely lower than what's in play. Saying so on the page is the caller's
+ * job — the card prints a footer note, the CSV a column of its own.
+ */
+export function permanentSubject(character) {
+  return { ...character, domainVaultIds: character.domainCardIds || [] };
+}
+
 // ---------- effect plumbing ----------
 
 const signed = (n) => (n > 0 ? `+${n}` : String(n));

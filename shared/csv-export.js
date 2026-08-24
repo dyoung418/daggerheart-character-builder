@@ -35,7 +35,13 @@ import {
   subclassTiersUpTo,
   tierForLevel,
 } from "./advancement.js";
-import { TRAIT_KEYS, TRAIT_LABELS, advancementOptionsFor, derivedStats } from "./derived-stats.js";
+import {
+  TRAIT_KEYS,
+  TRAIT_LABELS,
+  advancementOptionsFor,
+  derivedStats,
+  permanentSubject,
+} from "./derived-stats.js";
 import { titleCase } from "./text.js";
 import {
   UNARMED,
@@ -530,16 +536,12 @@ export function csvField(value) {
  * @param {Array} columns the export's columns, which buildCsv resolves once for the whole file
  */
 export function csvRowForCharacter(ch, db, loadout = true, columns = CSV_COLUMNS) {
-  // "Permanent only" means every card is in the vault, which is already what vaulted means to
-  // the rules: a vaulted card does nothing unless its entry says permanent, and the *-Touched
-  // requirement counts only what's in the loadout. So the whole split is one substitution —
-  // no second code path through derived-stats.js, and the card columns come out right on their
-  // own. It also answers Bare Bones honestly: a base a loadout card was standing in for goes
-  // with it, leaving the SRD's unarmored numbers.
-  //
-  // It substitutes the vault and never the collection, so the per-card columns come out
-  // identical under both exports: which cards you own doesn't depend on where they're sitting.
-  const subject = loadout ? ch : { ...ch, domainVaultIds: ch.domainCardIds || [] };
+  // "Permanent only" means every card is in the vault — one substitution, no second code path
+  // through derived-stats.js, and the per-card columns come out right on their own. Why that
+  // works and what it costs is stated once, at permanentSubject()'s definition; the printable
+  // sheet and the printed stats card make the same call, and this file used to spell the rule
+  // out a second time.
+  const subject = loadout ? ch : permanentSubject(ch);
   const r = rowContext(subject, db, loadout);
   return columns.map((column) => csvField(column.value(r))).join(",");
 }

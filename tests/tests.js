@@ -60,6 +60,7 @@ const {
   advancementOptionsFor,
   characterTracks,
   derivedStats,
+  permanentSubject,
   spellcastTraitKeys,
   effectBonuses,
   effectExperienceBonuses,
@@ -76,8 +77,12 @@ const {
   unresolvedChoices,
 } = await import(`../shared/effects.js${RUN}`);
 const {
+  attackText,
   deriveSheet,
 } = await import(`../shared/sheet-data.js${RUN}`);
+const {
+  sheetFieldValues,
+} = await import(`../shared/sheet-fields.js${RUN}`);
 const {
   SPELLCAST_TRAIT,
   UNARMED,
@@ -86,6 +91,7 @@ const {
   damageDice,
   damageText,
   featureLine,
+  featuresText,
   enumLabel,
   groupByTier,
   magicWeaponWarning,
@@ -129,6 +135,10 @@ const {
   formatNumber,
   pageContentStream,
 } = await import(`../shared/pdf.js${RUN}`);
+const {
+  fillForm,
+  readForm,
+} = await import(`../shared/pdf-form.js${RUN}`);
 const {
   CARDS_PER_PAGE,
   CARD_HEIGHT,
@@ -4958,6 +4968,1156 @@ group("What the Spellcast sentinel broke elsewhere, and no longer does");
     `got ${offhand["secondary-attack-bonus"]}`);
   eq("it says what the primary column would have said",
     offhand["secondary-attack-bonus"], "(+2) Instinct / (0) Knowledge");
+}
+
+// ---------- the official sheet: its fields, and the bytes that fill them ----------
+//
+// Two modules, two halves of one job. sheet-fields.js decides WHAT goes in each box and is a
+// pure function over a character; pdf-form.js puts strings into an AcroForm and decides nothing.
+// The template they meet in — data/sheet/sheet-template.pdf — is copyrighted art that lives in a
+// private repo, so nothing here opens it. The fixture below is hand-built instead, which is a
+// gain rather than a compromise: a template we compose can carry the traps a real one only has
+// by luck, and every one it carries is a wrong implementation failing loudly.
+
+const formFailure = (fn) => {
+  try { fn(); return ""; } catch (e) { return String(e.message); }
+};
+
+// A PDF built the way readForm expects to find one: objects in file order, one classic xref
+// table whose offsets are COUNTED from the bytes rather than guessed at, and one classic
+// trailer. One character per byte throughout — the latin1 representation pdf-form.js works in —
+// so `text.length` below is a byte offset and nothing has to be corrected for encoding.
+//
+// `info` and `id` are the trailer's two copied-through entries, spelled the way this fixture's
+// own trailer spells them by default: an indirect reference and a pair of hex strings. They are
+// parameters because a file identifier may legally be written as literal strings full of bytes no
+// ASCII writer would accept, and null for either drops the key entirely — the template that names
+// neither is the one that proves neither is invented.
+function buildFormPdf({
+  fields = "5 0 R 6 0 R 7 0 R 8 0 R", acroForm = "/AcroForm 3 0 R", extra = [], tail = "%%EOF\n",
+  info = "12 0 R", id = "[<0102030405060708090A0B0C0D0E0F10><100F0E0D0C0B0A090807060504030201>]",
+} = {}) {
+  // The appearance stream every widget below points its /AP at — and the fixture's first trap.
+  // Its content spells "7 0 obj" on a line of its own, which is object 7's header: a scanner
+  // that runs one global regex over the file finds it, and because a later definition wins in an
+  // incrementally-updated PDF it would overwrite the real object 7 — the `agi-marked` checkbox —
+  // with fifteen bytes of drawing operators.
+  const ops = "0 0 12 12 re f\n7 0 obj\n";
+  const objects = [
+    `<</Type/Catalog/Pages 2 0 R${acroForm}>>`,
+    "<</Type/Pages/Kids[4 0 R]/Count 1>>",
+    `<</Fields[${fields}]/DA(/Helvetica 0 Tf 0 g)/DR<</Font<</Helvetica 11 0 R>>>>>>`,
+    "<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]/Annots[5 0 R 6 0 R 7 0 R 8 0 R]>>",
+    // The second trap: a /TU whose literal string nests parentheses. Scanning for the next ")"
+    // ends this dictionary in the middle of "as written", and the walk that follows then reports
+    // a perfectly good template as malformed. /V is here too, so the rewrite has to REMOVE it —
+    // a dictionary with two /V entries is undefined behaviour and the one a reader picks is the
+    // one you didn't write.
+    "<</Type/Annot/Subtype/Widget/FT/Tx/T(name)/TU(Your name (1/2) as written)/V(Old Name)"
+      + "/P 4 0 R/Rect[36 700 300 720]/DA(/Helvetica 0 Tf 0 g)/MK<</BG[1 1 1]>>/AP<</N 10 0 R>>>>",
+    // A /T written as UTF-16BE hex, which Master PDF Editor does for some names. Decoded
+    // byte-wise it keys the field map on mojibake and the caller's correct "pronouns" throws as
+    // unknown. The \xee in its tooltip is a template byte above 0x7F that fillForm has to copy
+    // through untouched — re-encoding it as UTF-8 would write two bytes where there was one.
+    "<</Type/Annot/Subtype/Widget/FT/Tx/T<FEFF00700072006F006E006F0075006E0073>"
+      + "/TU(Pronoms, s'il vous pla\xeet)/P 4 0 R/Rect[36 670 300 690]/DA(/Helvetica 0 Tf 0 g)/AP<</N 10 0 R>>>>",
+    "<</Type/Annot/Subtype/Widget/FT/Btn/T(agi-marked)/P 4 0 R/Rect[36 640 50 654]"
+      + "/AP<</N<</Yes 10 0 R/Off 10 0 R>>>>/AS/Off/V/Off>>",
+    // The on-state named /On, and listed AFTER /Off so that taking the first substate ticks
+    // nothing. Writing /AS/Yes to this box selects an appearance it hasn't got and reports no
+    // error — the box just stays empty.
+    "<</Type/Annot/Subtype/Widget/FT/Btn/T(str-marked)/P 4 0 R/Rect[36 620 50 634]"
+      + "/AP<</N<</Off 10 0 R/On 10 0 R>>>>/AS/Off>>",
+    // The stale widget the module's header is about: a second `name`, left behind by an earlier
+    // editing session, in neither /Fields nor /Annots. No viewer will ever show it; a scan for
+    // "every object with a /T" finds it and calls this template broken.
+    "<</Type/Annot/Subtype/Widget/FT/Tx/T(name)/V(Superseded)/P 4 0 R/Rect[36 600 300 620]/DA(/Helvetica 0 Tf 0 g)>>",
+    `<</Type/XObject/Subtype/Form/BBox[0 0 12 12]/Resources<<>>/Length ${ops.length}>>\nstream\n${ops}endstream`,
+    // The fixture's font carries the trap the real template has: a /Differences array that moves
+    // WinAnsi 149 off `bullet` and 151 off `emdash`. A viewer that honours it draws the wrong
+    // glyph for text this app really writes — Guardian's bulleted benefits, and the em dash
+    // armor-name IS for a character with no armor. Nothing here should ever rewrite this object;
+    // the module adds a font of its own instead.
+    "<</Type/Font/Subtype/Type1/BaseFont/Helvetica/Encoding<</BaseEncoding/WinAnsiEncoding"
+      + "/Differences[149/Lslash 150/OE 151/Scaron]>>>>",
+    "<</Producer(Master PDF Editor)/CreationDate(D:20260101000000Z)>>",
+    ...extra,
+  ];
+
+  let text = "%PDF-1.7\n%\xe2\xe3\xcf\xd3\n";
+  const offsets = [];
+  objects.forEach((body, i) => {
+    offsets[i + 1] = text.length;
+    text += `${i + 1} 0 obj\n${body}\nendobj\n`;
+  });
+  const xrefAt = text.length;
+  const size = objects.length + 1;
+  text += `xref\n0 ${size}\n0000000000 65535 f\r\n`;
+  for (let i = 1; i < size; i++) text += `${String(offsets[i]).padStart(10, "0")} 00000 n\r\n`;
+  text += `trailer\n<</Size ${size}/Root 1 0 R${info ? `/Info ${info}` : ""}${id ? `/ID${id}` : ""}`
+    + `>>\nstartxref\n${xrefAt}\n${tail}`;
+  return { text, bytes: Uint8Array.from(text, (c) => c.charCodeAt(0)), xrefAt, size };
+}
+
+const FORM = buildFormPdf();
+
+group("Reading a form template: the live widgets, and the litter left beside them");
+{
+  const form = readForm(FORM.bytes);
+  eq("every field the AcroForm lists is found, in the order it lists them",
+    [...form.fields.keys()], ["name", "pronouns", "agi-marked", "str-marked"]);
+  eq("a text field and a checkbox are told apart by their /FT",
+    [...form.fields.values()].map((f) => f.type), ["Tx", "Tx", "Btn", "Btn"]);
+  eq("a /T written as UTF-16BE hex is decoded, not read one byte per character",
+    form.fields.get("pronouns").obj, 6);
+
+  // The stale-widget trap, stated as an assertion. Object 9 is a second `name`; the live one is
+  // the one /Fields names, and nothing the orphan says reaches the caller.
+  eq("the live `name` is the widget /Fields names, not the orphan an earlier edit left behind",
+    form.fields.get("name").obj, 5);
+  check("so the value the orphan is still carrying is nowhere in what came back",
+    ![...form.fields.values()].some((f) => f.dict.includes("Superseded")));
+
+  // And the stream trap. The check above it is the positive control: an assertion that a byte
+  // sequence was NOT mistaken for an object header is worth nothing unless the sequence is
+  // really there to be mistaken.
+  check("the fixture really does spell an object header inside a stream",
+    FORM.text.slice(FORM.text.indexOf("10 0 obj")).includes("\n7 0 obj\n"));
+  check("and object 7 is still the checkbox, not the drawing operators that spell its header",
+    form.fields.get("agi-marked").dict.includes("/T(agi-marked)"));
+
+  eq("the AcroForm is reached through the Catalog rather than searched for", form.acroForm.obj, 3);
+  eq("and the trailer's own numbers come back for the update to chain onto",
+    [form.root, form.size, form.prevStartxref], [1, FORM.size, FORM.xrefAt]);
+}
+
+group("What readForm refuses, beside the near-identical file it doesn't");
+{
+  // The positive control first, and it is the point of the group: every refusal below is one
+  // object or one key away from this file, so "it throws" only means something next to "and
+  // this, which is almost the same, does not".
+  eq("the fixture parses, with all four of its fields", readForm(FORM.bytes).fields.size, 4);
+
+  const objStm = formFailure(() => readForm(buildFormPdf({
+    extra: ["<</Type/ObjStm/N 1/First 4/Length 9>>\nstream\n1 0 <<>>\nendstream"],
+  }).bytes));
+  has("a compressed object stream is refused by name", [objStm], "/ObjStm");
+  has("and the message says which switch in which program to turn off", [objStm], "Master PDF Editor");
+
+  const xrefStream = formFailure(() => readForm(buildFormPdf({
+    extra: ["<</Type/XRef/Size 13/W[1 2 1]/Length 4>>\nstream\n\x01\x00\x0a\x00\nendstream"],
+  }).bytes));
+  has("so is a cross-reference stream, which a classic xref section cannot be appended to",
+    [xrefStream], "/Type /XRef");
+
+  // The same object 9 as above, this time LISTED. Unlisted it is litter to ignore; listed it is
+  // a question nothing can answer, so it is an error rather than last-one-wins.
+  const duplicate = formFailure(() => readForm(buildFormPdf({ fields: "5 0 R 6 0 R 7 0 R 8 0 R 9 0 R" }).bytes));
+  has("two LIVE fields with one name is an error", [duplicate], 'both called "name"');
+  has("and the message names both objects, so the template can be fixed", [duplicate], "objects 5 and 9");
+
+  const noTrailer = formFailure(() => readForm(
+    Uint8Array.from(FORM.text.slice(0, FORM.text.indexOf("trailer")), (c) => c.charCodeAt(0)),
+  ));
+  has("a file with no classic trailer has nothing to append an update to", [noTrailer], "trailer");
+
+  const noAcroForm = formFailure(() => readForm(buildFormPdf({ acroForm: "" }).bytes));
+  has("a Catalog with no /AcroForm is a PDF with no form to fill", [noAcroForm], "no /AcroForm");
+
+  // A real encrypted file names /Encrypt in its trailer; the fixture puts those bytes in an
+  // object instead, because the check is deliberately over-broad and that breadth IS the
+  // behaviour — refusing a file we might mangle is cheaper than shipping one full of mojibake.
+  has("a plaintext value written into an encrypted file would be ciphertext's problem, so /Encrypt is refused",
+    [formFailure(() => readForm(buildFormPdf({ extra: ["<</Encrypt 14 0 R>>"] }).bytes))], "/Encrypt");
+  eq("while a file carrying the same security handler's other keys is left alone",
+    formFailure(() => readForm(buildFormPdf({ extra: ["<</Filter/Standard/V 2/R 3>>"] }).bytes)), "");
+
+  has("and something that isn't a PDF at all says so first",
+    [formFailure(() => readForm(Uint8Array.from("not a pdf", (c) => c.charCodeAt(0))))], "isn't a PDF");
+}
+
+// Byte n of the file is character n of this string, so every index below is a byte offset — the
+// same representation "The bytes of a document" asserts in, and the same discipline: nothing
+// here diffs against a golden file. Every offset is re-derived FROM the output and checked
+// against what is actually at it, because the failure being guarded against is an entry one byte
+// out, which leaves a file that opens blank rather than one that fails.
+const formText = (out) => Array.from(out, (b) => String.fromCharCode(b)).join("");
+
+// The LAST xref section of a file, walked as bytes: the subsection headers say how many entries
+// follow, and each entry is assumed to be 20 bytes. If it isn't, `endAt` desynchronises and
+// lands somewhere that is not "trailer" — which is exactly what the check below asserts it does
+// not do.
+function lastXrefSection(text) {
+  const startxrefAt = text.lastIndexOf("startxref");
+  const at = Number(/^[\0\t\n\f\r ]*(\d+)/.exec(text.slice(startxrefAt + "startxref".length))[1]);
+  const entries = [];
+  let i = at + "xref\r\n".length;
+  for (;;) {
+    if (text.startsWith("trailer", i)) break;
+    const eol = text.indexOf("\r\n", i);
+    if (eol < 0) break;
+    const [first, count] = text.slice(i, eol).split(" ").map(Number);
+    if (!Number.isInteger(first) || !Number.isInteger(count) || count < 1) break;
+    i = eol + 2;
+    for (let k = 0; k < count; k++) {
+      entries.push({ obj: first + k, raw: text.slice(i, i + 20) });
+      i += 20;
+    }
+  }
+  return { at, entries, endAt: i, trailer: text.slice(i, text.indexOf("%%EOF", i)) };
+}
+
+// The body of object N as the file's LAST definition of it — which in an incrementally-updated
+// file is the one that counts.
+const formObject = (text, num) => {
+  const at = text.lastIndexOf(`\n${num} 0 obj`);
+  return text.slice(at, text.indexOf("endobj", at));
+};
+
+group("Filling a form appends to the template and never rewrites it");
+{
+  const values = { name: "Fáelán", "agi-marked": true };
+  const filled = fillForm(FORM.bytes, values);
+  const text = formText(filled);
+
+  check("the template's own bytes come first, every one of them unchanged",
+    filled.length > FORM.bytes.length && FORM.bytes.every((b, i) => filled[i] === b));
+
+  const xref = lastXrefSection(text);
+  check("the update's xref sits after the template's, rather than on top of it", xref.at > FORM.xrefAt);
+  // 3 and 5 are the two fields, 7 is the AcroForm; 13 is the WinAnsi font this module adds so the
+  // viewer has one whose encoding it can trust. Numeric order, never the caller's.
+  eq("only the objects whose value changed are rewritten, plus the font, in numeric order",
+    xref.entries.map((e) => e.obj), [3, 5, 7, 13]);
+  check("every entry is %010d SP %05d SP n CR LF",
+    xref.entries.every((e) => /^\d{10} 00000 n\r\n$/.test(e.raw)));
+  // A reader is entitled to seek straight to entry k at (section start + 20k). The walk above
+  // steps 20 bytes per entry, so landing exactly on "trailer" is the arithmetic proving it.
+  check("and the section ends exactly where the trailer begins, which is only true if each was 20 bytes",
+    text.startsWith("trailer", xref.endAt));
+  // The check that catches an off-by-one anywhere in the writer.
+  const misplaced = xref.entries.filter((e) => !text.startsWith(`${e.obj} 0 obj\r\n`, Number(e.raw.slice(0, 10))));
+  eq("every offset lands exactly on its own \"N 0 obj\"", misplaced.map((e) => e.obj), []);
+
+  check("the trailer chains back to the template's table with /Prev, so nothing we didn't rewrite disappears",
+    xref.trailer.includes(`/Prev ${FORM.xrefAt}`));
+  // /Size is one past the highest object number, and the added font IS a higher object number, so
+  // an unchanged /Size here would put the font above the ceiling and a reader would ignore it —
+  // leaving every field pointing at a font that, as far as the file is concerned, isn't there.
+  check("/Size grew to cover the font the update added",
+    xref.trailer.includes(`/Size ${FORM.size + 1}`));
+  check("and the Catalog is still the one the template named", xref.trailer.includes("/Root 1 0 R"));
+  check("with /Info and /ID copied rather than invented — a fresh /ID is the usual reason two identical exports diff",
+    xref.trailer.includes("/Info 12 0 R") && xref.trailer.includes("/ID[<0102030405060708090A0B0C0D0E0F10>"));
+
+  const nameObject = formObject(text, 5);
+  // Matched rather than searched for, so an implementation that wrote a literal (Fáelán) string
+  // reports what it wrote instead of throwing on a null match somewhere in this file.
+  eq("an accented value goes out as UTF-16BE hex, the form the template already uses",
+    (/\/V(<[0-9A-F]+>)/.exec(nameObject) || [])[1], "<FEFF004600E10065006C00E1006E>");
+  // Every dictionary this fill copies is pure ASCII in the fixture, so any byte above 0x7F in
+  // the appended region would have to be one fillForm composed — which is what a value run
+  // through TextEncoder looks like: "á" as 0xC3 0xA1.
+  check("and nothing in the appended update is a byte UTF-8 would have written for it",
+    filled.slice(FORM.bytes.length).every((b) => b <= 0x7f));
+
+  eq("the value the template shipped with is replaced, not joined by a second /V",
+    (nameObject.match(/\/V[<(]/g) || []).length, 1);
+  check("so nothing in the file still says \"Old Name\" at the offset a reader will look at",
+    !nameObject.includes("Old Name"));
+
+  const button = formObject(text, 7);
+  check("a ticked box gets BOTH /V and /AS — /V alone reads as ticked to a script and blank to a human",
+    button.includes("/V/Yes") && button.includes("/AS/Yes"));
+  eq("and exactly one /AS, because the template already had one to drop",
+    (button.match(/\/AS/g) || []).length, 1);
+
+  check("two runs of the same fill are the same bytes",
+    (() => { const b = fillForm(FORM.bytes, values); return b.length === filled.length && b.every((v, i) => v === filled[i]); })());
+  check("and so is the same fill written in the other order, because the objects are sorted rather than followed",
+    (() => {
+      const b = fillForm(FORM.bytes, { "agi-marked": true, name: "Fáelán" });
+      return b.length === filled.length && b.every((v, i) => v === filled[i]);
+    })());
+}
+
+group("What one value at a time does to the file");
+{
+  // /AS names one of the appearance states this widget actually has. Object 8's are /Off and
+  // /On, in that order, so both "assume /Yes" and "take the first substate" tick nothing at all
+  // — and neither reports an error.
+  const on = formObject(formText(fillForm(FORM.bytes, { "str-marked": true })), 8);
+  check("the on-state is read from /AP/N rather than assumed to be /Yes",
+    on.includes("/V/On") && on.includes("/AS/On"));
+  check("and the state this widget hasn't got is nowhere in it", !on.includes("/Yes"));
+
+  // What a sheet actually says about an unmarked trait, and it is not the same as saying nothing.
+  const off = formObject(formText(fillForm(FORM.bytes, { "agi-marked": false })), 7);
+  check("false writes /Off explicitly", off.includes("/V/Off") && off.includes("/AS/Off"));
+
+  // "" means "leave the box as the template drew it" — a character with no secondary weapon gets
+  // a blank line rather than a field asserting emptiness.
+  const blank = lastXrefSection(formText(fillForm(FORM.bytes, { name: "", pronouns: null, "agi-marked": undefined })));
+  eq("an empty, null or undefined value rewrites nothing but the AcroForm",
+    blank.entries.map((e) => e.obj), [3]);
+  check("which is still asked to draw the values, since this module writes no /AP of its own",
+    formObject(formText(fillForm(FORM.bytes, { name: "x" })), 3).includes("/NeedAppearances true"));
+
+  // The verbatim-copy path, which is not a second asciiBytes(): 0xEE came out of the template a
+  // moment ago and goes back unchanged. A re-encode would put 0xC3 0xAE there instead.
+  const accented = fillForm(FORM.bytes, { pronouns: "she/her" });
+  const copied = accented.slice(FORM.bytes.length);
+  check("a template byte above 0x7F inside a field we rewrite is copied through, not re-encoded",
+    formObject(formText(accented), 6).includes("pla\xeet") && copied.includes(0xee) && !copied.includes(0xc3));
+
+  const unknown = formFailure(() => fillForm(FORM.bytes, { "hp-slots": "6" }));
+  has("a field name the template hasn't got stops the export rather than dropping a line quietly",
+    [unknown], '"hp-slots"');
+  has("and the message lists what it does have, so the typo can be found", [unknown], "pronouns");
+
+  // Handing fillForm a readForm() result as its second argument is the mistake the signature
+  // invites, and "the template has no field called fields" sends the reader to the wrong file.
+  has("a readForm() result passed where the values go is named for what it is",
+    [formFailure(() => fillForm(FORM.bytes, readForm(FORM.bytes)))], "second argument");
+}
+
+group("The appearance a filled text field shipped with is deleted; a ticked box keeps its own");
+{
+  // The half of this module that no rendering check would ever catch, which is why it is pinned
+  // here rather than left to a look at the export. A template's text widget ships with an /AP
+  // drawing an EMPTY box, and a viewer that trusts a present /AP over /NeedAppearances draws that
+  // emptiness: the file is correct and the page is blank. Measured, not reasoned about — pixels
+  // differing from the empty template at -dPrinted=true -r100: keeping the stale /AP left
+  // ghostscript at 39, which is a blank sheet, where dropping it prints 4119. Poppler drew the
+  // values either way, so the screen said it worked, and so would a screenshot of it.
+  const filled = fillForm(FORM.bytes, { name: "Fáelán", "agi-marked": true, "str-marked": true });
+  const text = formText(filled);
+
+  // The positive control, and the group is worth nothing without it: the widget HAS an /AP to
+  // lose, so "no /AP" below is a fact about what fillForm wrote and not about a key that was
+  // never in this fixture.
+  check("the template's text widget really does carry an /AP to lose",
+    readForm(FORM.bytes).fields.get("name").dict.includes("/AP<</N 10 0 R>>"));
+  eq("and the rewritten field carries none — not an emptied one, not a nulled one",
+    (formObject(text, 5).match(/\/AP/g) || []).length, 0);
+  check("while the value it was rewritten for is in it, so the field wasn't simply left alone",
+    formObject(text, 5).includes("/V<FEFF"));
+
+  // The other half, one edit away from the first: "strip /AP from every widget" passes everything
+  // above and unticks every box. A checkbox's /AP is its two REAL appearances, and /AS is the key
+  // that picks between them — delete it and /NeedAppearances has nothing to draw a tick from.
+  const button = formObject(text, 7);
+  check("a ticked box keeps the /AP its two states live in",
+    button.includes("/AP<</N<</Yes 10 0 R/Off 10 0 R>>>>"));
+  check("and /AS names the one of them that means ticked", button.includes("/AS/Yes"));
+
+  // The same again where the on-state isn't /Yes, because "keeps its /AP" and "points /AS at a
+  // state that exists" are one fact: the states are inside the /AP.
+  const other = formObject(text, 8);
+  check("a box whose states are /Off and /On keeps both of them",
+    other.includes("/AP<</N<</Off 10 0 R/On 10 0 R>>>>"));
+  check("and is ticked by the name it actually has, not by the usual one",
+    other.includes("/AS/On") && !other.includes("/Yes"));
+}
+
+// The template's /Helvetica carries a /Differences array remapping WinAnsi 145-160 — 149 becomes
+// /Lslash where WinAnsi says bullet, 151 becomes /Scaron where it says emdash. Chrome honours that
+// and draws a quote for a bullet; poppler resolves by Unicode and draws the bullet. Across data/
+// that is 21 bullets, 7 curly apostrophes, 4 em dashes and 2 en dashes — plus armor-name, which IS
+// the em dash for a character with nothing equipped.
+//
+// So this module ADDS a font rather than correcting theirs. Correcting theirs would be a patch
+// shaped like one editor's bug; adding one depends on nothing any editor wrote.
+group("A font whose encoding we control, added rather than substituted");
+{
+  const filled = fillForm(FORM.bytes, { name: "x" });
+  const text = formText(filled);
+  const added = /(\d+) 0 obj\r\n(<<\/Type\/Font[^>]*>>)/.exec(text.slice(FORM.bytes.length));
+
+  check("the update carries a font object of its own", !!added);
+  eq("a base-14 Helvetica declaring WinAnsiEncoding, and no /Differences to argue with",
+    added[2], "<</Type/Font/Subtype/Type1/BaseFont/Helvetica/Encoding/WinAnsiEncoding>>");
+
+  const acro = readForm(filled).acroForm.dict;
+  check("it is reachable from the AcroForm's /DR, which is where a viewer looks it up",
+    acro.includes(`/DhHelv ${added[1]} 0 R`));
+  // The point of adding rather than correcting: their fonts are still exactly as authored.
+  // The whole point of adding rather than correcting: their font entry is untouched, and the
+  // broken /Differences it points at is still exactly as the editor wrote it. We simply stopped
+  // naming it.
+  check("the template's own font entry is still in /DR, unchanged",
+    acro.includes("/Helvetica 11 0 R"));
+  check("and the object it points at still carries the /Differences we refused to rewrite",
+    readForm(filled).fields.size > 0
+      && formText(filled).includes("/Differences[149/Lslash 150/OE 151/Scaron]"));
+
+  const field = readForm(filled).fields.get("name").dict;
+  check("the filled field's /DA names our font", /\/DA\(\/DhHelv /.test(field));
+  check("and keeps the 0 Tf the template chose, which is what asks the viewer to fit the box",
+    /\/DA\(\/DhHelv 0 Tf/.test(field));
+
+  // A sheet of nothing but ticked boxes needs no font: checkboxes draw from their own prebuilt
+  // appearance states in ZapfDingbats, which this module never touches.
+  const ticksOnly = formText(fillForm(FORM.bytes, { "agi-marked": true }));
+  check("a fill that writes no text adds no font",
+    !/<<\/Type\/Font/.test(ticksOnly.slice(FORM.bytes.length)));
+  // The positive control for that: the same fixture WITH text does add one, so the absence above
+  // is the rule firing rather than the search string being wrong.
+  check("while the same template with one string in it does",
+    /<<\/Type\/Font/.test(text.slice(FORM.bytes.length)));
+}
+
+group("A field nobody filled keeps every byte the template gave it");
+{
+  // "" means "leave the box as the template drew it" — and the template drew it with the /AP the
+  // group above deletes. Both rules are true at once, and a fix stated as "this module removes
+  // /AP" rather than "this module removes the /AP of a field it writes a value into" would blank
+  // the very fields we deliberately leave alone.
+  const one = fillForm(FORM.bytes, { name: "x" });
+  const text = formText(one);
+  eq("only the field we filled, the AcroForm and the added font are rewritten at all",
+    lastXrefSection(text).entries.map((e) => e.obj), [3, 5, 13]);
+  check("so the untouched field's last definition in the file is still the template's own",
+    text.lastIndexOf("\n6 0 obj") < FORM.bytes.length);
+  check("and it still carries the appearance stream the template drew it with",
+    readForm(one).fields.get("pronouns").dict.includes("/AP<</N 10 0 R>>"));
+  // The positive control for the search string above: /AP is a key this same fill really does
+  // remove, one field over.
+  check("which means something, because the field beside it lost exactly that key",
+    !readForm(one).fields.get("name").dict.includes("/AP"));
+}
+
+group("The update reads back, which is the only proof it is really in the file");
+{
+  // Everything above asserts what fillForm wrote. This asserts that a reader — the other side —
+  // finds it: the appended object has to be at an offset the xref names, on a line of its own,
+  // and later than the template's own copy.
+  const once = readForm(fillForm(FORM.bytes, { name: "Second" }));
+  check("readForm finds the appended value rather than the template's original",
+    once.fields.get("name").dict.includes("<FEFF005300650063006F006E0064>"));
+  check("and nothing else about the template moved", once.fields.size === 4 && once.root === 1);
+
+  const twice = readForm(fillForm(fillForm(FORM.bytes, { name: "First" }), { name: "Second" }));
+  check("filling a filled form supersedes the first value rather than resurrecting it",
+    twice.fields.get("name").dict.includes("<FEFF005300650063006F006E0064>"));
+  eq("and the AcroForm still carries exactly one /NeedAppearances, because the old one is dropped first",
+    (twice.acroForm.dict.match(/\/NeedAppearances/g) || []).length, 1);
+
+  // Master PDF Editor ends its files with a newline. A template that doesn't would otherwise get
+  // "1 0 obj" glued onto "%%EOF" — an offset that is still arithmetically right, pointing at a
+  // header no line-anchored scanner will ever see.
+  const flush = buildFormPdf({ tail: "%%EOF" });
+  check("the fixture really does end flush against %%EOF", flush.text.endsWith("%%EOF"));
+  check("and an update to it still starts a line, so the appended object is findable",
+    readForm(fillForm(flush.bytes, { name: "Second" })).fields.get("name").dict.includes("<FEFF005300650063006F006E0064>"));
+}
+
+// Sixteen bytes that are not text, in the other spelling a /ID is allowed: literal strings rather
+// than hex. Six of them are above 0x7F, which is the whole point of the fixture — a file
+// identifier is 16 random bytes, so a real one written this way almost certainly has some. No
+// parenthesis, backslash or newline among them, because those would be a test of the fixture's
+// escaping rather than of what fillForm does with the bytes.
+const WILD_ID_BYTES = [0x8b, 0x01, 0x51, 0xf4, 0x2c, 0xd9, 0x77, 0xa0, 0x10, 0xbe, 0x3f, 0x1c, 0xe7, 0x55, 0x82, 0x7e];
+const WILD_ID = `[(${String.fromCharCode(...WILD_ID_BYTES)})(${String.fromCharCode(...[...WILD_ID_BYTES].reverse())})]`;
+
+group("A file identifier is quoted back out of the template, never composed");
+{
+  const wild = buildFormPdf({ id: WILD_ID });
+  // The positive control: the same assertions against a hex /ID would pass through any writer at
+  // all, since hex is ASCII and every path can carry it.
+  check("the fixture's identifier really is literal strings holding bytes no ASCII writer would pass",
+    WILD_ID.includes("(") && WILD_ID_BYTES.some((b) => b > 0x7f));
+
+  // The failure mode here is not a wrong file, it is no file: composing the trailer with
+  // asciiBytes() throws on the first byte above 0x7F, blaming pdf.js for an encoding it was right
+  // to refuse, and the export stops on a template that is perfectly legal.
+  let filled = null;
+  eq("filling it raises no encoding error at all",
+    formFailure(() => { filled = fillForm(wild.bytes, { name: "Fáelán" }); }), "");
+
+  // Every check below reads those bytes, and they are EMPTY rather than absent when the fill
+  // threw — so each one fails on its own terms instead of a second copy of the same exception
+  // taking the whole run down before anything is reported.
+  const out = filled || new Uint8Array();
+  const text = formText(out);
+  const copiedAt = text.lastIndexOf(WILD_ID);
+  check("the identifier is in the update's trailer, byte for byte and in the appended half of the file",
+    copiedAt > wild.bytes.length);
+  eq("and once there, not twice, because the trailer states it once", (text.split(WILD_ID).length - 1), 2);
+
+  // The other failure mode, and the one that leaves a file rather than an exception: a value run
+  // through TextEncoder writes two bytes wherever the template had one, which is still a /ID and
+  // still opens — it is just no longer the same document identifier, so the same character
+  // exported twice diffs.
+  const appendedTrailer = text.slice(text.lastIndexOf("trailer"));
+  eq("and the trailer holding it has exactly as many bytes above 0x7F as the identifier does, so nothing was re-encoded on the way",
+    [...appendedTrailer].filter((c) => c.charCodeAt(0) > 0x7f).length,
+    WILD_ID_BYTES.filter((b) => b > 0x7f).length * 2);
+  eq("and /Info beside it, likewise copied rather than invented",
+    (text.slice(wild.bytes.length).match(/\/Info 12 0 R/g) || []).length, 1);
+
+  // A reader has to be able to walk the result, which the byte counting above doesn't prove:
+  // an identifier one byte short would still satisfy every count and leave the trailer unparseable.
+  check("the filled file still reads back as a form",
+    !!filled && readForm(filled).fields.get("name").dict.includes("/V<FEFF"));
+
+  // Neither key is required, and a template that names neither must not acquire one: /ID is
+  // supposed to be stable for the life of a document, so inventing one is a claim about identity
+  // this module has no business making.
+  const plain = buildFormPdf({ info: null, id: null });
+  const trailer = formText(fillForm(plain.bytes, { name: "x" })).split("trailer").pop();
+  check("a template that names neither gets neither invented for it",
+    !trailer.includes("/ID") && !trailer.includes("/Info"));
+  check("and is still a file, with the /Prev that makes the update an update",
+    trailer.includes(`/Prev ${plain.xrefAt}`));
+}
+
+// ---------- the sheet's fields ----------
+
+// The template's 56 text fields and the 46 checkboxes the sheet answers, spelled the way
+// data/sheet/sheet-template.pdf spells them. Written out here rather than read off the module
+// under test: this list IS the contract between sheet-fields.js and a PDF nothing in this repo
+// can open, and a list derived from the thing it is checking would agree with any rename.
+//
+// The 42 it does NOT answer are the in-play boxes — 12 armor slots, 12 HP, 12 Stress, 6 Hope.
+// Those are resources spent at the table; the app models their maxima and never their state.
+const SHEET_TEXT_FIELDS = [
+  "name", "pronouns", "heritage", "class-subclass", "multiclass-subclass", "level",
+  "agility", "strength", "finesse", "instinct", "presence", "knowledge",
+  "agi-spellcast-indicator", "str-spellcast-indicator", "fin-spellcast-indicator",
+  "ins-spellcast-indicator", "pre-spellcast-indicator", "kno-spellcast-indicator",
+  "evasion", "armor-score", "hp-slots", "stress-slots", "proficiency",
+  "damage-threshold-major", "damage-threshold-severe",
+  "primary-weapon-name", "primary-trait-range", "primary-damage-and-type", "primary-burden", "primary-feature",
+  "secondary-weapon-name", "secondary-trait-range", "secondary-damage-and-type", "secondary-burden", "secondary-feature",
+  "armor-name", "armor-base-thresholds", "armor-base-score", "armor-feature",
+  "class-hope-feature", "class-features", "inventory-items",
+  "experience-name1", "experience-name2", "experience-name3", "experience-name4", "experience-name5",
+  "experience-value1", "experience-value2", "experience-value3", "experience-value4", "experience-value5",
+  // Page two. `name-pg2` rather than a second `name`: two live fields sharing a /T is a template
+  // readForm refuses, because nothing can know which one a value was meant for.
+  "name-pg2", "background", "appearance", "connections",
+];
+// The six trait marks, then the level-up grid: nine rows across three tiers, spelled the way the
+// template spells them. A single-box row carries no index — "lu-experience-2", not "-2-1".
+const LEVEL_UP_MARKS = [
+  ...[2, 3, 4].flatMap((t) => [1, 2, 3].map((i) => `lu-trait-${t}-${i}`)),
+  ...[2, 3, 4].flatMap((t) => [1, 2].map((i) => `lu-hp-${t}-${i}`)),
+  ...[2, 3, 4].flatMap((t) => [1, 2].map((i) => `lu-stress-${t}-${i}`)),
+  ...[2, 3, 4].map((t) => `lu-experience-${t}`),
+  ...[2, 3, 4].map((t) => `lu-domain-${t}`),
+  ...[2, 3, 4].map((t) => `lu-evasion-${t}`),
+  ...[3, 4].map((t) => `lu-subclass-${t}`),
+  ...[3, 4].flatMap((t) => [1, 2].map((i) => `lu-proficiency-${t}-${i}`)),
+  ...[3, 4].flatMap((t) => [1, 2].map((i) => `lu-multiclass-${t}-${i}`)),
+];
+const SHEET_MARK_FIELDS = [
+  "agi-marked", "str-marked", "fin-marked", "ins-marked", "pre-marked", "kno-marked",
+  ...LEVEL_UP_MARKS,
+];
+const SPELLCAST_INDICATORS = SHEET_TEXT_FIELDS.filter((f) => f.endsWith("-spellcast-indicator"));
+
+// csvChar()'s character plus the two fields deriveSheet reads straight off the record
+// (sheet-data.js:334-336). The sheet prints a background and a set of connections and the CSV
+// exporter asks for neither, so csvChar() has no reason to carry them and sheetChar() — the
+// other fixture that goes through deriveSheet — sets exactly these two for the same reason.
+const formChar = (over = {}) => csvChar({
+  background: { description: "", answers: "" }, connectionsNotes: "", ...over,
+});
+
+// The Guardian of CSV_DB, fully equipped: a weapon with a feature, armor with a feature, and a
+// potion. Everything below is this character with one thing changed.
+const EQUIPPED = { primaryWeaponId: "longsword", secondaryWeaponId: null, armorId: "gambeson", potionChoice: "potion" };
+
+group("The sheet answers every box it has, including the ones it has nothing to say about");
+{
+  const f = sheetFieldValues(formChar({ equipment: EQUIPPED }), CSV_DB);
+
+  eq("all 52 text fields come back, and every one of them as a string",
+    SHEET_TEXT_FIELDS.filter((k) => typeof f[k] !== "string"), []);
+  eq("the six trait marks come back as booleans", SHEET_MARK_FIELDS.filter((k) => typeof f[k] !== "boolean"), []);
+  // The other half of the same contract, and the one a typo shows up in: a key the template
+  // hasn't got is a value fillForm will throw on, and a renamed field fails silently the other
+  // way — the box just prints empty.
+  eq("and nothing else at all, so a misspelled key can't ride along unnoticed",
+    Object.keys(f).filter((k) => !SHEET_TEXT_FIELDS.includes(k) && !SHEET_MARK_FIELDS.includes(k)), []);
+  // The 42 in-play boxes — Hit Point, Stress, Armor and Hope slots — are deliberately unanswered:
+  // a ticked HP box means that slot is SPENT, which the app models nowhere on purpose.
+  eq("the play-state checkboxes are left for the player's pencil",
+    ["hp1", "st1", "as1", "hope1"].filter((k) => k in f), []);
+}
+
+group("A single-class character reads off the page as prose");
+{
+  const f = sheetFieldValues(formChar({ equipment: EQUIPPED }), CSV_DB);
+
+  eq("the heritage line is the community and then the ancestry, in the order it is said out loud",
+    f.heritage, "Highborne Clank");
+  eq("the class line is the subclass and then the class", f["class-subclass"], "Stalwart Guardian");
+  eq("and the second-class box is empty rather than dashed, because nothing is missing from it",
+    f["multiclass-subclass"], "");
+  eq("a character nobody has named says so, rather than printing an empty line", f.name, "(unnamed)");
+
+  eq("the numbers along the top of the sheet",
+    [f.level, f.proficiency, f.evasion, f["armor-score"], f["hp-slots"], f["stress-slots"],
+      f["damage-threshold-major"], f["damage-threshold-severe"]],
+    ["1", "1", "10", "3", "7", "6", "6", "12"]);
+  // Effective traits, not the assignment: Gambeson moves none of these, but Full Plate's -1
+  // Agility is the bug printing the raw assignment would reintroduce.
+  eq("and the six traits, signed, as they are rolled at the table",
+    ["agility", "strength", "finesse", "instinct", "presence", "knowledge"].map((k) => f[k]),
+    ["+1", "+2", "0", "+1", "0", "-1"]);
+  eq("exactly one Spellcast marker, beside the trait this subclass casts with",
+    SPELLCAST_INDICATORS.map((k) => f[k]), ["", "", "", "", "", "*"]);
+
+  eq("the weapon's line leads with the bonus and names the trait after it",
+    f["primary-trait-range"], "(+2) Agility | Melee");
+  eq("its damage is Proficiency copies of the die, modifier and type included",
+    f["primary-damage-and-type"], "1d10+3 Physical");
+  eq("with the name, the burden and the feature in boxes of their own",
+    [f["primary-weapon-name"], f["primary-burden"], f["primary-feature"]],
+    ["Longsword", "Two handed", "Reliable: +1 to attack rolls."]);
+
+  eq("the armor's own printed numbers sit beside the totals they add up to",
+    [f["armor-name"], f["armor-base-score"], f["armor-base-thresholds"], f["armor-feature"]],
+    ["Gambeson", "3", "5 / 11", "Flexible: +1 to Evasion."]);
+  // The Hope feature has no card anywhere — card-sheet.js generates none for it — so this box is
+  // the only paper its text exists on, and a name alone would leave it unusable.
+  eq("the class's Hope feature is printed in full, name and text", f["class-hope-feature"],
+    "Frontline Tank: Spend 3 Hope to clear 2 Armor Slots.");
+  eq("and the potion is the whole of the inventory the app models", f["inventory-items"], "Minor Health Potion");
+  eq("a character with no potion gets an empty list box, not a dash saying \"recorded: nothing\"",
+    sheetFieldValues(formChar(), CSV_DB)["inventory-items"], "");
+}
+
+group("A mixed ancestry is one heritage with a plus in it");
+{
+  const mixed = sheetFieldValues(formChar({
+    heritage: {
+      ancestryMode: "mixed", ancestryIds: ["clank", "human"], communityId: "com",
+      chosenFeatures: [{ ancestryId: "clank", featureName: "Efficient" }, { ancestryId: "human", featureName: "High Stamina" }],
+    },
+  }), CSV_DB);
+  eq("both ancestries share one line, joined the way the sheet and the CSV both join them",
+    mixed.heritage, "Highborne Clank + Human");
+}
+
+// A second class whose Spellcast trait differs from the first's, so the sheet has two of
+// everything the SRD makes a per-roll choice of. CHAIR is the weapon whose trait is the
+// Spellcast sentinel and CASTER the Instinct-casting subclass, both declared above.
+const MULTICLASS_DB = {
+  ...CSV_DB,
+  classes: [...CSV_DB.classes, {
+    id: "cls2", name: "SORCERER", domains: ["ARCANA", "MIDNIGHT"], startingHitPoints: 6, startingEvasion: 10,
+    hopeFeature: feat("Volatile Magic", para("Reroll any number of your damage dice.")),
+    classFeatures: [feat("Arcane Sense", para("You can sense magic within Close range."))],
+  }],
+  subclasses: [...CSV_DB.subclasses, CASTER],
+  weapons: [...CSV_DB.weapons, CHAIR],
+};
+const MULTICLASSED = formChar({
+  multiclass: { classId: "cls2", subclassId: CASTER.id, domain: "ARCANA", level: 5, tier: "foundation" },
+  equipment: { primaryWeaponId: CHAIR.id, secondaryWeaponId: null, armorId: "gambeson", potionChoice: null },
+});
+
+group("A multiclassed caster has two of everything the rules let them choose between");
+{
+  const f = sheetFieldValues(MULTICLASSED, MULTICLASS_DB);
+
+  eq("the second class box carries its subclass, its class and the domain it opened",
+    f["multiclass-subclass"], "Sparkwright Sorcerer, Arcana");
+  eq("while the first class box is untouched by it", f["class-subclass"], "Stalwart Guardian");
+
+  // "if your foundation cards specify different Spellcast traits, you can choose which one to
+  // apply when making a Spellcast roll" — a choice per roll, so marking one would be the sheet
+  // making it for them.
+  eq("two of the six Spellcast markers are starred, and the other four are empty",
+    SPELLCAST_INDICATORS.map((k) => f[k]), ["", "", "", "*", "", "*"]);
+
+  // Alternatives print IN FULL. Collapsing them to the higher number would be this sheet making
+  // the GM's per-roll call; the bracket after them is what stops "Spellcast" reading as a third
+  // alternative rolled with a trait called "Instinct Spellcast".
+  eq("the attack keeps both alternatives, with the weapon's own label bracketed after them",
+    f["primary-trait-range"], "(0) Knowledge / (+2) Instinct (Spellcast) | Far");
+  // The single-trait shape beside it, so the bracketing above is visibly a branch and not the
+  // only thing this line can produce. The label stays the word off the card either way — which
+  // trait it resolved to is already inside the bonus, and "(0) Knowledge" would be the sheet
+  // printing a trait the weapon does not name.
+  eq("where a caster with one trait gets a plain signed total and the label unbracketed after it",
+    sheetFieldValues(formChar({
+      equipment: { primaryWeaponId: CHAIR.id, secondaryWeaponId: null, armorId: "gambeson", potionChoice: null },
+    }), MULTICLASS_DB)["primary-trait-range"], "(0) Spellcast | Far");
+}
+
+// gear.js marks list items with U+2022, which is right for the CSV and for the app's own pages.
+// In a PDF form field Chrome draws that character as a double quote, so a Guardian's bulleted
+// benefits print as `" You reduce the severity of...`. Measured, one character per line, against a
+// diagnostic sheet: the em dash, en dash and curly apostrophe all render correctly and only the
+// bullet fails — so this is one substitution, not a transliteration pass.
+group("The one character a form field can't carry is swapped, and only that one");
+{
+  // The fixture class carries a feature whose content is nothing but bullets, shaped like
+  // Guardian's second class feature in data/ — which is where the bullet enters the sheet.
+  const f = sheetFieldValues(formChar(), CSV_DB);
+
+  check("no field the sheet writes still carries U+2022",
+    !Object.values(f).some((v) => typeof v === "string" && v.includes("\u2022")));
+  check("the bulleted feature carries U+00B7 instead, which renders in both viewers we checked",
+    f["class-features"].includes("\u00b7"));
+  // The positive control: gear.js really does put a bullet in this feature, so the absence above
+  // is the substitution firing rather than the fixture having no list in it.
+  check("and the source text this was derived from really did have a bullet in it",
+    featuresText(CSV_DB.classes[0].classFeatures).includes("\u2022"));
+
+  // The characters that were NOT substituted, because measurement said they did not need to be.
+  // A blanket "strip anything above U+00FF" would have taken these with it.
+  const dashes = sheetFieldValues(formChar({ equipment: { primaryWeaponId: null, secondaryWeaponId: null, armorId: null, potionChoice: null } }), CSV_DB);
+  eq("an unequipped character's armor-name keeps its em dash, which Chrome draws correctly",
+    dashes["armor-name"], "\u2014");
+}
+
+group("The class-features box holds classes, and only classes");
+{
+  const f = sheetFieldValues(MULTICLASSED, MULTICLASS_DB);
+  const box = f["class-features"];
+
+  check("the first class's features are in it, name and text",
+    box.includes("Unstoppable: Once per long rest, you can become Unstoppable."));
+  // A middle dot, not gear.js's U+2022 bullet: Chrome draws that one as a double quote in a form
+  // field. See "The one character a form field can't carry" below for the measurement.
+  check("bullets included, for a feature whose whole content is a list",
+    box.includes("\u00b7 You can't be Restrained."));
+  check("and the second class's features under the second class's NAME, because nothing else in the box says where they came from",
+    box.includes("Sorcerer\nArcane Sense: You can sense magic within Close range."));
+
+  // Everything below is a negative assertion, and each one is paired with the positive control
+  // that makes it mean something: the string has to be findable in the sheet's own data before
+  // "it is not in this box" is a fact about the box rather than about the search.
+  const sheet = deriveSheet(MULTICLASSED, MULTICLASS_DB);
+  const somewhere = (list, text) => JSON.stringify(list).includes(text);
+
+  const subclassText = "Gain a permanent +1 bonus to your damage thresholds.";
+  check("the subclass's Foundation text IS in the sheet's data, so it was findable",
+    somewhere(sheet.subclassFeatures, subclassText));
+  check("and it is NOT in this box, because it is printed on the subclass card",
+    !box.includes(subclassText));
+
+  const ancestryText = "Decide who made you.";
+  check("the ancestry feature IS in the sheet's data", somewhere(sheet.ancestryFeatures, ancestryText));
+  check("and NOT in this box, for the same reason", !box.includes(ancestryText));
+
+  const communityText = "You have advantage on rolls to consort with nobles.";
+  check("the community feature IS in the sheet's data", somewhere(sheet.communityFeatures, communityText));
+  check("and NOT in this box either", !box.includes(communityText));
+
+  // A single-class character's box is the first half alone, with no separator left dangling.
+  const alone = sheetFieldValues(formChar({ equipment: EQUIPPED }), CSV_DB)["class-features"];
+  check("a character with one class gets no second class's name in the box", !alone.includes("Sorcerer"));
+  check("and no trailing blank line where the second half would have gone", alone === alone.trim());
+}
+
+group("Bare hands, bare skin, and an empty off hand");
+{
+  const bare = sheetFieldValues(formChar({
+    equipment: { primaryWeaponId: UNARMED, secondaryWeaponId: null, armorId: UNARMORED, potionChoice: null },
+  }), CSV_DB);
+
+  // The primary slot counts when it holds the sentinel, even though the db lookup finds nothing:
+  // the profile is a rule the SRD provides rather than a record in data/.
+  eq("bare hands fill the weapon slot rather than leaving it empty", bare["primary-weapon-name"], "Unarmed");
+  eq("the attack names its own two traits, and there is no label to bracket after them",
+    bare["primary-trait-range"], "(+2) Strength / (0) Finesse | Melee");
+  eq("with no burden at all, because nothing is in your hands", bare["primary-burden"], "");
+  eq("and no feature, because a bare-handed profile has none", bare["primary-feature"], "");
+
+  // The one field on this sheet where a dash is the answer rather than a placeholder: choosing
+  // to wear nothing is a choice, and not the same as not having chosen yet.
+  eq("choosing to wear nothing says so", bare["armor-name"], "Unarmored");
+  eq("where a slot nobody has filled prints the dash deriveSheet handed over",
+    sheetFieldValues(formChar(), CSV_DB)["armor-name"], "—");
+  eq("and an unarmored character has no base numbers, because there is no armor to have them",
+    [bare["armor-base-score"], bare["armor-base-thresholds"], bare["armor-feature"]], ["", "", ""]);
+
+  const empty = ["secondary-weapon-name", "secondary-trait-range", "secondary-damage-and-type",
+    "secondary-burden", "secondary-feature"];
+  eq("nothing in the off hand leaves all five of its boxes empty", empty.map((k) => bare[k]), ["", "", "", "", ""]);
+  // The positive control: those five boxes do fill, so the blanks above are about this character
+  // rather than about five fields nothing ever writes.
+  eq("and a dagger in it fills every one of them",
+    empty.map((k) => sheetFieldValues(formChar({
+      equipment: { ...EQUIPPED, secondaryWeaponId: "dagger" },
+    }), CSV_DB)[k]),
+    ["Dagger", "(0) Finesse | Melee", "1d8+1 Physical", "One handed", ""]);
+}
+
+group("A record the catalogue is missing numbers for prints nothing, and never the word NaN");
+{
+  // Armors validate under NAME_ONLY (content-sources.js:156,162), so an armor with an id and a
+  // name is an armor that LOADS. That is exactly the shape a hand-transcribed source has while it
+  // is being typed in — data/void/ is one — and the sheet is the last place a half-finished
+  // record should announce itself, because by then it is ink on a page a player takes to a table.
+  const HEDGE = { id: "hedge", name: { "en-US": "Hedge Plate" }, baseScore: 3 };
+  const WITH_NUMBERS = { ...CSV_DB, armors: [...CSV_DB.armors, { ...HEDGE, baseMajorThreshold: 5, baseSevereThreshold: 11 }] };
+  const WITHOUT = { ...CSV_DB, armors: [...CSV_DB.armors, HEDGE] };
+  const wearing = formChar({ equipment: { ...EQUIPPED, armorId: "hedge" } });
+
+  // The positive control comes first, because everything after it asserts that a box is EMPTY:
+  // the same character in the same armor, with the two numbers filled in on the record.
+  const complete = sheetFieldValues(wearing, WITH_NUMBERS);
+  eq("with the record complete, both threshold boxes carry numbers",
+    [complete["damage-threshold-major"], complete["damage-threshold-severe"]], ["6", "12"]);
+
+  // And the total really is NaN, which is what makes the guard load-bearing rather than
+  // defensive: derived-stats.js:590-594 adds the character's level to a base that isn't there.
+  const derived = deriveSheet(wearing, WITHOUT);
+  check("without them the arithmetic genuinely produces NaN — not null, not zero",
+    Number.isNaN(derived.thresholds.major) && Number.isNaN(derived.thresholds.severe));
+
+  const f = sheetFieldValues(wearing, WITHOUT);
+  eq("so both boxes come out empty", [f["damage-threshold-major"], f["damage-threshold-severe"]], ["", ""]);
+  check("and no box on the sheet says NaN, which is the word a viewer would otherwise print on the line",
+    !JSON.stringify(f).includes("NaN"));
+
+  // The armor's own boxes further down the module already guarded this catalogue bug on their
+  // own, and the pair below is what says the two guards agree: the record was found and readable,
+  // and only the numbers it hasn't got are blank.
+  eq("the armor's own thresholds box is blank for the same reason", f["armor-base-thresholds"], "");
+  eq("while the number it does carry is printed, so the record was reachable all along",
+    [f["armor-name"], f["armor-base-score"]], ["Hedge Plate", "3"]);
+}
+
+group("The trait-and-range line never ends in a separator with nothing after it");
+{
+  // Weapons load under NAME_ONLY too, and prettyEnum() answers "" for a range that isn't there.
+  // Interpolated, that prints "(+1) Agility | " — a line that reads as a range the printer lost.
+  const NOTCHED = {
+    id: "notched", name: { "en-US": "Notched Blade" }, trait: "AGILITY", burden: "ONE_HANDED",
+    damage: { dice: "D6", type: "PHYSICAL" },
+  };
+  const db = { ...CSV_DB, weapons: [...CSV_DB.weapons, NOTCHED, { ...NOTCHED, id: "notched-far", range: "FAR" }] };
+  const line = (id) => sheetFieldValues(formChar({
+    equipment: { ...EQUIPPED, primaryWeaponId: id },
+  }), db)["primary-trait-range"];
+
+  eq("a weapon with no range is its trait and nothing else", line("notched"), "(+1) Agility");
+  // Said twice on purpose: an implementation that appended the separator and then trimmed the
+  // line would still print "(+1) Agility |", which is wrong in the same way and passes an
+  // assertion about trailing whitespace.
+  check("with no separator anywhere in it", !line("notched").includes("|"));
+  eq("and nothing hanging off the end of it", line("notched"), line("notched").trim());
+  // The positive control: the same record with a range prints the separator, so the checks above
+  // are about the missing half rather than about a field that never joins anything.
+  eq("while the same weapon with a range still gets one", line("notched-far"), "(+1) Agility | Far");
+}
+
+group("Experiences fill from the top and leave the rest of the slots blank");
+{
+  const f = sheetFieldValues(formChar({ equipment: EQUIPPED }), CSV_DB);
+  eq("each Experience fills a name and the total it is at",
+    [f["experience-name1"], f["experience-value1"], f["experience-name2"], f["experience-value2"]],
+    ["A", "+2", "B", "+2"]);
+  // Five slots is exactly the ceiling the rules allow — two at creation plus one at each of the
+  // level 2, 5 and 8 achievements — so there is no overflow case and no sixth to lose.
+  eq("and the three this character hasn't earned are empty pairs",
+    [3, 4, 5].flatMap((n) => [f[`experience-name${n}`], f[`experience-value${n}`]]), ["", "", "", "", "", ""]);
+}
+
+group("The printed sheet outlives the loadout it was printed with");
+{
+  // Untouchable is half your Agility rounded up, and only while it is in the loadout.
+  const untouchable = formChar({ domainCardIds: ["core_domain_card_untouchable"], domainVaultIds: [] });
+
+  eq("so the loadout is off by default and the number is what is permanently true",
+    sheetFieldValues(untouchable, CSV_DB).evasion, "9");
+  eq("an options object with nothing in it says the same", sheetFieldValues(untouchable, CSV_DB, {}).evasion, "9");
+  eq("and asking for the loadout changes the number on the page",
+    sheetFieldValues(untouchable, CSV_DB, { loadout: true }).evasion, "10");
+
+  // Vaulting every card isn't a trick: vaulted is already what the rules mean by "not in play",
+  // so a card whose own text tells you to vault it keeps applying either way.
+  const vitality = formChar({
+    domainCardIds: ["core_domain_card_vitality"], domainVaultIds: [],
+    effectChoices: { core_domain_card_vitality: { optionIds: ["stress", "hitPoint"] } },
+  });
+  eq("while a permanent card counts in both, because permanent is what it says",
+    [sheetFieldValues(vitality, CSV_DB)["hp-slots"], sheetFieldValues(vitality, CSV_DB, { loadout: true })["hp-slots"]],
+    ["8", "8"]);
+}
+
+group("The trait marks are durable state, so the sheet answers them");
+{
+  const TRAIT_MARKS = SHEET_MARK_FIELDS.filter((k) => k.endsWith("-marked"));
+  const marked = formChar({
+    traitMarks: { agility: true, strength: false, finesse: false, instinct: false, presence: true, knowledge: false },
+  });
+  // A marked trait is one already raised in this tier and therefore ineligible for another +1
+  // while the tier lasts — state history.js keeps and clears at the level 5 and 8 boundaries,
+  // not something spent at the table.
+  eq("a raised trait is ticked, and every other box is explicitly false",
+    TRAIT_MARKS.map((k) => sheetFieldValues(marked, CSV_DB)[k]), [true, false, false, false, true, false]);
+  eq("and a character who has raised nothing ticks nothing",
+    TRAIT_MARKS.map((k) => sheetFieldValues(formChar(), CSV_DB)[k]), [false, false, false, false, false, false]);
+}
+
+// The other 40 answerable boxes. Same justification as the trait marks and the opposite of the 42
+// on page one: a marked advancement is a choice already made and kept, where a ticked HP box is a
+// resource spent this session.
+group("The level up grid fills from the left, one row per rule");
+{
+  const used = (over) => formChar({ level: 10, advancementSlotsUsed: {
+    traits: { 2: 2, 3: 0, 4: 0 }, hitPoint: { 2: 0, 3: 1, 4: 0 }, stress: { 2: 0, 3: 0, 4: 0 },
+    experience: { 2: 1, 3: 0, 4: 0 }, domainCard: { 2: 0, 3: 0, 4: 0 }, evasion: { 2: 0, 3: 0, 4: 0 },
+    subclass: { 3: 1, 4: 0 }, proficiency: { 3: 0, 4: 2 }, multiclass: { 3: 0, 4: 0 }, ...over,
+  } });
+  const f = sheetFieldValues(used(), CSV_DB);
+
+  // Two of tier 2's three trait boxes. Which two carries no information — the rules make a row's
+  // boxes interchangeable — so filling from the left is presentation, not a claim.
+  eq("two marks on a three-box row tick the first two and leave the third",
+    [f["lu-trait-2-1"], f["lu-trait-2-2"], f["lu-trait-2-3"]], [true, true, false]);
+  eq("a row untouched in that tier ticks nothing", [f["lu-stress-2-1"], f["lu-stress-2-2"]], [false, false]);
+  eq("tiers are independent: the Hit Point slot taken at tier 3 does not mark tier 2's",
+    [f["lu-hp-2-1"], f["lu-hp-3-1"], f["lu-hp-3-2"]], [false, true, false]);
+  // A one-box row has no index in the template, matching how it reads on the page.
+  eq("a single-box row is named without an index", [f["lu-experience-2"], f["lu-experience-3"]], [true, false]);
+  eq("and Proficiency costs both its boxes at once, which is why it costs the whole level",
+    [f["lu-proficiency-4-1"], f["lu-proficiency-4-2"]], [true, true]);
+
+  // Rows the rules do not offer at tier 2 have no box there to answer.
+  check("subclass, proficiency and multiclass have no tier 2 boxes at all",
+    !("lu-subclass-2" in f) && !("lu-proficiency-2-1" in f) && !("lu-multiclass-2-1" in f));
+  // The positive control: they DO exist at tier 3, so the absence above is the slot table talking
+  // rather than the name being misspelled.
+  check("but they do at tier 3", "lu-subclass-3" in f && "lu-proficiency-3-1" in f && "lu-multiclass-3-1" in f);
+
+  eq("a character who has levelled nothing ticks none of the forty",
+    SHEET_MARK_FIELDS.filter((k) => k.startsWith("lu-"))
+      .map((k) => sheetFieldValues(formChar(), CSV_DB)[k]).filter(Boolean), []);
+}
+
+// A tick on this grid means "not available", which on the printed sheet is two different marks:
+// filled in for spent, scored through for struck. A checkbox cannot draw a diagonal line, so both
+// print the same and the sheet keeps WHETHER a box is available while losing WHY.
+group("A struck option ticks the same as a spent one, because a box cannot be scored through");
+{
+  const BLANK = {
+    traits: { 2: 0, 3: 0, 4: 0 }, hitPoint: { 2: 0, 3: 0, 4: 0 }, stress: { 2: 0, 3: 0, 4: 0 },
+    experience: { 2: 0, 3: 0, 4: 0 }, domainCard: { 2: 0, 3: 0, 4: 0 }, evasion: { 2: 0, 3: 0, 4: 0 },
+    subclass: { 3: 0, 4: 0 }, proficiency: { 3: 0, 4: 0 }, multiclass: { 3: 0, 4: 0 },
+  };
+  const at10 = (used) => sheetFieldValues(formChar({ level: 10, advancementSlotsUsed: { ...BLANK, ...used } }), CSV_DB);
+
+  // The positive control this whole group rests on: with nothing taken, nothing is struck either,
+  // so every tick below is the rule firing rather than the row being ticked all along.
+  const none = at10({});
+  eq("with nothing taken, none of these rows is ticked",
+    [none["lu-subclass-3"], none["lu-multiclass-3-1"], none["lu-subclass-4"], none["lu-multiclass-4-1"]],
+    [false, false, false, false]);
+
+  // "Take an upgraded subclass card. Then cross out the multiclass option for this tier."
+  const upgraded = at10({ subclass: { 3: 1, 4: 0 } });
+  eq("upgrading a subclass ticks that tier's multiclass, which the rules strike",
+    [upgraded["lu-subclass-3"], upgraded["lu-multiclass-3-1"], upgraded["lu-multiclass-3-2"]],
+    [true, true, true]);
+  eq("and leaves the next tier alone, because it strikes THIS tier's option only",
+    [upgraded["lu-subclass-4"], upgraded["lu-multiclass-4-1"]], [false, false]);
+
+  // "Multiclass … then cross out an unused 'Take an upgraded subclass card' and the other
+  // multiclass option on this sheet" — which is what makes multiclassing once per career.
+  const multi = at10({ multiclass: { 3: 2, 4: 0 } });
+  eq("multiclassing ticks its own boxes and the unused subclass upgrade beside them",
+    [multi["lu-multiclass-3-1"], multi["lu-multiclass-3-2"], multi["lu-subclass-3"]], [true, true, true]);
+  eq("and reaches forward to the other tier's multiclass, which is the once-per-career rule",
+    [multi["lu-multiclass-4-1"], multi["lu-multiclass-4-2"]], [true, true]);
+
+  // The cap. A row struck after it was partly spent would otherwise tick past the boxes that
+  // exist, and fillForm throws on a field name the template hasn't got.
+  const both = at10({ subclass: { 3: 1, 4: 1 }, multiclass: { 3: 0, 4: 0 } });
+  check("no row ever ticks a box beyond the ones the template draws",
+    !SHEET_MARK_FIELDS.some((k) => k.startsWith("lu-") && both[k] === undefined)
+      && !("lu-multiclass-3-3" in both));
+}
+
+group("The two halves meet: every name the sheet writes is a field the template has");
+{
+  // The contract sheet-fields.js's header states, checked against a template rather than against
+  // itself. The fixture stands in for the real one — its widgets are named for two of the 52 —
+  // so what this proves is the SHAPE of the meeting: the value map's keys are what fillForm
+  // looks up, and a key that isn't a field stops the export instead of printing a blank line.
+  const values = sheetFieldValues(formChar({ equipment: EQUIPPED }), CSV_DB);
+  const template = readForm(FORM.bytes);
+
+  const present = Object.fromEntries(
+    Object.entries(values).filter(([k]) => template.fields.has(k)),
+  );
+  eq("the fixture really does carry field names the sheet writes", Object.keys(present).sort(),
+    ["agi-marked", "name", "pronouns", "str-marked"]);
+
+  const out = fillForm(FORM.bytes, present);
+  const text = formText(out);
+  check("and filling with them lands every offset on its own object",
+    lastXrefSection(text).entries.every((e) => text.startsWith(`${e.obj} 0 obj\r\n`, Number(e.raw.slice(0, 10)))));
+  // "(unnamed)" has parentheses in it, which is the character a literal PDF string would have to
+  // escape and this module never writes one of.
+  check("with a value full of parentheses written as hex rather than as a literal string",
+    formObject(text, 5).includes("/V<FEFF"));
+
+  const stray = formFailure(() => fillForm(FORM.bytes, { ...present, "damage-threshold-major": "6" }));
+  has("while a name this template hasn't got is refused rather than silently dropped",
+    [stray], "damage-threshold-major");
+}
+
+// ---------- one rule, three printed pages ----------
+//
+// permanentSubject() and attackText() are each one rule that three exports used to state
+// separately — the CSV, the printed stats card and the official sheet's form fields — in wordings
+// that were never identical. Nothing in git would have shown that drifting: two files that agree
+// today and disagree after one of them is edited is a change git has no reason to see as a
+// conflict. So these check the exports against EACH OTHER, which is the property the extractions
+// exist to protect, rather than each of them against a number of its own.
+
+group("The CSV, the printed card and the official sheet agree about one character");
+{
+  // Untouchable grants Evasion only while it's in the loadout; Vitality's two slots are permanent,
+  // and its own text tells you to vault the card. A character holding both is one whose numbers
+  // depend on which rule is being applied, which is what makes agreement here worth asserting.
+  const held = ["core_domain_card_untouchable", "core_domain_card_vitality"];
+  const ch = formChar({
+    domainCardIds: held, creationDomainCardIds: held, domainVaultIds: [],
+    effectChoices: { core_domain_card_vitality: { optionIds: ["stress", "hitPoint"] } },
+    equipment: EQUIPPED,
+  });
+
+  const csv = exportRow(ch, { loadout: false });
+  const card = statsCardContent(ch, CSV_DB);
+  const sheet = sheetFieldValues(ch, CSV_DB);
+  const defense = card.bands.find((b) => b.type === "defense");
+  const boxes = (label) => String(card.bands.find((b) => b.type === "slots")
+    .cells.find((c) => c.label === label).boxes);
+
+  eq("Evasion: the gambeson's Flexible counts on all three, and Untouchable on none of them",
+    [csv.evasion, defense.cells[0].value, sheet.evasion], ["10", "10", "10"]);
+  eq("Hit Points: the permanent slot Vitality grants counts on all three",
+    [csv["hp-slots"], boxes("Hit Points"), sheet["hp-slots"]], ["8", "8", "8"]);
+  eq("Stress: the other half of the same answered choice",
+    [csv["stress-slots"], boxes("Stress"), sheet["stress-slots"]], ["7", "7", "7"]);
+  eq("Armor Score, which the armor alone moves",
+    [csv["armor-score"], boxes("Armor"), sheet["armor-score"]], ["3", "3", "3"]);
+  eq("and both damage thresholds, which the card prints as a scale",
+    [csv["damage-threshold-major"], defense.scale[0].value, sheet["damage-threshold-major"],
+      csv["damage-threshold-severe"], defense.scale[1].value, sheet["damage-threshold-severe"]],
+    ["6", "6", "6", "12", "12", "12"]);
+
+  // The positive control for all of it: they agree because the substitution happened. Both exports
+  // that offer the choice move when the loadout is counted — and the card offers no choice at all,
+  // which is exactly why the rule is stated once rather than three times.
+  eq("in play the same character's Evasion is a point higher, in both exports that can say so",
+    [exportRow(ch).evasion, sheetFieldValues(ch, CSV_DB, { loadout: true }).evasion], ["11", "11"]);
+  eq("while the permanent slots don't move, which is what permanent means",
+    [exportRow(ch)["hp-slots"], sheetFieldValues(ch, CSV_DB, { loadout: true })["hp-slots"]], ["8", "8"]);
+
+  // The substitution is on a copy in all three. One that vaulted the character's cards for real
+  // would empty the loadout of every screen redrawn after the export.
+  eq("and nothing printed moved a card out of the character's own loadout",
+    [ch.domainVaultIds, ch.domainCardIds], [[], held]);
+}
+
+group("What permanentSubject substitutes, and what it deliberately leaves alone");
+{
+  const ch = csvChar({ domainCardIds: ["fx_bond", "fx_ava"], domainVaultIds: ["fx_ava"], creationDomainCardIds: ["fx_bond"] });
+  const subject = permanentSubject(ch);
+
+  eq("every card owned goes to the vault, which is already what the rules mean by not in play",
+    subject.domainVaultIds, ["fx_bond", "fx_ava"]);
+  eq("the collection is not substituted, because where a card sits doesn't change whether you own it",
+    subject.domainCardIds, ["fx_bond", "fx_ava"]);
+  // The candidate second clause the function's own comment names. Substituting it too would change
+  // which cards a character is deemed to have started with, which no printed page asks about.
+  eq("and the other card list passes through as it was", subject.creationDomainCardIds, ["fx_bond"]);
+  check("the character handed in is a different object, and is not modified",
+    subject !== ch && ch.domainVaultIds.length === 1);
+  // Every export runs on drafts too, and a character mid-creation may own nothing at all.
+  eq("a character who owns nothing vaults nothing", permanentSubject({ id: "x" }).domainVaultIds, []);
+}
+
+// A TRIPWIRE, not an assertion about which answer is right.
+//
+// sheet-fields.js asks spellcastTraitKeys() about the vaulted SUBJECT; card-content.js asks it
+// about the CHARACTER. Both files argue their case in a comment, and both are currently correct,
+// because the question is moot: spellcastTraitKeys() reads subclassId and multiclass.subclassId
+// and nothing else, so vaulting a card cannot move the answer.
+//
+// Nothing else in this suite notices that. Flip either call site today and 1226 checks still pass,
+// which is precisely why this group exists: it fails on the day the two spellings stop agreeing —
+// the day a card declares a Spellcast trait — and on that day the sheet and the card each have a
+// deliberate decision to make rather than a silent divergence to discover.
+group("Vaulting a card cannot change which trait you cast with — while that stays true");
+{
+  const casters = [
+    ["a single-class caster", formChar({ domainCardIds: ["core_domain_card_untouchable"] }), CSV_DB],
+    ["a multiclassed caster naming two traits", MULTICLASSED, MULTICLASS_DB],
+  ];
+  for (const [what, ch, db] of casters) {
+    eq(`${what}: the character and the vaulted subject name the same traits`,
+      spellcastTraitKeys(ch, db), spellcastTraitKeys(permanentSubject(ch), db));
+  }
+  // The positive control, without which the equalities above could both be [] compared to [] and
+  // this whole group would pass on a function that returned nothing at all.
+  check("and at least one of them names a trait, so the comparison isn't two empty lists",
+    spellcastTraitKeys(MULTICLASSED, MULTICLASS_DB).length === 2);
+}
+
+group("One weapon in one hand reads the same way on the card and on the sheet");
+{
+  const ch = formChar({ equipment: EQUIPPED });
+  const line = (card) => card.bands.filter((b) => b.type === "detail")[0].cells[0].value;
+
+  // The one thing the two pages genuinely differ about, and it's a parameter rather than something
+  // either of them quietly erases: the sheet brackets a lone bonus so both kinds of weapon line up
+  // down a column of boxes, where the card's sits inside a sentence and stays bare.
+  eq("the card writes the attack into a sentence", line(statsCardContent(ch, CSV_DB)),
+    "Longsword: +2 Agility | 1d10+3 Physical");
+  eq("and the sheet writes the same attack into a box, bracketed",
+    sheetFieldValues(ch, CSV_DB)["primary-trait-range"], "(+2) Agility | Melee");
+
+  // The case the shared function exists for: two Spellcast traits, printed IN FULL, with the
+  // weapon's own label bracketed after them so it can't read as a third alternative rolled with a
+  // trait called "Instinct Spellcast". Neither page composes that; both ask for it.
+  const casterLine = line(statsCardContent(MULTICLASSED, MULTICLASS_DB));
+  eq("an alternatives line, on the card", casterLine,
+    "Arcane-Frame Wheelchair: (0) Knowledge / (+2) Instinct (Spellcast) | 1d6 Magical");
+  // Asserted as a relation rather than as a second literal: this is the property the extraction
+  // protects, and it fails the moment either page re-spells the rule with a separator of its own.
+  eq("and the sheet's box is that same attack with the weapon's range after it",
+    sheetFieldValues(MULTICLASSED, MULTICLASS_DB)["primary-trait-range"],
+    `${casterLine.split(": ")[1].split(" | ")[0]} | Far`);
+}
+
+group("The attack line, one clause of the rule at a time");
+{
+  // The entry weaponEntry() hands over, hand-built so each clause can be put in front of the
+  // function on its own — including the shapes no fixture db above produces.
+  const entry = (over) => ({ attack: "+3", traitLabel: "Agility", attackNamesTraits: false, ...over });
+
+  eq("bonus first, trait second: the number is a total with the trait already inside it",
+    attackText(entry()), "+3 Agility");
+  eq("and the sheet's spelling of the same line brackets that bonus",
+    attackText(entry(), { bracketBonus: true }), "(+3) Agility");
+  // A weapon record that loaded without a `trait` has no label, and neither has a bare-handed
+  // profile: an absent piece must not leave behind the space that separated it.
+  eq("no trait label leaves no trailing space", attackText(entry({ traitLabel: "" })), "+3");
+  // "(—)" reads like a number that got lost; "—" reads like one nobody can compute yet.
+  eq("a bonus that doesn't exist stays a bare dash, brackets asked for or not",
+    [attackText(entry({ attack: "—", traitLabel: "" })),
+      attackText(entry({ attack: "—", traitLabel: "" }), { bracketBonus: true })], ["—", "—"]);
+
+  const alternatives = entry({ attack: "(+2) Strength / (0) Finesse", attackNamesTraits: true, traitLabel: "" });
+  eq("an attack that names its own traits is left to name them", attackText(alternatives),
+    "(+2) Strength / (0) Finesse");
+  eq("and is not bracketed a second time by the sheet",
+    attackText(alternatives, { bracketBonus: true }), "(+2) Strength / (0) Finesse");
+  eq("a label on top of those is separated by a bracket, not welded onto the last trait named",
+    attackText({ ...alternatives, traitLabel: "Spellcast" }), "(+2) Strength / (0) Finesse (Spellcast)");
 }
 
 // ---------- report ----------

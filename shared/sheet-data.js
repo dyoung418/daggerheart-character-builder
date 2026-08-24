@@ -336,3 +336,42 @@ export function deriveSheet(character, db) {
     connections: character.connectionsNotes || "",
   };
 }
+
+/**
+ * One weapon entry's attack as a single string: the bonus, then the trait it's rolled with.
+ *
+ * The composition rule, not the arithmetic — the numbers are weaponEntry()'s, above, and this is
+ * the other half of the `attackNamesTraits` flag it sets, which exists for no other decision.
+ * Both printed pages compose that line, and before this they each spelled it out: the two were
+ * never textually identical, so the drift was silent. Change the separator on the card and the
+ * PDF sheet keeps the old one, and the same weapon on the same character reads two ways.
+ *
+ * Bonus first, trait second — "+3 Agility", not "Agility +3". The number is a TOTAL with the
+ * trait already inside it, and the other order reads as an instruction to add the two.
+ *
+ * When the attack string names traits of its own — a bare-handed profile's two, or a multiclass
+ * caster's two Spellcast traits — a trait label may STILL apply, and welding it on the end turns
+ * "(+3) Knowledge / (+2) Instinct" into a third alternative rolled with a trait called "Instinct
+ * Spellcast". The bracket is what separates them. A magic weapon's label is the sentinel
+ * "Spellcast", printed as written: that is what its card says, and which trait it resolved to is
+ * already in the bonus beside it. Alternatives print IN FULL — collapsing them to one number
+ * would be a printed page making the GM's per-roll call for them.
+ *
+ * `bracketBonus` is the one thing the two callers genuinely differ about, so it is a parameter
+ * rather than something one of them quietly erases. The official sheet brackets a lone bonus into
+ * the lead — "(+3) Agility | Close" — so that both kinds of weapon read the same way down a
+ * column of boxes; the card leaves it bare, "+3 Agility". A bonus that doesn't exist stays the
+ * dash weaponEntry handed over either way: "(—)" reads like a number that got lost rather than
+ * one nobody can compute yet.
+ */
+export function attackText(weapon, { bracketBonus = false } = {}) {
+  const lead = bracketBonus && !weapon.attackNamesTraits && weapon.attack !== "—"
+    ? `(${weapon.attack})`
+    : weapon.attack;
+  // join rather than interpolate: a bare-handed profile has no trait label at all, and neither
+  // does a record that loads under NAME_ONLY without a `trait` — weaponTraitText() answers "" for
+  // both — so an absent piece must not leave the space that separated it behind.
+  return weapon.attackNamesTraits && weapon.traitLabel
+    ? `${lead} (${weapon.traitLabel})`
+    : [lead, weapon.traitLabel].filter(Boolean).join(" ");
+}

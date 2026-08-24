@@ -52,11 +52,13 @@ import {
 import { closePopover, openModal } from "./shared/popover.js";
 import { classFeatureSections } from "./shared/class-detail.js";
 import { escapeHtml } from "./shared/escape.js";
-// The only import here that isn't from shared/, and deliberately so: card-pdf.js fetches art
-// and draws it on a canvas, which is exactly what shared/ modules are forbidden to do. Every
-// rule it applies — which cards, where they land on the page, what the generated cards say —
-// lives in the pure modules underneath it, where tests/ can reach it.
+// The two imports here that aren't from shared/, and deliberately so: card-pdf.js fetches art and
+// draws it on a canvas, sheet-pdf.js fetches the official sheet template — both of which shared/
+// modules are forbidden to do. Every rule either of them applies — which cards, where they land on
+// the page, what the generated cards say, what each field of the official sheet reads — lives in
+// the pure modules underneath them, where tests/ can reach it.
 import { buildCardPdf } from "./card-pdf.js";
+import { buildSheetPdf, sheetTemplate } from "./sheet-pdf.js";
 
 const signed = (n) => (n > 0 ? `+${n}` : String(n));
 
@@ -76,6 +78,7 @@ let importPlan = null; // parsed file awaiting collision resolution
 let importResolutions = null; // incoming character id -> keep-both | overwrite | skip
 let importDropped = 0; // entries in the file that weren't characters
 let importUndo = null; // { characters, undoSlot } captured before the last commit
+let sheetTemplateInstalled = false; // whether data/sheet/ holds the official sheet — see init()
 
 async function loadAllData() {
   content = await loadContent();
@@ -555,8 +558,8 @@ function renderDetail() {
   printSheetLink.textContent = "Print sheet";
   container.appendChild(printSheetLink);
 
-  // Beside Print sheet, because they're the two ways to get this character onto paper and the
-  // sheet is deliberately art-free. Detail view only: the roster row already carries four
+  // Beside Print sheet, because it's another way to get this character onto paper and the sheet
+  // is deliberately art-free. Detail view only: the roster row already carries four
   // buttons and a fifth wraps on a narrow screen, and the toolbar above the roster is for
   // exports that cover every character, which this one can't be — it's one character's deck.
   // Borrowing .detail-print-link because .btn-ghost is width: 100% and would otherwise drop
@@ -566,6 +569,22 @@ function renderDetail() {
     "btn-ghost detail-print-link detail-print-link--spaced",
     () => openCardPdfModal(ch),
   ));
+
+  // Third way onto paper, and the only one that isn't always here: filling the official sheet
+  // needs the official sheet, which is a copyrighted PDF that a public fork can't ship, so
+  // data/sheet/ is a symlink most people won't have. Absent rather than present-and-explaining —
+  // an export that can only ever tell you why it can't run isn't an export, and "what would I
+  // have to own to use this" is a README question, the way the card art already is (README:80).
+  //
+  // The flag is resolved in init() rather than read from a promise here, which is what keeps this
+  // render synchronous; that's the whole reason it's a module-level boolean and not a call.
+  if (sheetTemplateInstalled) {
+    container.appendChild(button(
+      "Fill official sheet (PDF)",
+      "btn-ghost detail-print-link detail-print-link--spaced",
+      () => openSheetPdfPicker(ch),
+    ));
+  }
 
   const cardsRow = document.createElement("div");
   cardsRow.className = "tile-grid";
@@ -930,39 +949,58 @@ function renderAll() {
 // The columns and the escaping live in shared/csv-export.js, which is DOM-free and tested.
 // What's left here is the parts that need a page: asking which export you want, and saving it.
 
+// One sentence, two pickers: the CSV export and the official-sheet export ask the same question
+// for the same reason, and two copies of it would drift apart the first time either is reworded.
+const LOADOUT_HINT = "Your loadout changes at every rest, so the bonuses it grants go stale on " +
+  "a printed sheet. Permanent only leaves them out, as if every card were in your vault.";
+
+// One row too, and for a sharper reason than the hint. The labels, their order and which one is
+// primary were character-for-character identical in the two pickers: reword the question in one
+// copy and you get two wordings, which reads as sloppy, but reorder the buttons in one copy and
+// the app asks the same question with the primary button meaning the opposite thing in two modals
+// one click apart. `onPick` is handed the choice; what happens to the modal afterwards is the
+// caller's business, and the two callers differ on it.
+//
 // Two sheets are possible and they disagree about the numbers, so the export asks rather than
-// picking. "With loadout bonuses" leads because it matches what every other screen shows.
+// picking. "Permanent only" leads because a printed sheet outlives the loadout that produced it:
+// the loadout is re-chosen at every rest, so the bonuses it adds are wrong by the next session.
+// Permanent isn't frozen either — Full Plate bought at downtime moves Armor Score, the thresholds,
+// Agility and Evasion with no level-up in sight ("armor:Very Heavy" in effects.js) — it's the half
+// that doesn't turn over at every rest, which is all the ordering claims. This used to lead with
+// "With loadout bonuses" on the grounds that it matches what every other screen shows, which was
+// true and beside the point: a screen re-renders when the loadout changes, and paper doesn't.
+function loadoutChoiceRow(onPick) {
+  const row = document.createElement("div");
+  row.className = "export-choices";
+  for (const [label, loadout, cls] of [
+    ["Permanent only", false, "btn-primary"],
+    ["With loadout bonuses", true, "btn-ghost"],
+  ]) {
+    row.appendChild(button(label, cls, () => onPick(loadout)));
+  }
+  return row;
+}
+
 function openExportPicker() {
   const body = document.createElement("div");
   const hint = document.createElement("p");
   hint.className = "hint";
-  hint.textContent = "Your loadout changes at every rest, so the bonuses it grants go stale on " +
-    "a printed sheet. Permanent only leaves them out, as if every card were in your vault.";
+  hint.textContent = LOADOUT_HINT;
   body.appendChild(hint);
 
-  const row = document.createElement("div");
-  row.className = "export-choices";
-  for (const [label, loadout, cls] of [
-    ["With loadout bonuses", true, "btn-primary"],
-    ["Permanent only", false, "btn-ghost"],
-  ]) {
-    const btn = document.createElement("button");
-    btn.className = cls;
-    btn.textContent = label;
-    btn.addEventListener("click", () => {
-      closePopover();
-      downloadCsv(loadout);
-    });
-    row.appendChild(btn);
-  }
-  body.appendChild(row);
+  // Closed on the way through: writing a CSV is a string and a Blob, so there is no failure left
+  // to report and nothing this body would be needed for.
+  body.appendChild(loadoutChoiceRow((loadout) => {
+    closePopover();
+    downloadCsv(loadout);
+  }));
 
   openModal("Export CSV for the GM", body);
 }
 
-// The only thing in the app that writes a file. All three exports go through it: the CSV and
-// the transfer file hand it a string, the card PDF hands it a Uint8Array. Blob takes either
-// without being told which, so nothing here has to branch — hence `data` rather than `text`.
+// The only thing in the app that writes a file. All four exports go through it: the CSV and the
+// transfer file hand it a string, the card PDF and the official sheet hand it a Uint8Array. Blob
+// takes either without being told which, so nothing here has to branch — hence `data`, not `text`.
 function downloadFile(filename, data, mime) {
   const blob = new Blob([data], { type: mime });
   const url = URL.createObjectURL(blob);
@@ -976,7 +1014,7 @@ function downloadFile(filename, data, mime) {
 }
 
 function downloadCsv(loadout) {
-  const stamp = new Date().toISOString().slice(0, 10);
+  const stamp = dateStamp();
   downloadFile(
     // Suffixed, so exporting both ways doesn't leave two files fighting over one name.
     `daggerheart-characters-${stamp}${loadout ? "" : "-permanent"}.csv`,
@@ -1038,7 +1076,7 @@ async function runCardPdf(ch, body, bar, line) {
       },
     });
   } catch (err) {
-    showCardPdfProblem(body, "The cards couldn't be rendered, so nothing was saved. " +
+    showExportProblem(body, "The cards couldn't be rendered, so nothing was saved. " +
       (err && err.message ? err.message : String(err)));
     return;
   }
@@ -1047,7 +1085,7 @@ async function runCardPdf(ch, body, bar, line) {
   // of saving one. Read off the result rather than counted again up here: which cards exist is
   // the card sheet's answer to give, and a second opinion is a second thing to get wrong.
   if (!result.cardCount) {
-    showCardPdfProblem(body, "There are no cards to print yet. Pick a class, an ancestry and at " +
+    showExportProblem(body, "There are no cards to print yet. Pick a class, an ancestry and at " +
       "least one domain card, then export again.");
     return;
   }
@@ -1056,17 +1094,21 @@ async function runCardPdf(ch, body, bar, line) {
   showCardPdfAdvice(body, result);
 }
 
-// Both endings rewrite the body of the modal that's already open rather than opening a new
+// Every ending rewrites the body of the modal that's already open rather than opening a new
 // one. If the render outlasted the modal — Escape, or the close button — this body is detached
 // and writing to it does nothing, which is the right outcome: reopening would shove a panel
 // back over whatever the user went off and did instead.
-function showCardPdfProblem(body, message) {
+//
+// Named for exports rather than for cards because both PDF exports fail into it, and the answer
+// is the same either way: a problem box and a Close button. A second copy under a second name
+// would be two places to fix the day the wording or the class name changes.
+function showExportProblem(body, message) {
   body.innerHTML = "";
   const box = document.createElement("div");
   box.className = "problem-box";
   box.textContent = message;
   body.appendChild(box);
-  appendCardPdfClose(body);
+  appendExportClose(body);
 }
 
 // The modal stays open on success. A self-closing one would fire the download and take the
@@ -1114,31 +1156,106 @@ function showCardPdfAdvice(body, result) {
     body.appendChild(note);
   }
 
-  appendCardPdfClose(body);
+  appendExportClose(body);
 }
 
-function appendCardPdfClose(body) {
+function appendExportClose(body) {
   const row = document.createElement("div");
   row.className = "export-choices";
   row.appendChild(button("Close", "btn-primary", closePopover));
   body.appendChild(row);
 }
 
-// daggerheart-cards-<name>-<stamp>.pdf, to sit beside daggerheart-characters-<stamp>.csv. The
-// download attribute would carry the name in full, but the filesystem it lands on may not, so
-// it's reduced to [a-z0-9-]. Accents are folded rather than dropped: without the NFD pass
-// Élodie saves as "lodie", which looks like the export mangled it.
-function cardPdfFilename(ch) {
-  const slug = (ch.name || "")
+// The download attribute would carry a character's name in full, but the filesystem it lands on
+// may not, so it's reduced to [a-z0-9-]. Accents are folded rather than dropped: without the NFD
+// pass Élodie saves as "lodie", which looks like the export mangled it. Shared by both PDF
+// exports, so one character can't slug two ways in one download folder.
+function characterSlug(ch) {
+  return (ch.name || "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  // Same stamp downloadCsv writes, for the same reason: today's print run shouldn't overwrite
-  // the one you did before you levelled up.
-  const stamp = new Date().toISOString().slice(0, 10);
-  return `daggerheart-cards-${slug || "character"}-${stamp}.pdf`;
+    .replace(/^-+|-+$/g, "") || "character";
+}
+
+// One stamp for every export that names a file — the CSV, the cards, the sheet — so today's run
+// can't overwrite the one you did before you levelled up. Shared rather than repeated because the
+// day this goes local (toISOString is UTC, so a 7pm PDT export stamps tomorrow) the three have to
+// move together, or one run writes two dates across the folder.
+const dateStamp = () => new Date().toISOString().slice(0, 10);
+
+// daggerheart-cards-<name>-<stamp>.pdf, to sit beside daggerheart-characters-<stamp>.csv.
+function cardPdfFilename(ch) {
+  return `daggerheart-cards-${characterSlug(ch)}-${dateStamp()}.pdf`;
+}
+
+// ---------- official sheet PDF export ----------
+//
+// The filled copy of the official Daggerheart character sheet. Everything with a rule in it — what
+// each of the sheet's named fields says, and every byte of the PDF — is in sheet-pdf.js and the
+// two pure modules it composes. What's left here is the parts that need a page: asking which of
+// the two sheets you want, saving the bytes, and saying so when it fails.
+//
+// The way in is in the detail view, and only when the template is installed; see renderDetail().
+// There is deliberately no roster-wide version: the official sheet is a page per character, so a
+// party of five is five files, and the export that covers everyone at once is the CSV.
+
+// The same question the CSV export asks, and it matters more here: a filled official sheet is
+// printed, then written on for a whole campaign, which is the longest any set of numbers this app
+// produces stays in use. "Permanent only" leads for that reason — see loadoutChoiceRow(), which
+// is where both pickers get their buttons, and the reason they can't disagree about the order.
+function openSheetPdfPicker(ch) {
+  const body = document.createElement("div");
+
+  const hint = document.createElement("p");
+  hint.className = "hint";
+  hint.textContent = LOADOUT_HINT;
+  body.appendChild(hint);
+
+  // The modal is NOT closed on the way through, unlike the CSV picker's: this export reads a file
+  // off disk and rewrites it, so it can fail, and showExportProblem() needs a body that is still
+  // on the page to write into. What replaces these buttons is runSheetPdf()'s business.
+  body.appendChild(loadoutChoiceRow((loadout) => runSheetPdf(ch, body, loadout)));
+
+  openModal("Fill official sheet (PDF)", body);
+}
+
+// Split out so the picker above is just markup: this is the half that can fail.
+async function runSheetPdf(ch, body, loadout) {
+  // The choice is replaced by a line saying what's happening rather than left sitting there. The
+  // work is a fetch plus a rewrite of a ~185KB file and is usually a blink, but on a cold cache
+  // two buttons that still look unclicked invite a second click, and a second click would export
+  // twice.
+  body.innerHTML = "";
+  const line = document.createElement("p");
+  line.className = "hint";
+  line.textContent = "Filling the sheet…";
+  body.appendChild(line);
+
+  let bytes;
+  try {
+    bytes = await buildSheetPdf(ch, db, { loadout });
+  } catch (err) {
+    showExportProblem(body, "The sheet couldn't be filled, so nothing was saved. " +
+      (err && err.message ? err.message : String(err)));
+    return;
+  }
+
+  downloadFile(sheetPdfFilename(ch), bytes, "application/pdf");
+  // Closed on success, unlike the card export's modal, which stays open because it has print
+  // settings to hand you — cards that don't fit a sleeve are the failure that advice exists to
+  // prevent. A filled sheet prints like any other page, so a panel that only said "done" would
+  // cost a click and give nothing back.
+  closePopover();
+}
+
+// daggerheart-sheet-<name>-<stamp>.pdf, beside daggerheart-cards-<name>-<stamp>.pdf. No
+// "-permanent" suffix, unlike the CSV: that export writes every character into one file, so both
+// variants plausibly sit in the same folder on the same day. This one is aimed at a printer, one
+// character at a time, and which of the two sheets you want is chosen once per print run.
+function sheetPdfFilename(ch) {
+  return `daggerheart-sheet-${characterSlug(ch)}-${dateStamp()}.pdf`;
 }
 
 // ---------- backup & transfer ----------
@@ -1451,7 +1568,16 @@ function clearImportState() {
 }
 
 async function init() {
-  await loadAllData();
+  // The template probe rides along with the content load rather than happening where it's used.
+  // renderDetail() is synchronous and has to KNOW whether to offer the official-sheet export, not
+  // wait to find out: awaiting it there would make the whole detail view async, and appending the
+  // button when the fetch lands would have it pop in a moment after everything else, which reads
+  // as a bug in the view rather than as a feature that's only sometimes there. Parallel, so it
+  // costs next to nothing — the content load is a manifest plus a file per source, this is one
+  // request — and the bytes are memoised in sheet-pdf.js, so the export itself reuses these rather
+  // than fetching the template a second time.
+  const [, template] = await Promise.all([loadAllData(), sheetTemplate()]);
+  sheetTemplateInstalled = template !== null;
   mountContentSettings(content);
   loadCharacters();
   // Returning from a level edit reopens the character with the history showing, so any

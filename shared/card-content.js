@@ -17,12 +17,15 @@
 //
 // PERMANENT BONUSES ONLY
 // ----------------------
-// See permanentSubject() below. This is the one rule on this card that a reader is most likely
-// to "fix" into a bug.
+// The stats on this card are derived from permanentSubject() — every card owned, none of them in
+// play — and derived-stats.js states that rule once for the three exports that share it. This is
+// the one rule on this card a reader is most likely to "fix" into a bug, so the reasoning is at
+// that function's definition, and the footer below is what tells a player why their Evasion here
+// differs from the app's.
 
 import { MAX_HOPE } from "./advancement.js";
-import { spellcastTraitKeys } from "./derived-stats.js";
-import { deriveSheet, flattenFeatures } from "./sheet-data.js";
+import { permanentSubject, spellcastTraitKeys } from "./derived-stats.js";
+import { attackText, deriveSheet, flattenFeatures } from "./sheet-data.js";
 import { titleCase } from "./text.js";
 
 // What deriveSheet() prints for a number it doesn't have. Repeated here rather than imported
@@ -88,29 +91,6 @@ function featureText(feature) {
     .map((block) => (block.type === "list" ? (block.items || []).map((i) => `${BULLET}${i}`).join(" ") : block.text))
     .filter(Boolean)
     .join(" ");
-}
-
-/**
- * The character as the printed card counts them: every card owned, none of them in the loadout.
- *
- * This is csv-export.js's mechanism verbatim (csvRowForCharacter's `loadout: false` branch) and
- * deliberately so — one substitution, and no second code path through derived-stats.js.
- *
- * Vaulting everything is not a trick: vaulted is what the rules already mean by "not in play".
- * A vaulted card contributes only if its effects entry says `permanent`, so Vitality and Master
- * of the Craft keep applying (effects.js marks them permanent — which is precisely where their
- * own text tells you to put the card), while Untouchable stops. The *-Touched requirement counts
- * loadout cards, so it falls to zero on its own with nothing here knowing those cards exist.
- *
- * The collection is NOT substituted, only the vault: which cards you own doesn't depend on where
- * they're sitting.
- *
- * Consequence, and why the footer note is not optional: this also unwinds Bare Bones, so an
- * unarmored character reads the SRD's unarmored numbers and the printed Evasion, thresholds and
- * Armor Score can be genuinely lower than what's in play.
- */
-function permanentSubject(character) {
-  return { ...character, domainVaultIds: character.domainCardIds || [] };
 }
 
 /**
@@ -224,16 +204,12 @@ export function statsCardContent(character, db) {
   const gear = [];
   const slotName = ["Primary weapon", "Secondary weapon"];
   s.weapons.forEach((weapon, i) => {
-    // Bonus first, trait second — "+1 Agility". The number already has the trait inside it, and
-    // the other order reads as an instruction to add the two. An unarmed profile's attack string
-    // is built that way round in derived-stats.js and names both traits itself, so traitLabel is
-    // empty for one; appending a trait there would name three.
-    // ...unless the attack string names traits itself AND a label still applies — a Spellcast
-    // weapon in the hands of a multiclass casting with two. Then the bracket separates them, the
-    // same way sheet.js prints it; without it the line ends "Instinct Spellcast".
-    const attack = weapon.attackNamesTraits && weapon.traitLabel
-      ? `${weapon.attack} (${weapon.traitLabel})`
-      : [weapon.attack, weapon.traitLabel].filter(Boolean).join(" ");
+    // "+1 Agility", and the whole rule — bonus first, when a trait label is welded on and when a
+    // bracket has to separate it — is sheet-data.js's attackText(), which the official sheet's
+    // form fields call too. A lone bonus stays BARE here: this line sits inside a sentence
+    // ("Longsword: +1 Agility | 2d10+3 Physical"), where the sheet's is one value in a column of
+    // boxes and brackets it to line up with the alternatives beside it.
+    const attack = attackText(weapon);
     const damage = [weapon.damage, weapon.damageType].filter(Boolean).join(" ");
     gear.push({ lead: `${slotName[i] || "Weapon"} -`, text: `${weapon.name}: ${attack} | ${damage}`,
       features: weapon.features });
