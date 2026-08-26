@@ -28,3 +28,27 @@ export function isPortrait(value) {
 export function sanitizePortrait(value) {
   return isPortrait(value) ? value : null;
 }
+
+// ---------- the part that needs a browser ----------
+
+// A File from <input type="file"> → a data URL small enough to save. Two quality passes and
+// no more: if 0.6 still doesn't fit, the picture is refused out loud instead of silently
+// eating everyone else's storage.
+export async function encodePortrait(file, { maxEdge = MAX_EDGE, maxBytes = MAX_BYTES } = {}) {
+  const bitmap = await createImageBitmap(file);
+  const { width, height } = fitWithin(bitmap.width, bitmap.height, maxEdge);
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  canvas.getContext("2d").drawImage(bitmap, 0, 0, width, height);
+  bitmap.close?.();
+
+  for (const quality of [0.8, 0.6]) {
+    let url = canvas.toDataURL("image/webp", quality);
+    // A browser that can't write WebP quietly hands back a PNG, which is far bigger: ask for
+    // JPEG instead rather than saving the PNG.
+    if (!url.startsWith("data:image/webp")) url = canvas.toDataURL("image/jpeg", quality);
+    if (url.length <= maxBytes && isPortrait(url)) return url;
+  }
+  throw new Error("too-big");
+}
