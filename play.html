@@ -2,20 +2,20 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta http-equiv="Content-Security-Policy" content="
     default-src 'self';
     script-src 'self';
-    style-src 'self' https://fonts.googleapis.com;
-    font-src https://fonts.gstatic.com;
+    style-src 'self';
+    font-src 'self';
     img-src 'self';
     connect-src 'self';
     object-src 'none';
     base-uri 'none';
     form-action 'none'" />
   <meta name="referrer" content="no-referrer" />
+  <meta name="theme-color" content="#18162e" />
   <title>Daggerheart — At the Table</title>
-  <link rel="stylesheet" href="style.css" />
   <link rel="stylesheet" href="play.css" />
 </head>
 <body class="play-body">
@@ -24,7 +24,7 @@
     <a id="print-link" href="#">Print sheet</a>
   </div>
 
-  <main id="play-root"></main>
+  <main id="play-root" class="play-sheet"></main>
 
   <script type="module" src="play.js"></script>
 </body>
