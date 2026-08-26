@@ -61,7 +61,15 @@ function onLongPress(node, run) {
   });
   for (const type of ["pointerup", "pointerleave", "pointercancel"]) node.addEventListener(type, stop);
   node.addEventListener("contextmenu", (e) => { e.preventDefault(); fire(); });
-  node.addEventListener("keydown", (e) => { if (e.altKey && e.key === "Enter") { e.preventDefault(); fire(); } });
+  node.addEventListener("keydown", (e) => {
+    if (!e.altKey || e.key !== "Enter") return;
+    e.preventDefault();
+    fire();
+    // preventDefault means no click follows this one, so nothing would consume the flag —
+    // and leaving it raised would swallow the next genuine Enter on any slot. The keyboard
+    // route has no tap underneath to suppress in the first place.
+    longPressFired = false;
+  });
 }
 
 function el(tag, className, text) {
@@ -608,7 +616,7 @@ async function init() {
     state = clampState(next, maxes);
     saveState(id, state);
     if (key === "hope") {
-      refreshHope();
+      refreshHope(`.hope-slot[data-slot="${value}"]`);
     } else {
       const fresh = renderStatus(sheet, state, maxes, onTap);
       panels.status.replaceChildren(...fresh.childNodes);
