@@ -73,6 +73,11 @@ const {
   toggleCondition,
 } = await import(`../shared/table-state.js${RUN}`);
 const {
+  LANGUAGES,
+  pickLanguage,
+  translator,
+} = await import(`../shared/i18n.js${RUN}`);
+const {
   EXPORT_FORMAT,
   exportFileName,
   importConflicts,
@@ -1343,6 +1348,24 @@ group("Hope & Fear (the_void release of daggerheart-data) is in data/");
     ancestries.filter((a) => a.id.startsWith("the_void_")).length === 6 && communities.filter((a) => a.id.startsWith("the_void_")).length === 6);
   check("no id collides with the core set", new Set(classes.map((c) => c.id)).size === classes.length && new Set(cards.map((c) => c.id)).size === cards.length);
   check("the core set is still complete (9 classes, 189 cards)", classes.filter((c) => c.id.startsWith("core_")).length === 9 && cards.filter((c) => c.id.startsWith("core_")).length === 189);
+}
+
+group("Play page labels: English by default, Italian when the page says lang=\"it\"");
+{
+  eq("the languages on offer", LANGUAGES, ["en", "it"]);
+  eq("a plain tag picks its dictionary", [pickLanguage("it"), pickLanguage("en")], ["it", "en"]);
+  eq("a regional tag picks the base language", pickLanguage("it-IT"), "it");
+  eq("anything unknown, empty or missing falls back to English", [pickLanguage("de"), pickLanguage(""), pickLanguage(undefined)], ["en", "en", "en"]);
+
+  const en = translator("en");
+  const it = translator("it");
+  eq("a key resolves in each language", [en("tab.status"), it("tab.status")], ["Status", "Stato"]);
+  eq("placeholders are filled", it("hope.of", { n: 2, max: 6 }), "Speranza: 2 su 6");
+  eq("an unknown key comes back as the key itself, never blank", it("nope.missing"), "nope.missing");
+  check("every English key has an Italian one — no half-translated page",
+    (() => { const missing = en.keys().filter((k) => it(k) === k && en(k) !== k); return missing.length === 0; })());
+  check("the three conditions are translated, label and effect",
+    ["vulnerable", "hidden", "restrained"].every((id) => it(`condition.${id}.label`) !== en(`condition.${id}.label`) && it(`condition.${id}.effect`) !== `condition.${id}.effect`));
 }
 
 // ---------- report ----------

@@ -10,15 +10,20 @@
 import { ensureLevelFields } from "./shared/advancement.js";
 import { deriveSheet } from "./shared/sheet-data.js";
 import { CONDITIONS, clampState, maxesFromSheet, tapBox, toggleCondition } from "./shared/table-state.js";
+import { pickLanguage, translator } from "./shared/i18n.js";
 
 const CHAR_STORAGE_KEY = "dh-characters-v1";
 const SVG = "http://www.w3.org/2000/svg";
 
+// Labels follow <html lang> (shared/i18n.js), or ?lang= when a player wants the other one;
+// game data stays in the data files' language.
+const t = translator(pickLanguage(new URLSearchParams(location.search).get("lang") || document.documentElement.lang));
+
 const TABS = [
-  { id: "status", label: "Status" },
-  { id: "weapons", label: "Weapons" },
-  { id: "cards", label: "Cards" },
-  { id: "features", label: "Features" },
+  { id: "status", label: "tab.status" },
+  { id: "weapons", label: "tab.weapons" },
+  { id: "cards", label: "tab.cards" },
+  { id: "features", label: "tab.features" },
 ];
 
 function el(tag, className, text) {
@@ -114,7 +119,7 @@ function renderHeader(s, character, domains, hope) {
 
   const nameRow = el("div", "play-name-row");
   nameRow.appendChild(el("h1", "play-name", s.name));
-  const level = el("span", "play-level", "Level");
+  const level = el("span", "play-level", t("level"));
   level.appendChild(el("strong", null, String(s.level)));
   nameRow.appendChild(level);
   head.appendChild(nameRow);
@@ -147,13 +152,13 @@ function renderHeader(s, character, domains, hope) {
 function renderHope(marked, max, onTap) {
   const box = el("div", "dh-pill dh-hope");
   box.setAttribute("role", "group");
-  box.setAttribute("aria-label", `Hope: ${marked} of ${max}`);
-  box.appendChild(el("span", "hope-label", "Hope"));
+  box.setAttribute("aria-label", t("hope.of", { n: marked, max }));
+  box.appendChild(el("span", "hope-label", t("hope")));
   for (let i = 0; i < max; i++) {
     const b = el("button", "hope-slot" + (i < marked ? " filled" : ""));
     b.type = "button";
     b.setAttribute("aria-pressed", String(i < marked));
-    b.setAttribute("aria-label", `Hope ${i + 1} of ${max}`);
+    b.setAttribute("aria-label", t("hope.one", { n: i + 1, max }));
     b.addEventListener("click", () => onTap("hope", i));
     box.appendChild(b);
   }
@@ -167,7 +172,7 @@ function renderTraits(s, character) {
     const item = el("div", "play-trait");
     const name = el("div", "trait-name", trait.label);
     const mark = el("span", "tier-mark" + (character.traitMarks?.[trait.key] ? " marked" : ""));
-    mark.title = "Marked this tier";
+    mark.title = t("trait.tierMark");
     name.prepend(mark);
     item.appendChild(name);
     const shield = el("div", "trait-shield");
@@ -175,7 +180,7 @@ function renderTraits(s, character) {
     shield.appendChild(el("span", "trait-value", trait.display));
     if (spellcastTrait === trait.key) {
       const sc = el("span", "spellcast-mark", "✦");
-      sc.title = "Spellcast trait";
+      sc.title = t("trait.spellcast");
       shield.appendChild(sc);
     }
     item.appendChild(shield);
@@ -192,7 +197,7 @@ function renderTabs(active, onSelect) {
   const nav = el("nav");
   nav.setAttribute("role", "tablist");
   for (const tab of TABS) {
-    const b = el("button", null, tab.label);
+    const b = el("button", null, t(tab.label));
     b.type = "button";
     b.setAttribute("role", "tab");
     b.setAttribute("aria-selected", String(tab.id === active));
@@ -212,7 +217,7 @@ function pipBar(key, label, marked, max, onTap, note) {
   const box = el("div", `dh-slot-value dh-${key}`);
   const bar = el("div", `dh-slot-bar ${key}`);
   bar.setAttribute("role", "group");
-  bar.setAttribute("aria-label", `${label}: ${marked} of ${max ?? "?"} marked`);
+  bar.setAttribute("aria-label", t("bar.of", { label, n: marked, max: max ?? "?" }));
   if (max === null || max === undefined) {
     bar.appendChild(el("span", "play-empty", "—"));
   } else {
@@ -220,7 +225,7 @@ function pipBar(key, label, marked, max, onTap, note) {
       const b = el("button", "dh-slot" + (i < marked ? " filled" : ""));
       b.type = "button";
       b.setAttribute("aria-pressed", String(i < marked));
-      b.setAttribute("aria-label", `${label} ${i + 1} of ${max}`);
+      b.setAttribute("aria-label", t("bar.one", { label, n: i + 1, max }));
       if (key === "armor") b.appendChild(armorShield());
       b.addEventListener("click", () => onTap(key, i));
       bar.appendChild(b);
@@ -247,10 +252,10 @@ function renderConditions(active, onToggle) {
   const box = el("section", "play-conditions");
   const chips = el("div", "play-chips");
   chips.setAttribute("role", "group");
-  chips.setAttribute("aria-label", "Conditions");
+  chips.setAttribute("aria-label", t("conditions"));
   for (const c of CONDITIONS) {
     const on = active.includes(c.id);
-    const b = el("button", "dh-chip" + (on ? " active" : ""), c.label);
+    const b = el("button", "dh-chip" + (on ? " active" : ""), t(`condition.${c.id}.label`));
     b.type = "button";
     b.setAttribute("aria-pressed", String(on));
     b.addEventListener("click", () => onToggle(c.id));
@@ -259,8 +264,8 @@ function renderConditions(active, onToggle) {
   box.appendChild(chips);
   for (const c of CONDITIONS.filter((c) => active.includes(c.id))) {
     const line = el("p", "play-condition-effect");
-    line.appendChild(el("strong", null, `${c.label} — `));
-    line.appendChild(document.createTextNode(c.effect));
+    line.appendChild(el("strong", null, `${t(`condition.${c.id}.label`)} — `));
+    line.appendChild(document.createTextNode(t(`condition.${c.id}.effect`)));
     box.appendChild(line);
   }
   return box;
@@ -269,12 +274,12 @@ function renderConditions(active, onToggle) {
 // Session notes: saved as you type (debounced), never cleared by the app.
 function renderNotes(notes, onChange) {
   const box = el("section", "play-notes");
-  box.appendChild(sectionTitle("Notes"));
+  box.appendChild(sectionTitle(t("notes")));
   const ta = el("textarea", "play-notes-field");
   ta.value = notes;
   ta.rows = 4;
-  ta.placeholder = "Session notes: temporary effects, debts, countdowns, who owes whom…";
-  ta.setAttribute("aria-label", "Session notes");
+  ta.placeholder = t("notes.placeholder");
+  ta.setAttribute("aria-label", t("notes.aria"));
   let timer = null;
   ta.addEventListener("input", () => {
     clearTimeout(timer);
@@ -289,41 +294,41 @@ function renderStatus(s, state, maxes, onTap) {
   const panel = el("div");
 
   const res = el("div", "play-resources");
-  res.appendChild(pipBar("hp", "HP", state.hp, maxes.hp, onTap, s.hitPointsNote));
-  res.appendChild(pipBar("stress", "Stress", state.stress, maxes.stress, onTap, s.stressNote));
+  res.appendChild(pipBar("hp", t("hp"), state.hp, maxes.hp, onTap, s.hitPointsNote));
+  res.appendChild(pipBar("stress", t("stress"), state.stress, maxes.stress, onTap, s.stressNote));
   panel.appendChild(res);
 
   const row = el("div", "play-status-row");
-  row.appendChild(statusNumber("Evasion", s.evasion));
-  row.appendChild(pipBar("armor", "Armor", state.armor, maxes.armor, onTap, s.armorScoreNote));
-  row.appendChild(statusNumber("Prof.", s.proficiency));
+  row.appendChild(statusNumber(t("evasion"), s.evasion));
+  row.appendChild(pipBar("armor", t("armor"), state.armor, maxes.armor, onTap, s.armorScoreNote));
+  row.appendChild(statusNumber(t("proficiency"), s.proficiency));
   panel.appendChild(row);
 
   const th = el("div", "dh-pill dh-thresholds");
-  th.appendChild(el("span", "th-label", "Minor"));
+  th.appendChild(el("span", "th-label", t("threshold.minor")));
   th.appendChild(el("span", "th-value", s.thresholds ? String(s.thresholds.major) : "—"));
-  th.appendChild(el("span", "th-label", "Major"));
+  th.appendChild(el("span", "th-label", t("threshold.major")));
   th.appendChild(el("span", "th-value", s.thresholds ? String(s.thresholds.severe) : "—"));
-  th.appendChild(el("span", "th-label", "Severe"));
+  th.appendChild(el("span", "th-label", t("threshold.severe")));
   panel.appendChild(th);
 
   panel.appendChild(renderConditions(state.conditions, (id) => onTap("condition", id)));
 
   if (s.spellcast) {
-    const sc = el("p", "dh-slot-note", `Spellcast: ${s.spellcast.display}${s.spellcast.note ? " — " + s.spellcast.note : ""}`);
+    const sc = el("p", "dh-slot-note", `${t("spellcast")}: ${s.spellcast.display}${s.spellcast.note ? " — " + s.spellcast.note : ""}`);
     panel.appendChild(sc);
   }
 
   if (s.unresolvedChoicePrompts.length) {
     const warn = el("div", "play-warning");
-    warn.appendChild(el("strong", null, "Unresolved choices — these grant nothing until answered:"));
+    warn.appendChild(el("strong", null, t("unresolved")));
     const list = el("ul");
     for (const p of s.unresolvedChoicePrompts) list.appendChild(el("li", null, p));
     warn.appendChild(list);
     panel.appendChild(warn);
   }
 
-  panel.appendChild(sectionTitle("Experience"));
+  panel.appendChild(sectionTitle(t("experience")));
   const exps = el("div", "play-experiences");
   for (const exp of s.experiences) {
     const row = el("div", "experience-row");
@@ -334,7 +339,7 @@ function renderStatus(s, state, maxes, onTap) {
     row.appendChild(el("span", "experience-name", exp.name));
     exps.appendChild(row);
   }
-  if (!s.experiences.length) exps.appendChild(el("p", "play-empty", "No experiences yet."));
+  if (!s.experiences.length) exps.appendChild(el("p", "play-empty", t("experience.none")));
   panel.appendChild(exps);
 
   panel.appendChild(renderNotes(state.notes, (text) => onTap("notes", text)));
@@ -377,7 +382,7 @@ function itemCard({ name, labels = [], roll, rollNote, features = [], withNames 
 
 function renderWeapons(s) {
   const panel = el("div");
-  panel.appendChild(sectionTitle("Weapons"));
+  panel.appendChild(sectionTitle(t("weapons")));
   for (const w of s.weapons) {
     panel.appendChild(itemCard({
       name: w.name,
@@ -388,33 +393,33 @@ function renderWeapons(s) {
       withNames: true,
     }));
   }
-  if (!s.weapons.length) panel.appendChild(el("p", "play-empty", "No weapon equipped."));
-  panel.appendChild(sectionTitle("Armor"));
+  if (!s.weapons.length) panel.appendChild(el("p", "play-empty", t("weapons.none")));
+  panel.appendChild(sectionTitle(t("armor")));
   panel.appendChild(itemCard({
     name: s.armorName,
-    labels: [s.thresholds ? `Thresholds ${s.thresholds.major} / ${s.thresholds.severe}` : ""],
+    labels: [s.thresholds ? t("armor.thresholds", { major: s.thresholds.major, severe: s.thresholds.severe }) : ""],
     roll: s.armorScore === null ? "—" : String(s.armorScore),
-    rollNote: "Armor Score",
+    rollNote: t("armor.score"),
     features: s.armorFeatures,
     withNames: true,
   }));
-  panel.appendChild(el("p", "dh-slot-note", `Potion: ${s.potionName}`));
+  panel.appendChild(el("p", "dh-slot-note", t("potion", { name: s.potionName })));
   return panel;
 }
 
 function renderCards(s) {
   const panel = el("div");
-  panel.appendChild(sectionTitle(`Loadout ${s.loadout.length}/5`));
+  panel.appendChild(sectionTitle(t("loadout", { n: s.loadout.length })));
   for (const card of s.loadout) {
     panel.appendChild(itemCard({
       name: card.name,
-      labels: [`Lv ${card.level}`, card.domain, card.type, `Recall ${card.recallCost}`],
+      labels: [t("card.level", { n: card.level }), card.domain, card.type, t("card.recall", { n: card.recallCost })],
       features: card.features,
       withNames: card.features.length > 1,
       className: `domain-${card.domainClass}`,
     }));
   }
-  if (!s.loadout.length) panel.appendChild(el("p", "play-empty", "No cards in loadout."));
+  if (!s.loadout.length) panel.appendChild(el("p", "play-empty", t("loadout.none")));
   return panel;
 }
 
@@ -427,26 +432,29 @@ function renderFeatures(s) {
       panel.appendChild(itemCard({ name: f.name, labels: [source ? source(f) : ""], features: [f] }));
     }
   };
-  group(`${s.className} — Hope feature`, s.hopeFeature ? [s.hopeFeature] : []);
+  group(t("features.hope", { cls: s.className }), s.hopeFeature ? [s.hopeFeature] : []);
   group(s.className, s.classFeatures);
   group(s.subclassName, s.subclassFeatures, (f) => f.source);
-  group("Ancestry", s.ancestryFeatures, (f) => f.source);
-  group("Community", s.communityFeatures, (f) => f.source);
-  if (!panel.childNodes.length) panel.appendChild(el("p", "play-empty", "No features yet."));
+  group(t("features.ancestry"), s.ancestryFeatures, (f) => f.source);
+  group(t("features.community"), s.communityFeatures, (f) => f.source);
+  if (!panel.childNodes.length) panel.appendChild(el("p", "play-empty", t("features.none")));
   return panel;
 }
 
 // ---------- page ----------
 
 function renderNotFound(root) {
-  root.appendChild(el("p", "hint", "Character not found."));
-  const link = el("a", null, "Back to My Characters");
+  root.appendChild(el("p", "hint", t("notfound")));
+  const link = el("a", null, t("notfound.back"));
   link.href = "characters.html";
   root.appendChild(link);
 }
 
 async function init() {
   const root = document.getElementById("play-root");
+  document.getElementById("nav-characters").textContent = t("nav.characters");
+  document.getElementById("print-link").textContent = t("nav.print");
+  document.title = `Daggerheart — ${t("title.play")}`;
   const db = await loadAllData();
 
   const id = new URLSearchParams(location.search).get("id");
@@ -456,7 +464,7 @@ async function init() {
     return;
   }
   document.getElementById("print-link").href = `sheet.html?id=${id}`;
-  document.title = `${character.name || "Character"} — At the Table`;
+  document.title = `${character.name || "Daggerheart"} — ${t("title.play")}`;
 
   const sheet = deriveSheet(character, db);
   const maxes = maxesFromSheet(sheet);
