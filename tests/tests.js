@@ -70,6 +70,14 @@ const {
   maxesFromSheet,
   tapBox,
 } = await import(`../shared/table-state.js${RUN}`);
+const {
+  EXPORT_FORMAT,
+  exportFileName,
+  importConflicts,
+  mergeImported,
+  parseImport,
+  serializeCharacters,
+} = await import(`../shared/transfer.js${RUN}`);
 
 // ---------- tiny runner ----------
 
@@ -1240,6 +1248,67 @@ group("Table state: boxes marked at the table (HP, Stress, Hope, Armor)");
   const kept = newCharacter();
   kept.state = { hp: 3, stress: 1, hope: 5, armor: 2 };
   eq("and leaves an existing state alone", ensureLevelFields(kept).state, { hp: 3, stress: 1, hope: 5, armor: 2 });
+}
+
+group("JSON transfer: one file format for one character or the whole list");
+{
+  const a = newCharacter(); a.id = "a"; a.name = "Aster";
+  const b = newCharacter(); b.id = "b"; b.name = "Brann Ferro";
+  const when = new Date("2026-08-26T10:00:00Z");
+
+  const text = serializeCharacters([a, b], when);
+  const parsed = JSON.parse(text);
+  eq("the envelope names the format, a version and the export time",
+    [parsed.format, parsed.version, parsed.exportedAt], [EXPORT_FORMAT, 1, "2026-08-26T10:00:00.000Z"]);
+  eq("and carries the characters as saved", parsed.characters.map((c) => c.id), ["a", "b"]);
+  check("the text is pretty-printed so a file is readable and diffable", text.includes("\n  "));
+
+  eq("parsing what serialize wrote gives the characters back", parseImport(text).characters.map((c) => c.name), ["Aster", "Brann Ferro"]);
+  eq("and no errors", parseImport(text).errors, []);
+
+  const old = JSON.stringify({ format: EXPORT_FORMAT, version: 1, characters: [{ id: "x", name: "Old", classId: "cls" }] });
+  check("an older character is backfilled on import (ensureLevelFields), not rejected",
+    parseImport(old).characters[0].levelUps !== undefined && parseImport(old).characters[0].state !== undefined);
+
+  has("not JSON at all is an error", parseImport("nope {").errors, "not valid JSON");
+  has("JSON that isn't one of these files is an error", parseImport(JSON.stringify({ hello: 1 })).errors, "not a Daggerheart character file");
+  has("a bare character object (no envelope) is refused too", parseImport(JSON.stringify(a)).errors, "not a Daggerheart character file");
+  has("an entry without an id is an error", parseImport(JSON.stringify({ format: EXPORT_FORMAT, version: 1, characters: [{ name: "No id" }] })).errors, "missing an id");
+  has("an entry that isn't an object is an error", parseImport(JSON.stringify({ format: EXPORT_FORMAT, version: 1, characters: [42] })).errors, "not a character");
+  eq("an empty list is fine (nothing to import, no error)", parseImport(JSON.stringify({ format: EXPORT_FORMAT, version: 1, characters: [] })), { characters: [], errors: [] });
+  has("a newer version than this app knows is refused, naming the version", parseImport(JSON.stringify({ format: EXPORT_FORMAT, version: 99, characters: [] })).errors, "version 99");
+}
+
+group("JSON transfer: merging an import into the saved list, by id");
+{
+  const a = newCharacter(); a.id = "a"; a.name = "Aster"; a.level = 1;
+  const b = newCharacter(); b.id = "b"; b.name = "Brann";
+  const a2 = newCharacter(); a2.id = "a"; a2.name = "Aster"; a2.level = 3;
+  const c = newCharacter(); c.id = "c"; c.name = "Cato";
+  const existing = [a, b];
+  const incoming = [a2, c];
+
+  eq("conflicts are the incoming characters whose id is already saved", importConflicts(existing, incoming).map((x) => x.id), ["a"]);
+  eq("no conflicts when every id is new", importConflicts(existing, [c]), []);
+
+  const replaced = mergeImported(existing, incoming, "replace");
+  eq("replace: the saved copy is overwritten in place, new ones appended",
+    replaced.map((x) => `${x.id}:${x.name}:${x.level}`), ["a:Aster:3", "b:Brann:1", "c:Cato:1"]);
+
+  let n = 0;
+  const copied = mergeImported(existing, incoming, "copy", () => `new${++n}`);
+  eq("copy: the saved copy stays, the incoming one gets a fresh id and a marker in its name",
+    copied.map((x) => `${x.id}:${x.name}:${x.level}`), ["a:Aster:1", "b:Brann:1", "new1:Aster (imported):3", "c:Cato:1"]);
+
+  check("merging never mutates the saved list", existing.length === 2 && existing[0].level === 1);
+  eq("importing the same file twice with replace is idempotent",
+    mergeImported(replaced, incoming, "replace").map((x) => x.id), ["a", "b", "c"]);
+
+  const stamp = "2026-08-26";
+  eq("one character is named after itself", exportFileName([b], stamp), "brann.json");
+  eq("odd characters in the name become dashes", exportFileName([{ name: "Ser Aëlwyn / the Bold!" }], stamp), "ser-aelwyn-the-bold.json");
+  eq("a nameless character still gets a file name", exportFileName([{ name: "" }], stamp), "character.json");
+  eq("the whole list is named by date, like the CSV", exportFileName([a, b], stamp), `daggerheart-characters-${stamp}.json`);
 }
 
 // ---------- report ----------

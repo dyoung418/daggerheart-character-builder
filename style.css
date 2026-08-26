@@ -508,6 +508,20 @@ h1, h2, h3, .btn-primary, .btn-ghost, .btn-small, .top-nav a {
 
 .characters-layout { padding: 1rem 1.5rem; }
 .export-csv-btn { width: auto; display: inline-block; margin-bottom: 1rem; }
+.transfer-bar { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.import-banner {
+  max-width: 700px;
+  margin: 0 0 1rem;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--panel);
+  font-size: 0.9rem;
+}
+.import-banner.error { border-color: #c0392b; }
+.import-banner p { margin: 0; }
+.import-banner .import-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.5rem; }
+.import-banner .import-actions .btn-small { width: auto; flex: none; }
 .characters-list { display: flex; flex-direction: column; gap: 0.6rem; max-width: 700px; }
 
 .character-row {

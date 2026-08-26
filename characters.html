@@ -27,7 +27,13 @@
   </header>
 
   <div class="characters-layout">
-    <button id="export-csv-btn" class="btn-ghost export-csv-btn">Export CSV for the GM</button>
+    <div class="transfer-bar">
+      <button id="export-csv-btn" class="btn-ghost export-csv-btn">Export CSV for the GM</button>
+      <button id="export-json-btn" class="btn-ghost export-csv-btn">Export JSON</button>
+      <button id="import-json-btn" class="btn-ghost export-csv-btn">Import JSON</button>
+      <input id="import-json-file" type="file" accept=".json,application/json" hidden />
+    </div>
+    <div id="import-banner" class="import-banner" hidden></div>
     <div id="characters-list" class="characters-list"></div>
     <div id="character-detail" class="character-detail"></div>
   </div>

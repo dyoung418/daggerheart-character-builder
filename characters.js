@@ -29,6 +29,7 @@ import { derivedStats } from "./shared/derived-stats.js";
 import { statLine } from "./shared/stat-line.js";
 import { unresolvedChoices } from "./shared/effects.js";
 import { escapeHtml } from "./shared/escape.js";
+import { exportFileName, importConflicts, mergeImported, parseImport, serializeCharacters } from "./shared/transfer.js";
 
 const signed = (n) => (n > 0 ? `+${n}` : String(n));
 
@@ -128,6 +129,7 @@ function renderList() {
         <a class="btn-small" href="play.html?id=${ch.id}">Play</a>
         <a class="btn-small" href="sheet.html?id=${ch.id}">Print sheet</a>
         <button class="btn-small" data-action="edit">Edit</button>
+        <button class="btn-small" data-action="export">Export</button>
         <button class="btn-small btn-danger" data-action="delete">Delete</button>
       `;
 
@@ -153,6 +155,7 @@ function renderList() {
     } else {
       row.querySelector('[data-action="view"]').addEventListener("click", () => { openId = ch.id; renderAll(); });
       row.querySelector('[data-action="edit"]').addEventListener("click", () => { location.href = `create.html?id=${ch.id}`; });
+      row.querySelector('[data-action="export"]').addEventListener("click", () => exportJson([ch]));
       row.querySelector('[data-action="delete"]').addEventListener("click", () => {
         pendingDeleteId = ch.id;
         renderAll();
@@ -506,6 +509,13 @@ function renderDetail() {
   printSheetLink.textContent = "Print sheet";
   container.appendChild(printSheetLink);
 
+  const exportBtn = document.createElement("button");
+  exportBtn.type = "button";
+  exportBtn.className = "btn-ghost detail-print-link";
+  exportBtn.textContent = "Export JSON";
+  exportBtn.addEventListener("click", () => exportJson([ch]));
+  container.appendChild(exportBtn);
+
   const cardsRow = document.createElement("div");
   cardsRow.className = "tile-grid";
   // Every subclass card the character has, not just the newest: a Specialization or Mastery
@@ -795,18 +805,107 @@ function buildCsv() {
   return lines.join("\r\n");
 }
 
-function exportCsv() {
-  const csv = "﻿" + buildCsv(); // BOM so Excel recognizes accented characters
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+function downloadText(text, type, filename) {
+  const blob = new Blob([text], { type });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  const stamp = new Date().toISOString().slice(0, 10);
   a.href = url;
-  a.download = `daggerheart-characters-${stamp}.csv`;
+  a.download = filename;
   document.body.appendChild(a);
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
+}
+
+function today() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function exportCsv() {
+  // BOM so Excel recognizes accented characters
+  downloadText("﻿" + buildCsv(), "text/csv;charset=utf-8;", `daggerheart-characters-${today()}.csv`);
+}
+
+// ---------- JSON import/export (shared/transfer.js) ----------
+// The round-trip between phones: a file with one character or the whole list. Everything
+// about the format and the merge lives in shared/transfer.js; this is the file dialog, the
+// download and the banner.
+
+function exportJson(list) {
+  downloadText(serializeCharacters(list), "application/json", exportFileName(list, today()));
+}
+
+function showImportBanner(text, { error = false, actions = [] } = {}) {
+  const banner = document.getElementById("import-banner");
+  banner.replaceChildren();
+  banner.className = "import-banner" + (error ? " error" : "");
+  banner.hidden = false;
+  const p = document.createElement("p");
+  p.textContent = text;
+  banner.appendChild(p);
+  if (actions.length) {
+    const row = document.createElement("div");
+    row.className = "import-actions";
+    for (const { label, onClick, danger } of actions) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "btn-small" + (danger ? " btn-danger" : "");
+      b.textContent = label;
+      b.addEventListener("click", onClick);
+      row.appendChild(b);
+    }
+    banner.appendChild(row);
+  }
+}
+
+function hideImportBanner() {
+  const banner = document.getElementById("import-banner");
+  banner.hidden = true;
+  banner.replaceChildren();
+}
+
+function applyImport(incoming, mode) {
+  characters = mergeImported(characters, incoming, mode);
+  saveCharacters();
+  pendingDeleteId = null;
+  renderAll();
+  const n = incoming.length;
+  showImportBanner(`Imported ${n} character${n === 1 ? "" : "s"}.`, {
+    actions: [{ label: "OK", onClick: hideImportBanner }],
+  });
+}
+
+function importText(text) {
+  const { characters: incoming, errors } = parseImport(text);
+  if (errors.length) {
+    showImportBanner(`Nothing imported. ${errors.join(" ")}`, { error: true, actions: [{ label: "OK", onClick: hideImportBanner }] });
+    return;
+  }
+  if (incoming.length === 0) {
+    showImportBanner("That file has no characters in it.", { error: true, actions: [{ label: "OK", onClick: hideImportBanner }] });
+    return;
+  }
+  const conflicts = importConflicts(characters, incoming);
+  if (conflicts.length === 0) {
+    applyImport(incoming, "replace");
+    return;
+  }
+  const names = conflicts.map((c) => c.name || "(unnamed)").join(", ");
+  showImportBanner(
+    `${conflicts.length === 1 ? "This character already exists" : `${conflicts.length} of these characters already exist`} here: ${names}. Replace the saved copy, or keep both?`,
+    {
+      actions: [
+        { label: "Replace", onClick: () => applyImport(incoming, "replace"), danger: true },
+        { label: "Keep both", onClick: () => applyImport(incoming, "copy") },
+        { label: "Cancel", onClick: hideImportBanner },
+      ],
+    },
+  );
+}
+
+async function importFromFile(file) {
+  if (!file) return;
+  importText(await file.text());
 }
 
 async function init() {
@@ -822,6 +921,13 @@ async function init() {
   }
   renderAll();
   document.getElementById("export-csv-btn").addEventListener("click", exportCsv);
+  document.getElementById("export-json-btn").addEventListener("click", () => exportJson(characters));
+  const fileInput = document.getElementById("import-json-file");
+  document.getElementById("import-json-btn").addEventListener("click", () => fileInput.click());
+  fileInput.addEventListener("change", async () => {
+    await importFromFile(fileInput.files[0]);
+    fileInput.value = ""; // so picking the same file again fires change
+  });
 }
 
 init();
