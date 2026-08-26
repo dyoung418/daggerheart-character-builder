@@ -9,7 +9,7 @@
 
 import { ensureLevelFields } from "./shared/advancement.js";
 import { deriveSheet } from "./shared/sheet-data.js";
-import { CONDITIONS, clampState, maxesFromSheet, tapBox, toggleCondition } from "./shared/table-state.js";
+import { CONDITIONS, clampState, maxesFromSheet, scarAt, tapBox, toggleCondition } from "./shared/table-state.js";
 import { pickLanguage, translator } from "./shared/i18n.js";
 
 const CHAR_STORAGE_KEY = "dh-characters-v1";
@@ -25,6 +25,32 @@ const TABS = [
   { id: "cards", label: "tab.cards" },
   { id: "features", label: "tab.features" },
 ];
+
+const LONG_PRESS_MS = 600;
+
+// A long press that also fires the click underneath would spend a Hope at the same time as it
+// scars the slot, so the click handler asks `pressed()` first and stands down when it says yes.
+// Touch and mouse both go through pointer events; the right-click and Alt+Enter routes are
+// there so the gesture isn't the only way in.
+function onLongPress(node, run) {
+  let timer = null;
+  let fired = false;
+  const start = () => {
+    fired = false;
+    timer = setTimeout(() => { fired = true; timer = null; run(); }, LONG_PRESS_MS);
+  };
+  const stop = () => { clearTimeout(timer); timer = null; };
+  const now = (e) => { e.preventDefault(); fired = true; run(); };
+  node.addEventListener("pointerdown", start);
+  node.addEventListener("pointerup", stop);
+  node.addEventListener("pointerleave", stop);
+  node.addEventListener("pointercancel", stop);
+  node.addEventListener("contextmenu", now);
+  node.addEventListener("keydown", (e) => { if (e.altKey && e.key === "Enter") now(e); });
+  // Reading the flag clears it: otherwise the Alt+Enter route would leave it raised and the
+  // next ordinary tap on that slot would be swallowed.
+  return () => { const was = fired; fired = false; return was; };
+}
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -164,19 +190,47 @@ function renderHeader(s, character, domains, hope) {
   return head;
 }
 
-function renderHope(marked, max, onTap) {
-  const box = el("div", "dh-pill dh-hope");
-  box.setAttribute("role", "group");
-  box.setAttribute("aria-label", t("hope.of", { n: marked, max }));
-  box.appendChild(el("span", "hope-label", t("hope")));
+// The Hope row, plus what a scar puts under it: the confirmation and, at the end of the road,
+// the line that says so. `pending` is the slot index waiting for a yes, or null.
+function renderHope(state, max, onTap, pending) {
+  const box = el("div", "dh-hope-box");
+  const pill = el("div", "dh-pill dh-hope");
+  pill.setAttribute("role", "group");
+  pill.setAttribute("aria-label", t("hope.of", { n: state.hope, max: max - state.scars }));
+  pill.appendChild(el("span", "hope-label", t("hope")));
+
+  const firstScarred = max - state.scars;
   for (let i = 0; i < max; i++) {
-    const b = el("button", "hope-slot" + (i < marked ? " filled" : ""));
+    const scarred = i >= firstScarred;
+    const b = el("button", "hope-slot" + (i < state.hope ? " filled" : "") + (scarred ? " scarred" : ""));
     b.type = "button";
-    b.setAttribute("aria-pressed", String(i < marked));
-    b.setAttribute("aria-label", t("hope.one", { n: i + 1, max }));
-    b.addEventListener("click", () => onTap("hope", i));
-    box.appendChild(b);
+    b.setAttribute("aria-pressed", String(i < state.hope));
+    b.setAttribute("aria-label", scarred ? t("hope.scarred", { n: i + 1, max }) : t("hope.one", { n: i + 1, max }));
+    b.setAttribute("aria-keyshortcuts", "Alt+Enter");
+    if (scarred) b.setAttribute("aria-disabled", "true");
+    const pressed = onLongPress(b, () => onTap("scar", i));
+    b.addEventListener("click", () => {
+      if (pressed() || scarred) return;
+      onTap("hope", i);
+    });
+    pill.appendChild(b);
   }
+  box.appendChild(pill);
+
+  if (pending !== null) {
+    const ask = el("div", "hope-confirm");
+    ask.appendChild(el("span", null, t("hope.scar.confirm")));
+    const yes = el("button", "hope-confirm-yes", t("hope.scar.yes"));
+    yes.type = "button";
+    yes.addEventListener("click", () => onTap("scar-confirm", pending));
+    const no = el("button", "hope-confirm-no", t("hope.scar.cancel"));
+    no.type = "button";
+    no.addEventListener("click", () => onTap("scar-cancel", null));
+    ask.append(yes, no);
+    box.appendChild(ask);
+  }
+
+  if (state.scars >= max && max > 0) box.appendChild(el("p", "hope-ended", t("hope.journeyEnds")));
   return box;
 }
 
@@ -493,6 +547,12 @@ async function init() {
 
   const panels = {};
   let hopeBox;
+  let pendingScar = null;
+  function refreshHope() {
+    const fresh = renderHope(state, maxes.hope ?? 0, onTap, pendingScar);
+    hopeBox.replaceWith(fresh);
+    hopeBox = fresh;
+  }
   // One entry point for every change at the table: a tapped box (key + index), a toggled
   // condition (key "condition" + id) or the notes (key "notes" + text). Notes don't redraw
   // the panel — the textarea being typed in would lose focus.
@@ -502,22 +562,41 @@ async function init() {
       saveState(id, state);
       return;
     }
+    // A scar is permanent, so adding one asks first; taking one back doesn't (that's the
+    // correction of a mistake, not a decision).
+    if (key === "scar" || key === "scar-confirm" || key === "scar-cancel") {
+      const max = maxes.hope ?? 0;
+      if (key === "scar-cancel") pendingScar = null;
+      else if (key === "scar-confirm") {
+        state = clampState({ ...state, scars: scarAt(state.scars, value, max) }, maxes);
+        saveState(id, state);
+        pendingScar = null;
+      } else {
+        const next = scarAt(state.scars, value, max);
+        if (next > state.scars) pendingScar = value;
+        else {
+          state = clampState({ ...state, scars: next }, maxes);
+          saveState(id, state);
+          pendingScar = null;
+        }
+      }
+      refreshHope();
+      return;
+    }
     const next = key === "condition"
       ? { ...state, conditions: toggleCondition(state.conditions, value) }
       : { ...state, [key]: tapBox(state[key], value) };
     state = clampState(next, maxes);
     saveState(id, state);
     if (key === "hope") {
-      const fresh = renderHope(state.hope, maxes.hope ?? 0, onTap);
-      hopeBox.replaceWith(fresh);
-      hopeBox = fresh;
+      refreshHope();
     } else {
       const fresh = renderStatus(sheet, state, maxes, onTap);
       panels.status.replaceChildren(...fresh.childNodes);
     }
   }
 
-  hopeBox = renderHope(state.hope, maxes.hope ?? 0, onTap);
+  hopeBox = renderHope(state, maxes.hope ?? 0, onTap, pendingScar);
   root.appendChild(renderHeader(sheet, character, domains, hopeBox));
 
   // The active tab lives in the URL hash so a reload (or a back-navigation) lands on it.
