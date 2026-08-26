@@ -1396,6 +1396,13 @@ group("Play page labels: English by default, Italian when the page says lang=\"i
     (() => { const missing = en.keys().filter((k) => it(k) === k && en(k) !== k); return missing.length === 0; })());
   check("the three conditions are translated, label and effect",
     ["vulnerable", "hidden", "restrained"].every((id) => it(`condition.${id}.label`) !== en(`condition.${id}.label`) && it(`condition.${id}.effect`) !== `condition.${id}.effect`));
+
+  eq("the scar words exist in both languages",
+    [en("hope.scar"), it("hope.scar")], ["Scar", "Cicatrice"]);
+  eq("the crossed-out slot says so in its label",
+    it("hope.scarred", { n: 6, max: 6 }), "Speranza 6 di 6, cicatrizzata");
+  eq("the end of the road is spelled out, not implied",
+    it("hope.journeyEnds"), "Il viaggio di questo personaggio finisce qui.");
 }
 
 group("Portrait: a picture small enough to live in localStorage");
