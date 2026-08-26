@@ -118,7 +118,7 @@ button { font: inherit; color: inherit; }
 
 /* Hope: diamonds you tap. A scar is a struck-out slot. */
 .dh-hope .hope-label { margin-right: 0.2rem; }
-.dh-hope .hope-slot { display: grid; place-items: center; width: 1.6rem; height: 1.7rem; margin: -0.25rem 0; padding: 0; border: 0; background: transparent; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.dh-hope .hope-slot { display: grid; place-items: center; width: 1.6rem; height: 1.7rem; margin: -0.25rem 0; padding: 0; border: 0; background: transparent; cursor: pointer; -webkit-tap-highlight-color: transparent; touch-action: manipulation; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
 .dh-hope .hope-slot::before { content: ""; width: 0.65rem; height: 0.65rem; border: 1.5px solid var(--dh-golden); border-radius: 50%; transition: transform 80ms ease, background 80ms ease; }
 .dh-hope .hope-slot.filled::before { border-radius: 1px; background: var(--dh-golden); transform: rotate(45deg) scale(0.95); }
 .dh-hope .hope-slot:active::before { transform: scale(0.8); }

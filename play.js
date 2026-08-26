@@ -28,28 +28,40 @@ const TABS = [
 
 const LONG_PRESS_MS = 600;
 
-// A long press that also fires the click underneath would spend a Hope at the same time as it
-// scars the slot, so the click handler asks `pressed()` first and stands down when it says yes.
-// Touch and mouse both go through pointer events; the right-click and Alt+Enter routes are
-// there so the gesture isn't the only way in.
+// A long press must not also fire the tap underneath — that would spend a Hope at the very
+// moment it scars the slot. The guard can't live in the button's own closure: acting on a long
+// press redraws the whole row, so the click that follows would land on a brand-new button that
+// never saw the press. One module-level flag, cleared at the start of every press and consumed
+// by whichever click arrives, is what actually holds.
+let longPressFired = false;
+
+// True once, right after a long press: the click the browser may still deliver is the tail of
+// that gesture, not a tap of its own.
+function longPressConsumed() {
+  const was = longPressFired;
+  longPressFired = false;
+  return was;
+}
+
 function onLongPress(node, run) {
   let timer = null;
-  let fired = false;
-  const start = () => {
-    fired = false;
-    timer = setTimeout(() => { fired = true; timer = null; run(); }, LONG_PRESS_MS);
-  };
   const stop = () => { clearTimeout(timer); timer = null; };
-  const now = (e) => { e.preventDefault(); fired = true; run(); };
-  node.addEventListener("pointerdown", start);
-  node.addEventListener("pointerup", stop);
-  node.addEventListener("pointerleave", stop);
-  node.addEventListener("pointercancel", stop);
-  node.addEventListener("contextmenu", now);
-  node.addEventListener("keydown", (e) => { if (e.altKey && e.key === "Enter") now(e); });
-  // Reading the flag clears it: otherwise the Alt+Enter route would leave it raised and the
-  // next ordinary tap on that slot would be swallowed.
-  return () => { const was = fired; fired = false; return was; };
+  // Always through here: contextmenu arrives while the pointerdown timer is still armed, and
+  // leaving it running would fire the whole thing a second time half a second later.
+  const fire = () => { stop(); longPressFired = true; run(); };
+  node.addEventListener("pointerdown", (e) => {
+    longPressFired = false;
+    if (!e.isPrimary) return;                                  // a second finger doesn't start a second timer
+    if (e.pointerType === "mouse" && e.button !== 0) return;    // right and middle click come as contextmenu
+    // Touch takes implicit pointer capture on pointerdown, which would swallow the leave event
+    // that tells us the finger slid off the slot to call the gesture off. Hand it back.
+    node.releasePointerCapture?.(e.pointerId);
+    stop();
+    timer = setTimeout(fire, LONG_PRESS_MS);
+  });
+  for (const type of ["pointerup", "pointerleave", "pointercancel"]) node.addEventListener(type, stop);
+  node.addEventListener("contextmenu", (e) => { e.preventDefault(); fire(); });
+  node.addEventListener("keydown", (e) => { if (e.altKey && e.key === "Enter") { e.preventDefault(); fire(); } });
 }
 
 function el(tag, className, text) {
@@ -208,9 +220,10 @@ function renderHope(state, max, onTap, pending) {
     b.setAttribute("aria-label", scarred ? t("hope.scarred", { n: i + 1, max }) : t("hope.one", { n: i + 1, max }));
     b.setAttribute("aria-keyshortcuts", "Alt+Enter");
     if (scarred) b.setAttribute("aria-disabled", "true");
-    const pressed = onLongPress(b, () => onTap("scar", i));
+    b.dataset.slot = String(i);
+    onLongPress(b, () => onTap("scar", i));
     b.addEventListener("click", () => {
-      if (pressed() || scarred) return;
+      if (longPressConsumed() || scarred) return;
       onTap("hope", i);
     });
     pill.appendChild(b);
@@ -219,6 +232,7 @@ function renderHope(state, max, onTap, pending) {
 
   if (pending !== null) {
     const ask = el("div", "hope-confirm");
+    ask.setAttribute("role", "alert");
     ask.appendChild(el("span", null, t("hope.scar.confirm")));
     const yes = el("button", "hope-confirm-yes", t("hope.scar.yes"));
     yes.type = "button";
@@ -548,10 +562,13 @@ async function init() {
   const panels = {};
   let hopeBox;
   let pendingScar = null;
-  function refreshHope() {
+  // Redrawing the row destroys the button that had the focus, so whoever plays from the
+  // keyboard would be dropped back to the top of the page. Say where the focus should land.
+  function refreshHope(focusSelector) {
     const fresh = renderHope(state, maxes.hope ?? 0, onTap, pendingScar);
     hopeBox.replaceWith(fresh);
     hopeBox = fresh;
+    if (focusSelector) fresh.querySelector(focusSelector)?.focus();
   }
   // One entry point for every change at the table: a tapped box (key + index), a toggled
   // condition (key "condition" + id) or the notes (key "notes" + text). Notes don't redraw
@@ -566,6 +583,7 @@ async function init() {
     // correction of a mistake, not a decision).
     if (key === "scar" || key === "scar-confirm" || key === "scar-cancel") {
       const max = maxes.hope ?? 0;
+      const wasPending = pendingScar;
       if (key === "scar-cancel") pendingScar = null;
       else if (key === "scar-confirm") {
         state = clampState({ ...state, scars: scarAt(state.scars, value, max) }, maxes);
@@ -580,7 +598,8 @@ async function init() {
           pendingScar = null;
         }
       }
-      refreshHope();
+      // Opening the confirmation moves the focus onto it; answering gives it back to the slot.
+      refreshHope(pendingScar === null ? `.hope-slot[data-slot="${key === "scar-cancel" ? wasPending : value}"]` : ".hope-confirm-yes");
       return;
     }
     const next = key === "condition"
