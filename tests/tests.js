@@ -88,7 +88,9 @@ const {
 } = await import(`../shared/transfer.js${RUN}`);
 const {
   MAX_BYTES,
+  MAX_DECODED_EDGE,
   MAX_EDGE,
+  decodedSize,
   fitWithin,
   isPortrait,
   sanitizePortrait,
@@ -1449,6 +1451,100 @@ group("Portrait: a picture small enough to live in localStorage");
   shipped.portrait = webp;
   eq("a portrait makes the round trip through an export file",
     parseImport(serializeCharacters([shipped])).characters[0].portrait, webp);
+}
+
+group("Portrait: a decompression bomb is caught by its header, before it ever decodes");
+{
+  // Bytes built by hand, one format at a time — no files on disk, no real image encoder.
+  // decodedSize only needs enough of the header to read the declared width and height; the
+  // rest of each format (pixel data, CRCs, Huffman tables) is never touched.
+  const u8 = (arr) => Uint8Array.from(arr);
+  const ascii = (s) => Array.from(s, (c) => c.charCodeAt(0));
+  const toDataUrl = (mime, bytes) => {
+    let binary = "";
+    for (const b of bytes) binary += String.fromCharCode(b);
+    return `data:${mime};base64,${btoa(binary)}`;
+  };
+  const u32be = (bytes, offset, value) => {
+    bytes[offset] = (value >>> 24) & 0xff;
+    bytes[offset + 1] = (value >>> 16) & 0xff;
+    bytes[offset + 2] = (value >>> 8) & 0xff;
+    bytes[offset + 3] = value & 0xff;
+  };
+  const u24le = (bytes, offset, value) => {
+    bytes[offset] = value & 0xff;
+    bytes[offset + 1] = (value >> 8) & 0xff;
+    bytes[offset + 2] = (value >> 16) & 0xff;
+  };
+
+  // PNG: signature, then the IHDR chunk with width at byte 16 and height at byte 20
+  // (big-endian, 4 bytes each). Nothing past byte 24 is read.
+  function pngHeader(width, height) {
+    const bytes = new Uint8Array(24);
+    bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 0);
+    bytes.set([0, 0, 0, 13], 8); // IHDR data length, unread by decodedSize
+    bytes.set(ascii("IHDR"), 12);
+    u32be(bytes, 16, width);
+    u32be(bytes, 20, height);
+    return bytes;
+  }
+
+  // JPEG: SOI, then an SOF0 marker directly (real files have DQT/APP0 segments first, but the
+  // scanner has to walk past those to find it — this fixture just puts SOF0 first). The segment
+  // length that follows the marker is never used by decodedSize when the marker IS a SOF, so it
+  //'s left as zeroes.
+  function jpegHeader(width, height) {
+    return u8([
+      0xff, 0xd8,
+      0xff, 0xc0, 0x00, 0x00,
+      0x08, // precision
+      (height >> 8) & 0xff, height & 0xff,
+      (width >> 8) & 0xff, width & 0xff,
+    ]);
+  }
+
+  // WebP VP8X (the "extended" chunk): RIFF/WEBP/VP8X headers, a flags byte, 3 reserved bytes,
+  // then the canvas width and height as 24-bit little-endian values, each one less than the
+  // real size.
+  function webpVp8xHeader(width, height) {
+    const bytes = new Uint8Array(30);
+    bytes.set(ascii("RIFF"), 0);
+    bytes.set(ascii("WEBP"), 8);
+    bytes.set(ascii("VP8X"), 12);
+    bytes[20] = 0; // flags
+    u24le(bytes, 24, width - 1);
+    u24le(bytes, 27, height - 1);
+    return bytes;
+  }
+
+  eq("the cap", MAX_DECODED_EDGE, 2048);
+
+  const pngSmall = toDataUrl("image/png", pngHeader(100, 100));
+  const pngHuge = toDataUrl("image/png", pngHeader(24000, 24000));
+  eq("PNG: a 100x100 header reads back its size", decodedSize(pngSmall), { width: 100, height: 100 });
+  eq("PNG: a 24000x24000 header reads back its size too", decodedSize(pngHuge), { width: 24000, height: 24000 });
+  eq("PNG: the small one is accepted", sanitizePortrait(pngSmall), pngSmall);
+  eq("PNG: the huge one is refused before it ever decodes", sanitizePortrait(pngHuge), null);
+
+  const jpegSmall = toDataUrl("image/jpeg", jpegHeader(100, 100));
+  const jpegHuge = toDataUrl("image/jpeg", jpegHeader(24000, 24000));
+  eq("JPEG: an SOF0 header reads back its size", decodedSize(jpegSmall), { width: 100, height: 100 });
+  eq("JPEG: a huge SOF0 header reads back its size too", decodedSize(jpegHuge), { width: 24000, height: 24000 });
+  eq("JPEG: the small one is accepted", sanitizePortrait(jpegSmall), jpegSmall);
+  eq("JPEG: the huge one is refused", sanitizePortrait(jpegHuge), null);
+
+  const webpSmall = toDataUrl("image/webp", webpVp8xHeader(100, 100));
+  const webpHuge = toDataUrl("image/webp", webpVp8xHeader(24000, 24000));
+  eq("WebP VP8X: a small canvas reads back its size", decodedSize(webpSmall), { width: 100, height: 100 });
+  eq("WebP VP8X: a huge canvas reads back its size too", decodedSize(webpHuge), { width: 24000, height: 24000 });
+  eq("WebP: the small one is accepted", sanitizePortrait(webpSmall), webpSmall);
+  eq("WebP: the huge one is refused", sanitizePortrait(webpHuge), null);
+
+  // A header that doesn't parse (too short, wrong signature) can't say it's oversized, so it's
+  // let through rather than dropping an honest file the decoder would have handled anyway.
+  eq("an unreadable header comes back null, not a false size", decodedSize("data:image/webp;base64,AAAA"), null);
+  eq("and sanitizePortrait accepts it rather than guessing", sanitizePortrait("data:image/webp;base64,AAAA"), "data:image/webp;base64,AAAA");
+  eq("a non-string is null, not a throw", decodedSize(42), null);
 }
 
 // ---------- report ----------
