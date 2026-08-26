@@ -1288,6 +1288,7 @@ group("Table state: boxes marked at the table (HP, Stress, Hope, Armor)");
   eq("long-pressing the leftmost crosses out the lot", scarAt(0, 0, 6), 6);
   eq("long-pressing the only crossed slot frees it", scarAt(1, 5, 6), 0);
   eq("long-pressing a crossed slot frees it and the crossed ones before it", scarAt(3, 4, 6), 1);
+  eq("long-pressing the leftmost crossed slot frees just that one, the ones after it stay", scarAt(3, 3, 6), 2);
   eq("long-pressing the rightmost (last) crossed slot frees them all", scarAt(3, 5, 6), 0);
 
   eq("scars ride along in the state", clampState({ scars: 2 }, maxes).scars, 2);
