@@ -15,8 +15,23 @@ export const HOPE_START = 2;
 
 export const RESOURCE_KEYS = ["hp", "stress", "hope", "armor"];
 
+// The SRD's three conditions, with the one line a player needs when one is on them.
+export const CONDITIONS = [
+  { id: "vulnerable", label: "Vulnerable", effect: "Rolls against you have advantage." },
+  { id: "hidden", label: "Hidden", effect: "Rolls against you have disadvantage, until you're seen, act or move into view." },
+  { id: "restrained", label: "Restrained", effect: "You can't move, but you can still act." },
+];
+
 export function defaultState() {
-  return { hp: 0, stress: 0, hope: HOPE_START, armor: 0 };
+  return { hp: 0, stress: 0, hope: HOPE_START, armor: 0, conditions: [], notes: "" };
+}
+
+// Returns the new list, in catalogue order; an unknown id is ignored.
+export function toggleCondition(conditions, id) {
+  if (!CONDITIONS.some((c) => c.id === id)) return conditions.slice();
+  const set = new Set(conditions);
+  if (set.has(id)) set.delete(id); else set.add(id);
+  return CONDITIONS.map((c) => c.id).filter((c) => set.has(c));
 }
 
 // Tapping box `index` (0-based) on a row with `marked` boxes filled: a box past the marked
@@ -27,7 +42,8 @@ export function tapBox(marked, index) {
 }
 
 // `maxes` is { hp, stress, hope, armor } from maxesFromSheet(); a null maximum (a draft with
-// no class or armor yet) means nothing can be marked there. Always returns a new object.
+// no class or armor yet) means nothing can be marked there. Conditions and notes ride along
+// (known ids only, in catalogue order; notes as a string). Always returns a new object.
 export function clampState(state, maxes) {
   const defaults = defaultState();
   const out = {};
@@ -37,6 +53,9 @@ export function clampState(state, maxes) {
     const max = maxes?.[key] ?? 0;
     out[key] = Math.min(value, max);
   }
+  const wanted = new Set(Array.isArray(state?.conditions) ? state.conditions : []);
+  out.conditions = CONDITIONS.map((c) => c.id).filter((id) => wanted.has(id));
+  out.notes = typeof state?.notes === "string" ? state.notes : "";
   return out;
 }
 

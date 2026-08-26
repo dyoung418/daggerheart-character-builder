@@ -63,12 +63,14 @@ const {
   deriveSheet,
 } = await import(`../shared/sheet-data.js${RUN}`);
 const {
+  CONDITIONS,
   HOPE_MAX,
   HOPE_START,
   clampState,
   defaultState,
   maxesFromSheet,
   tapBox,
+  toggleCondition,
 } = await import(`../shared/table-state.js${RUN}`);
 const {
   EXPORT_FORMAT,
@@ -1208,8 +1210,8 @@ group("Sheet stats agree with derivedStats() rather than re-deriving anything");
 
 group("Table state: boxes marked at the table (HP, Stress, Hope, Armor)");
 {
-  eq("a new character starts with nothing marked but the two starting Hope",
-    defaultState(), { hp: 0, stress: 0, hope: HOPE_START, armor: 0 });
+  eq("a new character starts with nothing marked but the two starting Hope, no conditions, no notes",
+    defaultState(), { hp: 0, stress: 0, hope: HOPE_START, armor: 0, conditions: [], notes: "" });
   eq("Hope starts at 2 and caps at 6, per the SRD", [HOPE_START, HOPE_MAX], [2, 6]);
 
   // Tapping is "fill up to here / clear from here on": one tap reaches any value.
@@ -1221,14 +1223,30 @@ group("Table state: boxes marked at the table (HP, Stress, Hope, Armor)");
 
   const maxes = { hp: 6, stress: 6, hope: HOPE_MAX, armor: 3 };
   eq("values within the maxima pass through untouched",
-    clampState({ hp: 2, stress: 1, hope: 4, armor: 3 }, maxes), { hp: 2, stress: 1, hope: 4, armor: 3 });
+    clampState({ hp: 2, stress: 1, hope: 4, armor: 3 }, maxes), { hp: 2, stress: 1, hope: 4, armor: 3, conditions: [], notes: "" });
   eq("a value above its maximum (e.g. armor swapped for a lighter one) is pulled down to it",
-    clampState({ hp: 9, stress: 0, hope: 7, armor: 5 }, maxes), { hp: 6, stress: 0, hope: 6, armor: 3 });
+    clampState({ hp: 9, stress: 0, hope: 7, armor: 5 }, maxes), { hp: 6, stress: 0, hope: 6, armor: 3, conditions: [], notes: "" });
+
+  // Conditions and notes ride along in the same state object: a clamp must keep them, or the
+  // first tap on an HP box would silently drop every condition marked.
+  eq("conditions and notes survive a clamp",
+    clampState({ hp: 1, stress: 0, hope: 2, armor: 0, conditions: ["hidden", "restrained"], notes: "owes Rya 2 gold" }, maxes),
+    { hp: 1, stress: 0, hope: 2, armor: 0, conditions: ["hidden", "restrained"], notes: "owes Rya 2 gold" });
+  eq("unknown condition ids and non-string entries are dropped, duplicates collapsed",
+    clampState({ conditions: ["vulnerable", "stunned", 3, "vulnerable"] }, maxes).conditions, ["vulnerable"]);
+  eq("non-string notes fall back to empty", clampState({ notes: 42 }, maxes).notes, "");
+
+  eq("the SRD's three conditions, each with the one line a player needs at the table",
+    CONDITIONS.map((c) => c.id), ["vulnerable", "hidden", "restrained"]);
+  check("every condition has a label and an effect", CONDITIONS.every((c) => c.label && c.effect));
+  eq("toggling a condition on adds it in catalogue order", toggleCondition(["restrained"], "vulnerable"), ["vulnerable", "restrained"]);
+  eq("toggling it again removes it", toggleCondition(["vulnerable", "restrained"], "vulnerable"), ["restrained"]);
+  eq("toggling an unknown id changes nothing", toggleCondition(["hidden"], "stunned"), ["hidden"]);
   eq("negative and non-numeric values fall back to the defaults",
     clampState({ hp: -1, stress: "x", hope: undefined, armor: null }, maxes), defaultState());
   eq("an unknown maximum (draft with no class yet) means nothing can be marked",
     clampState({ hp: 3, stress: 2, hope: 2, armor: 1 }, { hp: null, stress: 6, hope: 6, armor: null }),
-    { hp: 0, stress: 2, hope: 2, armor: 0 });
+    { hp: 0, stress: 2, hope: 2, armor: 0, conditions: [], notes: "" });
   eq("a missing state altogether clamps to the defaults", clampState(undefined, maxes), defaultState());
   check("clampState returns a new object rather than mutating its input", (() => {
     const input = { hp: 9, stress: 0, hope: 2, armor: 0 };

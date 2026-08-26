@@ -9,7 +9,7 @@
 
 import { ensureLevelFields } from "./shared/advancement.js";
 import { deriveSheet } from "./shared/sheet-data.js";
-import { clampState, maxesFromSheet, tapBox } from "./shared/table-state.js";
+import { CONDITIONS, clampState, maxesFromSheet, tapBox, toggleCondition } from "./shared/table-state.js";
 
 const CHAR_STORAGE_KEY = "dh-characters-v1";
 const SVG = "http://www.w3.org/2000/svg";
@@ -242,6 +242,49 @@ function statusNumber(label, value) {
   return box;
 }
 
+// The three SRD conditions as chips; the active ones spell out their effect underneath.
+function renderConditions(active, onToggle) {
+  const box = el("section", "play-conditions");
+  const chips = el("div", "play-chips");
+  chips.setAttribute("role", "group");
+  chips.setAttribute("aria-label", "Conditions");
+  for (const c of CONDITIONS) {
+    const on = active.includes(c.id);
+    const b = el("button", "dh-chip" + (on ? " active" : ""), c.label);
+    b.type = "button";
+    b.setAttribute("aria-pressed", String(on));
+    b.addEventListener("click", () => onToggle(c.id));
+    chips.appendChild(b);
+  }
+  box.appendChild(chips);
+  for (const c of CONDITIONS.filter((c) => active.includes(c.id))) {
+    const line = el("p", "play-condition-effect");
+    line.appendChild(el("strong", null, `${c.label} — `));
+    line.appendChild(document.createTextNode(c.effect));
+    box.appendChild(line);
+  }
+  return box;
+}
+
+// Session notes: saved as you type (debounced), never cleared by the app.
+function renderNotes(notes, onChange) {
+  const box = el("section", "play-notes");
+  box.appendChild(sectionTitle("Notes"));
+  const ta = el("textarea", "play-notes-field");
+  ta.value = notes;
+  ta.rows = 4;
+  ta.placeholder = "Session notes: temporary effects, debts, countdowns, who owes whom…";
+  ta.setAttribute("aria-label", "Session notes");
+  let timer = null;
+  ta.addEventListener("input", () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => onChange(ta.value), 300);
+  });
+  ta.addEventListener("blur", () => { clearTimeout(timer); onChange(ta.value); });
+  box.appendChild(ta);
+  return box;
+}
+
 function renderStatus(s, state, maxes, onTap) {
   const panel = el("div");
 
@@ -263,6 +306,8 @@ function renderStatus(s, state, maxes, onTap) {
   th.appendChild(el("span", "th-value", s.thresholds ? String(s.thresholds.severe) : "—"));
   th.appendChild(el("span", "th-label", "Severe"));
   panel.appendChild(th);
+
+  panel.appendChild(renderConditions(state.conditions, (id) => onTap("condition", id)));
 
   if (s.spellcast) {
     const sc = el("p", "dh-slot-note", `Spellcast: ${s.spellcast.display}${s.spellcast.note ? " — " + s.spellcast.note : ""}`);
@@ -291,6 +336,8 @@ function renderStatus(s, state, maxes, onTap) {
   }
   if (!s.experiences.length) exps.appendChild(el("p", "play-empty", "No experiences yet."));
   panel.appendChild(exps);
+
+  panel.appendChild(renderNotes(state.notes, (text) => onTap("notes", text)));
   return panel;
 }
 
@@ -423,8 +470,19 @@ async function init() {
 
   const panels = {};
   let hopeBox;
-  function onTap(key, index) {
-    state = clampState({ ...state, [key]: tapBox(state[key], index) }, maxes);
+  // One entry point for every change at the table: a tapped box (key + index), a toggled
+  // condition (key "condition" + id) or the notes (key "notes" + text). Notes don't redraw
+  // the panel — the textarea being typed in would lose focus.
+  function onTap(key, value) {
+    if (key === "notes") {
+      state = clampState({ ...state, notes: value }, maxes);
+      saveState(id, state);
+      return;
+    }
+    const next = key === "condition"
+      ? { ...state, conditions: toggleCondition(state.conditions, value) }
+      : { ...state, [key]: tapBox(state[key], value) };
+    state = clampState(next, maxes);
     saveState(id, state);
     if (key === "hope") {
       const fresh = renderHope(state.hope, maxes.hope ?? 0, onTap);

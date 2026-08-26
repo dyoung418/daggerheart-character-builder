@@ -209,6 +209,32 @@ button { font: inherit; color: inherit; }
 .dh-thresholds .th-label { font-size: 0.72rem; }
 .dh-thresholds .th-value { color: var(--dh-beige); font-size: 0.95rem; }
 
+/* Conditions: chips that fill gold when on, the effect line under the active ones. */
+.play-conditions { margin: 0.9rem 0 0.5rem; }
+.play-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.4rem; }
+.dh-chip {
+  min-height: 2.1rem; padding: 0.35rem 0.8rem;
+  border: 1px solid var(--dh-golden); border-radius: 999px;
+  background: var(--dh-golden-10); color: var(--dh-golden);
+  font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+  cursor: pointer; -webkit-tap-highlight-color: transparent; transition: background 80ms ease, color 80ms ease;
+}
+.dh-chip.active { background: var(--dh-golden); color: var(--dh-dark-blue); }
+.dh-chip:active { transform: scale(0.96); }
+.play-condition-effect { margin: 0.5rem 0 0; text-align: center; font-family: var(--dh-font-description); font-size: 0.82rem; color: var(--dh-beige); }
+.play-condition-effect strong { color: var(--dh-golden); font-family: var(--dh-font-body); font-weight: 600; }
+
+/* Session notes. */
+.play-notes-field {
+  display: block; width: 100%; min-height: 6rem; padding: 0.6rem 0.7rem;
+  border: 1px solid var(--dh-golden-40); border-radius: 6px;
+  background: #18162ec0; color: var(--dh-beige);
+  font-family: var(--dh-font-description); font-size: 0.9rem; line-height: 1.4;
+  resize: vertical;
+}
+.play-notes-field:focus { outline: none; border-color: var(--dh-golden); box-shadow: 0 0 0 2px var(--dh-golden-40); }
+.play-notes-field::placeholder { color: var(--dh-subtle); font-style: italic; }
+
 .play-experiences { display: flex; flex-direction: column; gap: 0.35rem; }
 .experience-row { display: flex; align-items: center; gap: 0.6rem; }
 .experience-value { position: relative; width: 2.2rem; height: 1.6rem; flex: none; display: grid; place-items: center; color: var(--dh-beige); font-size: 0.85rem; font-weight: 600; }
