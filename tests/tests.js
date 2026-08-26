@@ -1286,6 +1286,21 @@ group("Table state: boxes marked at the table (HP, Stress, Hope, Armor)");
   eq("and backfills scars onto an existing state that predates it, leaving the rest untouched",
     ensureLevelFields(kept).state, { hp: 3, stress: 1, hope: 5, armor: 2, scars: 0 });
 
+  // An imported file can say `"state": "x"` (or a number, or an array): not just missing, but
+  // the wrong shape entirely. Writing a field onto a primitive throws in strict mode, which
+  // would take the whole page down rather than just this one character's state.
+  for (const bad of ["rotto", 42, [], null]) {
+    const broken = newCharacter();
+    broken.state = bad;
+    check(`a primitive or array state (${JSON.stringify(bad)}) resets to defaultState() instead of throwing`, (() => {
+      try {
+        return JSON.stringify(ensureLevelFields(broken).state) === JSON.stringify(defaultState());
+      } catch {
+        return false;
+      }
+    })());
+  }
+
   // A scar crosses out a Hope slot for good (SRD, Avoid Death). They're always the slots at
   // the right-hand end, so scarring is tapBox seen from that end.
   eq("no scars to start with", defaultState().scars, 0);
@@ -1540,6 +1555,30 @@ group("Portrait: a decompression bomb is caught by its header, before it ever de
   eq("JPEG: a huge SOF0 header reads back its size too", decodedSize(jpegHuge), { width: 24000, height: 24000 });
   eq("JPEG: the small one is accepted", sanitizePortrait(jpegSmall), jpegSmall);
   eq("JPEG: the huge one is refused", sanitizePortrait(jpegHuge), null);
+
+  // A real photo's EXIF (plus a thumbnail) routinely pushes the SOF marker tens of kilobytes
+  // in — an APP1 segment, walked past the same way any other segment is. A short scan budget
+  // would give up on exactly these files and let the huge one through unread.
+  function jpegHeaderWithApp1(width, height, app1Size) {
+    const app1 = new Uint8Array(2 + app1Size); // marker (2) + length field, which counts itself
+    app1[0] = 0xff; app1[1] = 0xe1;
+    app1[2] = (app1Size >> 8) & 0xff;
+    app1[3] = app1Size & 0xff;
+    // app1[4..] stands in for the EXIF/thumbnail payload — content is never read, only skipped.
+    const sof0 = jpegHeader(width, height).slice(2); // drop jpegHeader's own leading SOI
+    const bytes = new Uint8Array(2 + app1.length + sof0.length);
+    bytes[0] = 0xff; bytes[1] = 0xd8; // SOI
+    bytes.set(app1, 2);
+    bytes.set(sof0, 2 + app1.length);
+    return bytes;
+  }
+  const jpegHugeWithExif = toDataUrl("image/jpeg", jpegHeaderWithApp1(24000, 24000, 8000));
+  const jpegSmallWithExif = toDataUrl("image/jpeg", jpegHeaderWithApp1(100, 100, 8000));
+  eq("JPEG: an 8KB APP1 segment ahead of SOF0 is walked past, size read correctly (huge)",
+    decodedSize(jpegHugeWithExif), { width: 24000, height: 24000 });
+  eq("JPEG: same APP1 size, a real photo's proportions", decodedSize(jpegSmallWithExif), { width: 100, height: 100 });
+  eq("JPEG: the huge one is refused even behind 8KB of EXIF", sanitizePortrait(jpegHugeWithExif), null);
+  eq("JPEG: the small one still passes with the same EXIF", sanitizePortrait(jpegSmallWithExif), jpegSmallWithExif);
 
   const webpSmall = toDataUrl("image/webp", webpVp8xHeader(100, 100));
   const webpHuge = toDataUrl("image/webp", webpVp8xHeader(24000, 24000));

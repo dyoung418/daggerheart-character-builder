@@ -198,7 +198,9 @@ export function ensureLevelFields(ch) {
   if (!ch.effectChoices) ch.effectChoices = {};
   // Boxes marked at the table (HP, Stress, Hope, Armor) — see shared/table-state.js. A
   // character saved before the play page existed starts clean, with the SRD's two Hope.
-  if (!ch.state) ch.state = defaultState();
+  // Not just missing: an imported file can say `"state": "x"`, and writing a field onto a
+  // primitive throws in strict mode — which would take down every page that opens this character.
+  if (!ch.state || typeof ch.state !== "object" || Array.isArray(ch.state)) ch.state = defaultState();
   // A character saved between the play page and the scars has a state without this field.
   if (!Number.isInteger(ch.state.scars) || ch.state.scars < 0) ch.state.scars = 0;
   // The portrait is the only field that comes from a file the app didn't write, so it's the

@@ -151,9 +151,10 @@ export function decodedSize(dataUrl) {
   const base64 = dataUrl.slice(comma + 1);
 
   if (dataUrl.startsWith("data:image/png;base64,")) return pngSize(decodeBase64Prefix(base64, 1024));
-  // JPEG can carry a few KB of EXIF/thumbnail/quantization data before the frame header, so it
-  // gets a bigger allowance than the other two formats before giving up.
-  if (dataUrl.startsWith("data:image/jpeg;base64,")) return jpegSize(decodeBase64Prefix(base64, 4096));
+  // A real photo carries its EXIF and thumbnail before the frame header, often tens of kilobytes
+  // of them, so a short prefix would give up exactly on the files worth checking. The whole
+  // payload is already capped at MAX_BYTES, so reading all of it costs nothing worth saving.
+  if (dataUrl.startsWith("data:image/jpeg;base64,")) return jpegSize(decodeBase64Prefix(base64, MAX_BYTES));
   if (dataUrl.startsWith("data:image/webp;base64,")) return webpSize(decodeBase64Prefix(base64, 1024));
   return null;
 }

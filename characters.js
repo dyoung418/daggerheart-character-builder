@@ -84,15 +84,25 @@ function saveCharacters() {
 }
 
 // Re-read, patch one character's portrait, write back — the same care play.js takes with the
-// marked boxes, for the same reason: the play page may have written to another tab's copy while
-// this list sat open, and the portrait is a new reason to come back here mid-session.
+// marked boxes, for the same reason: the play page may have written since this list was loaded,
+// and the portrait is a new reason to come back here mid-session. Returns false when nothing was
+// written, so the caller can put its own copy back instead of showing a portrait that isn't saved.
 function savePortrait(id, portrait) {
-  const raw = localStorage.getItem(CHAR_STORAGE_KEY);
-  const list = raw ? JSON.parse(raw) : [];
+  let list;
+  try {
+    const raw = localStorage.getItem(CHAR_STORAGE_KEY);
+    list = raw ? JSON.parse(raw) : [];
+  } catch {
+    return false;
+  }
   const target = list.find((c) => c.id === id);
-  if (!target) return;
+  if (!target) return false;
   if (portrait) target.portrait = portrait; else delete target.portrait;
   localStorage.setItem(CHAR_STORAGE_KEY, JSON.stringify(list));
+  // What's on disk is now ahead of what this page loaded; the next saveCharacters() would write
+  // the stale copy back over it.
+  loadCharacters();
+  return true;
 }
 
 function findClass(id) { return db.classes.find((c) => c.id === id); }
@@ -549,8 +559,19 @@ function renderDetail() {
     dropBtn.className = "btn-ghost detail-print-link";
     dropBtn.textContent = "Remove portrait";
     dropBtn.addEventListener("click", () => {
+      const before = ch.portrait;
       delete ch.portrait;
-      savePortrait(ch.id, null);
+      let saved = false;
+      try {
+        saved = savePortrait(ch.id, null);
+      } catch {
+        saved = false;
+      }
+      if (!saved) {
+        ch.portrait = before;
+        portraitProblem("The portrait couldn't be removed — the character may have been removed in another tab.");
+        return;
+      }
       renderAll();
     });
     container.appendChild(dropBtn);
@@ -971,8 +992,19 @@ function pickPortrait(id) {
   document.getElementById("portrait-file").click();
 }
 
+// Whether the banner currently showing is one of ours. An import conflict waiting for an answer
+// is not, and a portrait going well must not throw that question away.
+let portraitBannerUp = false;
+
 function portraitProblem(text) {
-  showImportBanner(text, { error: true, actions: [{ label: "OK", onClick: hideImportBanner }] });
+  portraitBannerUp = true;
+  showImportBanner(text, { error: true, actions: [{ label: "OK", onClick: () => { portraitBannerUp = false; hideImportBanner(); } }] });
+}
+
+function clearPortraitProblem() {
+  if (!portraitBannerUp) return;
+  portraitBannerUp = false;
+  hideImportBanner();
 }
 
 async function usePortraitFile(file) {
@@ -991,13 +1023,18 @@ async function usePortraitFile(file) {
   // old value back rather than leaving the list and what's on disk saying different things.
   const before = ch.portrait;
   ch.portrait = url;
+  let saved = false;
   try {
-    savePortrait(ch.id, url);
+    saved = savePortrait(ch.id, url);
   } catch {
+    saved = false;
+  }
+  if (!saved) {
     if (before) ch.portrait = before; else delete ch.portrait;
-    portraitProblem("No room left in this browser's storage. Export a character or two, remove them from the list, and try again.");
+    portraitProblem("The portrait couldn't be saved — this browser may be out of storage, or the character may have been removed in another tab.");
     return;
   }
+  clearPortraitProblem();
   renderAll();
 }
 
