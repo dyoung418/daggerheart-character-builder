@@ -18,6 +18,7 @@ import {
   subclassTiersUpTo,
   tierForLevel,
 } from "./shared/advancement.js";
+import { encodePortrait } from "./shared/portrait.js";
 import {
   describeCards,
   describeLevelUp,
@@ -469,6 +470,13 @@ function renderDetail() {
   const header = document.createElement("div");
   header.className = "detail-header";
   header.innerHTML = `<h2>${escapeHtml(ch.name || "(unnamed)")}</h2><p>${escapeHtml(ch.pronouns || "")} · Level ${escapeHtml(ch.level)}</p>`;
+  if (ch.portrait) {
+    const face = document.createElement("img");
+    face.className = "detail-portrait";
+    face.src = ch.portrait;
+    face.alt = "";
+    header.prepend(face);
+  }
   container.appendChild(header);
 
   // Levelling up on top of choices that no longer add up just compounds the problem, so
@@ -515,6 +523,26 @@ function renderDetail() {
   exportBtn.textContent = "Export JSON";
   exportBtn.addEventListener("click", () => exportJson([ch]));
   container.appendChild(exportBtn);
+
+  const portraitBtn = document.createElement("button");
+  portraitBtn.type = "button";
+  portraitBtn.className = "btn-ghost detail-print-link";
+  portraitBtn.textContent = ch.portrait ? "Replace portrait" : "Add portrait";
+  portraitBtn.addEventListener("click", () => pickPortrait(ch.id));
+  container.appendChild(portraitBtn);
+
+  if (ch.portrait) {
+    const dropBtn = document.createElement("button");
+    dropBtn.type = "button";
+    dropBtn.className = "btn-ghost detail-print-link";
+    dropBtn.textContent = "Remove portrait";
+    dropBtn.addEventListener("click", () => {
+      delete ch.portrait;
+      saveCharacters();
+      renderAll();
+    });
+    container.appendChild(dropBtn);
+  }
 
   const cardsRow = document.createElement("div");
   cardsRow.className = "tile-grid";
@@ -908,6 +936,45 @@ async function importFromFile(file) {
   importText(await file.text());
 }
 
+// Which character the hidden file input is about to serve. The input is one, shared, and
+// lives in the page rather than in the detail, so re-rendering the detail can't lose it
+// mid-dialog.
+let portraitTarget = null;
+
+function pickPortrait(id) {
+  portraitTarget = id;
+  document.getElementById("portrait-file").click();
+}
+
+function portraitProblem(text) {
+  showImportBanner(text, { error: true, actions: [{ label: "OK", onClick: hideImportBanner }] });
+}
+
+async function usePortraitFile(file) {
+  const ch = characters.find((c) => c.id === portraitTarget);
+  if (!file || !ch) return;
+  let url;
+  try {
+    url = await encodePortrait(file);
+  } catch {
+    portraitProblem("That picture couldn't be used. Pick a JPEG, PNG or WebP — a photo from the camera is fine.");
+    return;
+  }
+  // localStorage is a few megabytes for every character together, so a save can fail. Put the
+  // old value back rather than leaving the list and what's on disk saying different things.
+  const before = ch.portrait;
+  ch.portrait = url;
+  try {
+    saveCharacters();
+  } catch {
+    if (before) ch.portrait = before; else delete ch.portrait;
+    portraitProblem("No room left in this browser's storage. Export a character or two, remove them from the list, and try again.");
+    return;
+  }
+  hideImportBanner();
+  renderAll();
+}
+
 async function init() {
   await loadAllData();
   loadCharacters();
@@ -927,6 +994,12 @@ async function init() {
   fileInput.addEventListener("change", async () => {
     await importFromFile(fileInput.files[0]);
     fileInput.value = ""; // so picking the same file again fires change
+  });
+  const portraitInput = document.getElementById("portrait-file");
+  portraitInput.addEventListener("change", async () => {
+    const file = portraitInput.files[0];
+    portraitInput.value = ""; // so picking the same file again fires change
+    await usePortraitFile(file);
   });
 }
 
