@@ -18,6 +18,7 @@
   --c-blade: #c0392b;
   --c-bone: #8a7f6a;
   --c-codex: #3b6ea5;
+  --c-dread: #5b6b7a;
   --c-grace: #d472a6;
   --c-midnight: #4a3f80;
   --c-sage: #4f9d5c;
@@ -195,6 +196,7 @@ h1, h2, h3, .btn-primary, .btn-ghost, .btn-small, .top-nav a {
 .card-art.domain-blade.art-missing { border-color: var(--c-blade); }
 .card-art.domain-bone.art-missing { border-color: var(--c-bone); }
 .card-art.domain-codex.art-missing { border-color: var(--c-codex); }
+.card-art.domain-dread.art-missing { border-color: var(--c-dread); }
 .card-art.domain-grace.art-missing { border-color: var(--c-grace); }
 .card-art.domain-midnight.art-missing { border-color: var(--c-midnight); }
 .card-art.domain-sage.art-missing { border-color: var(--c-sage); }

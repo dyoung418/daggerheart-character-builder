@@ -1329,6 +1329,22 @@ group("JSON transfer: merging an import into the saved list, by id");
   eq("the whole list is named by date, like the CSV", exportFileName([a, b], stamp), `daggerheart-characters-${stamp}.json`);
 }
 
+group("Hope & Fear (the_void release of daggerheart-data) is in data/");
+{
+  const load = async (name) => (await fetch(`../data/${name}.json${RUN}`)).json();
+  const [classes, subclasses, ancestries, communities, cards] = await Promise.all(
+    ["classes", "subclasses", "ancestries", "communities", "domain-cards"].map(load));
+  const voidClasses = classes.filter((c) => c.id.startsWith("the_void_class_"));
+  eq("the four classes", voidClasses.map((c) => c.name).sort(), ["ASSASSIN", "BRAWLER", "WARLOCK", "WITCH"]);
+  check("each of them has two subclasses keyed by class name, the way the wizard looks them up",
+    voidClasses.every((c) => subclasses.filter((s) => s.class === c.name).length === 2));
+  check("the 21 Dread domain cards, levels 1 to 10", cards.filter((c) => c.domain === "DREAD").length === 21);
+  check("the six ancestries and six communities",
+    ancestries.filter((a) => a.id.startsWith("the_void_")).length === 6 && communities.filter((a) => a.id.startsWith("the_void_")).length === 6);
+  check("no id collides with the core set", new Set(classes.map((c) => c.id)).size === classes.length && new Set(cards.map((c) => c.id)).size === cards.length);
+  check("the core set is still complete (9 classes, 189 cards)", classes.filter((c) => c.id.startsWith("core_")).length === 9 && cards.filter((c) => c.id.startsWith("core_")).length === 189);
+}
+
 // ---------- report ----------
 
 const results = document.getElementById("results");
