@@ -62,6 +62,14 @@ const {
 const {
   deriveSheet,
 } = await import(`../shared/sheet-data.js${RUN}`);
+const {
+  HOPE_MAX,
+  HOPE_START,
+  clampState,
+  defaultState,
+  maxesFromSheet,
+  tapBox,
+} = await import(`../shared/table-state.js${RUN}`);
 
 // ---------- tiny runner ----------
 
@@ -1188,6 +1196,50 @@ group("Sheet stats agree with derivedStats() rather than re-deriving anything");
   const capped = deriveSheet(sheetChar({ equipment: { weaponMode: "two-handed", armorId: "absurd" } }), EFFECT_DB);
   eq("Armor Score is capped at 12, not printed as the raw baseScore of 40", capped.armorScore, 12);
   check("and the cap is explained in a note the printed page can show", !!capped.armorScoreNote);
+}
+
+group("Table state: boxes marked at the table (HP, Stress, Hope, Armor)");
+{
+  eq("a new character starts with nothing marked but the two starting Hope",
+    defaultState(), { hp: 0, stress: 0, hope: HOPE_START, armor: 0 });
+  eq("Hope starts at 2 and caps at 6, per the SRD", [HOPE_START, HOPE_MAX], [2, 6]);
+
+  // Tapping is "fill up to here / clear from here on": one tap reaches any value.
+  eq("tapping an empty box marks every box up to and including it", tapBox(0, 2), 3);
+  eq("tapping the box right after the marked ones marks one more", tapBox(2, 2), 3);
+  eq("tapping the last marked box clears just that one", tapBox(3, 2), 2);
+  eq("tapping an earlier marked box clears it and everything after", tapBox(5, 1), 1);
+  eq("tapping the first box when it's the only one marked clears everything", tapBox(1, 0), 0);
+
+  const maxes = { hp: 6, stress: 6, hope: HOPE_MAX, armor: 3 };
+  eq("values within the maxima pass through untouched",
+    clampState({ hp: 2, stress: 1, hope: 4, armor: 3 }, maxes), { hp: 2, stress: 1, hope: 4, armor: 3 });
+  eq("a value above its maximum (e.g. armor swapped for a lighter one) is pulled down to it",
+    clampState({ hp: 9, stress: 0, hope: 7, armor: 5 }, maxes), { hp: 6, stress: 0, hope: 6, armor: 3 });
+  eq("negative and non-numeric values fall back to the defaults",
+    clampState({ hp: -1, stress: "x", hope: undefined, armor: null }, maxes), defaultState());
+  eq("an unknown maximum (draft with no class yet) means nothing can be marked",
+    clampState({ hp: 3, stress: 2, hope: 2, armor: 1 }, { hp: null, stress: 6, hope: 6, armor: null }),
+    { hp: 0, stress: 2, hope: 2, armor: 0 });
+  eq("a missing state altogether clamps to the defaults", clampState(undefined, maxes), defaultState());
+  check("clampState returns a new object rather than mutating its input", (() => {
+    const input = { hp: 9, stress: 0, hope: 2, armor: 0 };
+    clampState(input, maxes);
+    return input.hp === 9;
+  })());
+
+  eq("the maxima come from the derived sheet: HP, Stress, Hope slots and Armor Score (= armor slots)",
+    maxesFromSheet({ hitPoints: 7, stress: 6, hopeSlots: 6, armorScore: 3 }),
+    { hp: 7, stress: 6, hope: 6, armor: 3 });
+  eq("unknown sheet values stay null so the UI can show a dash",
+    maxesFromSheet({ hitPoints: null, stress: 6, hopeSlots: 6, armorScore: null }),
+    { hp: null, stress: 6, hope: 6, armor: null });
+
+  eq("ensureLevelFields backfills the table state on characters saved before it existed",
+    ensureLevelFields(newCharacter()).state, defaultState());
+  const kept = newCharacter();
+  kept.state = { hp: 3, stress: 1, hope: 5, armor: 2 };
+  eq("and leaves an existing state alone", ensureLevelFields(kept).state, { hp: 3, stress: 1, hope: 5, armor: 2 });
 }
 
 // ---------- report ----------

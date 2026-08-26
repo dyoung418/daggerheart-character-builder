@@ -125,6 +125,7 @@ function renderList() {
       `
       : `
         <button class="btn-small" data-action="view">Sheet</button>
+        <a class="btn-small" href="play.html?id=${ch.id}">Play</a>
         <a class="btn-small" href="sheet.html?id=${ch.id}">Print sheet</a>
         <button class="btn-small" data-action="edit">Edit</button>
         <button class="btn-small btn-danger" data-action="delete">Delete</button>
@@ -493,8 +494,14 @@ function renderDetail() {
     container.appendChild(levelUpBtn);
   }
 
+  const playLink = document.createElement("a");
+  playLink.className = "btn-ghost detail-print-link" + (ch.level < 10 ? " detail-print-link--spaced" : "");
+  playLink.href = `play.html?id=${ch.id}`;
+  playLink.textContent = "Play";
+  container.appendChild(playLink);
+
   const printSheetLink = document.createElement("a");
-  printSheetLink.className = "btn-ghost detail-print-link" + (ch.level < 10 ? " detail-print-link--spaced" : "");
+  printSheetLink.className = "btn-ghost detail-print-link";
   printSheetLink.href = `sheet.html?id=${ch.id}`;
   printSheetLink.textContent = "Print sheet";
   container.appendChild(printSheetLink);

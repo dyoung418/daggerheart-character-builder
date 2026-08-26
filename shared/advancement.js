@@ -3,6 +3,8 @@
 // Multiclassing is NOT implemented (deliberate scope cut: rare in practice, adds
 // disproportionate data/UI complexity for a personal-scale tool).
 
+import { defaultState } from "./table-state.js";
+
 // NEW slots that unlock starting at each tier (cumulative, not replaced: at tier 3
 // you have tier 2's slots plus the new tier 3 ones, and so on).
 export const TIER_SLOT_TABLE = {
@@ -193,6 +195,9 @@ export function ensureLevelFields(ch) {
   // of the Craft. Keyed by the shared/effects.js key that asked. Missing answers are shown as a
   // nudge on the sheet, never enforced — characters saved before this existed must stay editable.
   if (!ch.effectChoices) ch.effectChoices = {};
+  // Boxes marked at the table (HP, Stress, Hope, Armor) — see shared/table-state.js. A
+  // character saved before the play page existed starts clean, with the SRD's two Hope.
+  if (!ch.state) ch.state = defaultState();
   // The cards picked during character creation, kept apart from the ones gained on level up so
   // the creation wizard can edit them without touching the rest of the collection.
   //
