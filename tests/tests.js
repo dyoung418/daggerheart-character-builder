@@ -69,6 +69,7 @@ const {
   clampState,
   defaultState,
   maxesFromSheet,
+  scarAt,
   tapBox,
   toggleCondition,
 } = await import(`../shared/table-state.js${RUN}`);
@@ -1223,7 +1224,7 @@ group("Sheet stats agree with derivedStats() rather than re-deriving anything");
 group("Table state: boxes marked at the table (HP, Stress, Hope, Armor)");
 {
   eq("a new character starts with nothing marked but the two starting Hope, no conditions, no notes",
-    defaultState(), { hp: 0, stress: 0, hope: HOPE_START, armor: 0, conditions: [], notes: "" });
+    defaultState(), { hp: 0, stress: 0, hope: HOPE_START, armor: 0, scars: 0, conditions: [], notes: "" });
   eq("Hope starts at 2 and caps at 6, per the SRD", [HOPE_START, HOPE_MAX], [2, 6]);
 
   // Tapping is "fill up to here / clear from here on": one tap reaches any value.
@@ -1235,15 +1236,15 @@ group("Table state: boxes marked at the table (HP, Stress, Hope, Armor)");
 
   const maxes = { hp: 6, stress: 6, hope: HOPE_MAX, armor: 3 };
   eq("values within the maxima pass through untouched",
-    clampState({ hp: 2, stress: 1, hope: 4, armor: 3 }, maxes), { hp: 2, stress: 1, hope: 4, armor: 3, conditions: [], notes: "" });
+    clampState({ hp: 2, stress: 1, hope: 4, armor: 3 }, maxes), { hp: 2, stress: 1, hope: 4, armor: 3, scars: 0, conditions: [], notes: "" });
   eq("a value above its maximum (e.g. armor swapped for a lighter one) is pulled down to it",
-    clampState({ hp: 9, stress: 0, hope: 7, armor: 5 }, maxes), { hp: 6, stress: 0, hope: 6, armor: 3, conditions: [], notes: "" });
+    clampState({ hp: 9, stress: 0, hope: 7, armor: 5 }, maxes), { hp: 6, stress: 0, hope: 6, armor: 3, scars: 0, conditions: [], notes: "" });
 
   // Conditions and notes ride along in the same state object: a clamp must keep them, or the
   // first tap on an HP box would silently drop every condition marked.
   eq("conditions and notes survive a clamp",
     clampState({ hp: 1, stress: 0, hope: 2, armor: 0, conditions: ["hidden", "restrained"], notes: "owes Rya 2 gold" }, maxes),
-    { hp: 1, stress: 0, hope: 2, armor: 0, conditions: ["hidden", "restrained"], notes: "owes Rya 2 gold" });
+    { hp: 1, stress: 0, hope: 2, armor: 0, scars: 0, conditions: ["hidden", "restrained"], notes: "owes Rya 2 gold" });
   eq("unknown condition ids and non-string entries are dropped, duplicates collapsed",
     clampState({ conditions: ["vulnerable", "stunned", 3, "vulnerable"] }, maxes).conditions, ["vulnerable"]);
   eq("non-string notes fall back to empty", clampState({ notes: 42 }, maxes).notes, "");
@@ -1258,7 +1259,7 @@ group("Table state: boxes marked at the table (HP, Stress, Hope, Armor)");
     clampState({ hp: -1, stress: "x", hope: undefined, armor: null }, maxes), defaultState());
   eq("an unknown maximum (draft with no class yet) means nothing can be marked",
     clampState({ hp: 3, stress: 2, hope: 2, armor: 1 }, { hp: null, stress: 6, hope: 6, armor: null }),
-    { hp: 0, stress: 2, hope: 2, armor: 0, conditions: [], notes: "" });
+    { hp: 0, stress: 2, hope: 2, armor: 0, scars: 0, conditions: [], notes: "" });
   eq("a missing state altogether clamps to the defaults", clampState(undefined, maxes), defaultState());
   check("clampState returns a new object rather than mutating its input", (() => {
     const input = { hp: 9, stress: 0, hope: 2, armor: 0 };
@@ -1278,6 +1279,28 @@ group("Table state: boxes marked at the table (HP, Stress, Hope, Armor)");
   const kept = newCharacter();
   kept.state = { hp: 3, stress: 1, hope: 5, armor: 2 };
   eq("and leaves an existing state alone", ensureLevelFields(kept).state, { hp: 3, stress: 1, hope: 5, armor: 2 });
+
+  // A scar crosses out a Hope slot for good (SRD, Avoid Death). They're always the slots at
+  // the right-hand end, so scarring is tapBox seen from that end.
+  eq("no scars to start with", defaultState().scars, 0);
+  eq("long-pressing the last slot crosses out just that one", scarAt(0, 5, 6), 1);
+  eq("long-pressing an earlier one crosses out it and everything after", scarAt(0, 3, 6), 3);
+  eq("long-pressing the leftmost crosses out the lot", scarAt(0, 0, 6), 6);
+  eq("long-pressing the only crossed slot frees it", scarAt(1, 5, 6), 0);
+  eq("long-pressing a crossed slot frees it and the crossed ones before it", scarAt(3, 4, 6), 1);
+  eq("long-pressing the rightmost (last) crossed slot frees them all", scarAt(3, 5, 6), 0);
+
+  eq("scars ride along in the state", clampState({ scars: 2 }, maxes).scars, 2);
+  eq("more scars than there are slots is impossible", clampState({ scars: 9 }, maxes).scars, HOPE_MAX);
+  eq("a negative or non-numeric scar count falls back to none",
+    [clampState({ scars: -1 }, maxes).scars, clampState({ scars: "x" }, maxes).scars], [0, 0]);
+  eq("a scar gained with Hope full pushes the Hope down with it",
+    clampState({ hope: 6, scars: 2 }, maxes).hope, 4);
+  eq("Hope below the reduced maximum is left where it is", clampState({ hope: 1, scars: 2 }, maxes).hope, 1);
+  eq("with no Hope slots at all (a draft with no class) nothing can be scarred",
+    clampState({ scars: 3 }, { hp: 6, stress: 6, hope: null, armor: 3 }).scars, 0);
+  eq("a character saved before scars existed opens with none",
+    ensureLevelFields(newCharacter()).state.scars, 0);
 }
 
 group("JSON transfer: one file format for one character or the whole list");
