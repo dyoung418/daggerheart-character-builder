@@ -1397,6 +1397,27 @@ group("Portrait: a picture small enough to live in localStorage");
 
   eq("sanitizePortrait passes a good one through", sanitizePortrait(webp), webp);
   eq("and turns anything else into null", [sanitizePortrait("javascript:alert(1)"), sanitizePortrait(undefined)], [null, null]);
+
+  // Everything that gets read back — localStorage and imported files alike — goes through
+  // ensureLevelFields, so that's where a portrait is checked before an <img> ever sees it.
+  const clean = newCharacter();
+  clean.portrait = webp;
+  eq("a good portrait survives ensureLevelFields", ensureLevelFields(clean).portrait, webp);
+
+  const nasty = newCharacter();
+  nasty.name = "Aster";
+  nasty.portrait = "javascript:alert(1)";
+  const fixed = ensureLevelFields(nasty);
+  eq("a portrait that isn't a picture is dropped", "portrait" in fixed, false);
+  eq("and the rest of the character is untouched", fixed.name, "Aster");
+
+  eq("a character with no portrait at all stays without one", "portrait" in ensureLevelFields(newCharacter()), false);
+
+  const shipped = newCharacter();
+  shipped.id = "p1";
+  shipped.portrait = webp;
+  eq("a portrait makes the round trip through an export file",
+    parseImport(serializeCharacters([shipped])).characters[0].portrait, webp);
 }
 
 // ---------- report ----------
