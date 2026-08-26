@@ -17,10 +17,10 @@ const EN = {
   "level": "Level",
   "hope": "Hope",
   "hope.of": "Hope: {n} of {max}",
-  "hope.one": "Hope {n} of {max}",
-  "hope.scar": "Scar",
-  "hope.scarred": "Hope {n} of {max}, scarred",
-  "hope.scar.confirm": "Mark a scar? This crosses out a Hope slot for good.",
+  "hope.slot": "Hope slot {n} of {max}",
+  "hope.scarred": "Hope slot {n} of {max}, scarred",
+  "hope.scar.confirmOne": "Cross out Hope {n} for good?",
+  "hope.scar.confirmMany": "Cross out Hope {from}–{to} for good?",
   "hope.scar.yes": "Mark it",
   "hope.scar.cancel": "Cancel",
   "hope.journeyEnds": "This character's journey ends here.",
@@ -67,6 +67,7 @@ const EN = {
   "features.ancestry": "Ancestry",
   "features.community": "Community",
   "features.none": "No features yet.",
+  "save.failed": "This browser can't save any more — nothing marked from here on will survive a reload.",
 };
 
 const IT = {
@@ -78,10 +79,10 @@ const IT = {
   "level": "Livello",
   "hope": "Speranza",
   "hope.of": "Speranza: {n} su {max}",
-  "hope.one": "Speranza {n} di {max}",
-  "hope.scar": "Cicatrice",
-  "hope.scarred": "Speranza {n} di {max}, cicatrizzata",
-  "hope.scar.confirm": "Segnare una cicatrice? Barra per sempre una slot di Speranza.",
+  "hope.slot": "Casella di Speranza {n} di {max}",
+  "hope.scarred": "Casella di Speranza {n} di {max}, cicatrizzata",
+  "hope.scar.confirmOne": "Barrare per sempre la Speranza {n}?",
+  "hope.scar.confirmMany": "Barrare per sempre la Speranza da {from} a {to}?",
   "hope.scar.yes": "Segna",
   "hope.scar.cancel": "Annulla",
   "hope.journeyEnds": "Il viaggio di questo personaggio finisce qui.",
@@ -128,6 +129,7 @@ const IT = {
   "features.ancestry": "Ascendenza",
   "features.community": "Comunità",
   "features.none": "Nessuna abilità.",
+  "save.failed": "Questo browser non riesce più a salvare — quello che segni da adesso sparisce se ricarichi.",
 };
 
 const DICTS = { en: EN, it: IT };
