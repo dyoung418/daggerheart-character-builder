@@ -85,6 +85,13 @@ const {
   parseImport,
   serializeCharacters,
 } = await import(`../shared/transfer.js${RUN}`);
+const {
+  MAX_BYTES,
+  MAX_EDGE,
+  fitWithin,
+  isPortrait,
+  sanitizePortrait,
+} = await import(`../shared/portrait.js${RUN}`);
 
 // ---------- tiny runner ----------
 
@@ -1366,6 +1373,51 @@ group("Play page labels: English by default, Italian when the page says lang=\"i
     (() => { const missing = en.keys().filter((k) => it(k) === k && en(k) !== k); return missing.length === 0; })());
   check("the three conditions are translated, label and effect",
     ["vulnerable", "hidden", "restrained"].every((id) => it(`condition.${id}.label`) !== en(`condition.${id}.label`) && it(`condition.${id}.effect`) !== `condition.${id}.effect`));
+}
+
+group("Portrait: a picture small enough to live in localStorage");
+{
+  eq("the limits, in one place", [MAX_EDGE, MAX_BYTES], [512, 120_000]);
+
+  eq("a wide picture is shrunk by its width", fitWithin(1600, 900, 512), { width: 512, height: 288 });
+  eq("a tall one by its height", fitWithin(900, 1600, 512), { width: 288, height: 512 });
+  eq("a square one hits the box on both sides", fitWithin(2000, 2000, 512), { width: 512, height: 512 });
+  eq("one already inside the box is left alone — never enlarged", fitWithin(120, 90, 512), { width: 120, height: 90 });
+  eq("a degenerate size doesn't divide by zero", fitWithin(0, 0, 512), { width: 0, height: 0 });
+
+  const webp = "data:image/webp;base64,AAAA";
+  eq("a small WebP data URL is a portrait", isPortrait(webp), true);
+  eq("JPEG and PNG too", [isPortrait("data:image/jpeg;base64,AA"), isPortrait("data:image/png;base64,AA")], [true, true]);
+  eq("a remote URL is not", isPortrait("https://example.com/face.png"), false);
+  eq("nor is a script URL", isPortrait("javascript:alert(1)"), false);
+  eq("nor is an HTML data URL dressed up as an image", isPortrait("data:text/html;base64,PHNjcmlwdD4="), false);
+  eq("nor an SVG, which can carry script", isPortrait("data:image/svg+xml;base64,AA"), false);
+  eq("nor an empty string, a number or an object", [isPortrait(""), isPortrait(42), isPortrait({})], [false, false, false]);
+  eq("anything past the byte cap is refused", isPortrait("data:image/webp;base64," + "A".repeat(MAX_BYTES)), false);
+
+  eq("sanitizePortrait passes a good one through", sanitizePortrait(webp), webp);
+  eq("and turns anything else into null", [sanitizePortrait("javascript:alert(1)"), sanitizePortrait(undefined)], [null, null]);
+
+  // Everything that gets read back — localStorage and imported files alike — goes through
+  // ensureLevelFields, so that's where a portrait is checked before an <img> ever sees it.
+  const clean = newCharacter();
+  clean.portrait = webp;
+  eq("a good portrait survives ensureLevelFields", ensureLevelFields(clean).portrait, webp);
+
+  const nasty = newCharacter();
+  nasty.name = "Aster";
+  nasty.portrait = "javascript:alert(1)";
+  const fixed = ensureLevelFields(nasty);
+  eq("a portrait that isn't a picture is dropped", "portrait" in fixed, false);
+  eq("and the rest of the character is untouched", fixed.name, "Aster");
+
+  eq("a character with no portrait at all stays without one", "portrait" in ensureLevelFields(newCharacter()), false);
+
+  const shipped = newCharacter();
+  shipped.id = "p1";
+  shipped.portrait = webp;
+  eq("a portrait makes the round trip through an export file",
+    parseImport(serializeCharacters([shipped])).characters[0].portrait, webp);
 }
 
 // ---------- report ----------

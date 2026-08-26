@@ -756,3 +756,13 @@ h1, h2, h3, .btn-primary, .btn-ghost, .btn-small, .top-nav a {
   cursor: pointer;
 }
 .popover-close:hover { color: var(--accent); }
+
+/* The portrait in the character detail: the same circle the play page shows. */
+.detail-portrait {
+  float: left;
+  width: 3.5rem;
+  height: 3.5rem;
+  margin: 0 0.75rem 0.25rem 0;
+  border-radius: 50%;
+  object-fit: cover;
+}

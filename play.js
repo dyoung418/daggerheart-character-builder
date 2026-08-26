@@ -117,12 +117,24 @@ function renderHeader(s, character, domains, hope) {
   const head = el("header", "play-header");
   head.appendChild(line());
 
+  // Portrait (when there is one), name and heritage line share a row: without a portrait the
+  // header looks exactly as it did before — no empty circle, no placeholder silhouette.
+  const identity = el("div", "play-identity");
+  if (character.portrait) {
+    const face = document.createElement("img");
+    face.className = "play-portrait";
+    face.src = character.portrait;
+    face.alt = s.name;
+    identity.appendChild(face);
+  }
+  const idText = el("div", "play-identity-text");
+
   const nameRow = el("div", "play-name-row");
   nameRow.appendChild(el("h1", "play-name", s.name));
   const level = el("span", "play-level", t("level"));
   level.appendChild(el("strong", null, String(s.level)));
   nameRow.appendChild(level);
-  head.appendChild(nameRow);
+  idText.appendChild(nameRow);
 
   const details = el("p", "play-details");
   const parts = [s.className, s.subclassName, s.communityName, s.ancestryNames.join(" + ") || "—"];
@@ -130,7 +142,10 @@ function renderHeader(s, character, domains, hope) {
     if (i > 0) details.appendChild(el("span", "dot", "•"));
     details.appendChild(el("span", null, text));
   });
-  head.appendChild(details);
+  idText.appendChild(details);
+
+  identity.appendChild(idText);
+  head.appendChild(identity);
 
   const pills = el("div", "play-pills");
   pills.appendChild(hope);
