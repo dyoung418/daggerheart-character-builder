@@ -187,7 +187,7 @@ function renderHeader(s, character, domains, hope) {
     const face = document.createElement("img");
     face.className = "play-portrait";
     face.src = character.portrait;
-    face.alt = s.name;
+    face.alt = ""; // decorative: the name is right there in the h1 next to it
     identity.appendChild(face);
   }
   const idText = el("div", "play-identity-text");
@@ -242,7 +242,7 @@ function renderHope(state, max, onTap, pending) {
     const b = el("button", "hope-slot" + (i < state.hope ? " filled" : "") + (scarred ? " scarred" : ""));
     b.type = "button";
     b.setAttribute("aria-pressed", String(i < state.hope));
-    b.setAttribute("aria-label", scarred ? t("hope.scarred", { n: i + 1, max }) : t("hope.one", { n: i + 1, max }));
+    b.setAttribute("aria-label", scarred ? t("hope.scarred", { n: i + 1, max }) : t("hope.slot", { n: i + 1, max }));
     b.setAttribute("aria-keyshortcuts", "Alt+Enter");
     if (scarred) b.setAttribute("aria-disabled", "true");
     b.dataset.slot = String(i);
@@ -258,7 +258,11 @@ function renderHope(state, max, onTap, pending) {
   if (pending !== null) {
     const ask = el("div", "hope-confirm");
     ask.setAttribute("role", "alert");
-    ask.appendChild(el("span", null, t("hope.scar.confirm")));
+    // The gesture crosses out the slot and every one after it, so the question says which.
+    const first = pending + 1;
+    ask.appendChild(el("span", null, first === max
+      ? t("hope.scar.confirmOne", { n: max })
+      : t("hope.scar.confirmMany", { from: first, to: max })));
     const yes = el("button", "hope-confirm-yes", t("hope.scar.yes"));
     yes.type = "button";
     yes.addEventListener("click", () => onTap("scar-confirm", pending));

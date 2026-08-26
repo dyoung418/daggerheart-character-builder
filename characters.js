@@ -83,6 +83,18 @@ function saveCharacters() {
   localStorage.setItem(CHAR_STORAGE_KEY, JSON.stringify(characters));
 }
 
+// Re-read, patch one character's portrait, write back — the same care play.js takes with the
+// marked boxes, for the same reason: the play page may have written to another tab's copy while
+// this list sat open, and the portrait is a new reason to come back here mid-session.
+function savePortrait(id, portrait) {
+  const raw = localStorage.getItem(CHAR_STORAGE_KEY);
+  const list = raw ? JSON.parse(raw) : [];
+  const target = list.find((c) => c.id === id);
+  if (!target) return;
+  if (portrait) target.portrait = portrait; else delete target.portrait;
+  localStorage.setItem(CHAR_STORAGE_KEY, JSON.stringify(list));
+}
+
 function findClass(id) { return db.classes.find((c) => c.id === id); }
 function findSubclass(id) { return db.subclasses.find((s) => s.id === id); }
 function findAncestry(id) { return db.ancestries.find((a) => a.id === id); }
@@ -127,8 +139,8 @@ function renderList() {
       `
       : `
         <button class="btn-small" data-action="view">Sheet</button>
-        <a class="btn-small" href="play.html?id=${ch.id}">Play</a>
-        <a class="btn-small" href="sheet.html?id=${ch.id}">Print sheet</a>
+        <a class="btn-small" href="play.html?id=${encodeURIComponent(ch.id)}">Play</a>
+        <a class="btn-small" href="sheet.html?id=${encodeURIComponent(ch.id)}">Print sheet</a>
         <button class="btn-small" data-action="edit">Edit</button>
         <button class="btn-small" data-action="export">Export</button>
         <button class="btn-small btn-danger" data-action="delete">Delete</button>
@@ -538,7 +550,7 @@ function renderDetail() {
     dropBtn.textContent = "Remove portrait";
     dropBtn.addEventListener("click", () => {
       delete ch.portrait;
-      saveCharacters();
+      savePortrait(ch.id, null);
       renderAll();
     });
     container.appendChild(dropBtn);
@@ -969,8 +981,10 @@ async function usePortraitFile(file) {
   let url;
   try {
     url = await encodePortrait(file);
-  } catch {
-    portraitProblem("That picture couldn't be used. Pick a JPEG, PNG or WebP — a photo from the camera is fine.");
+  } catch (err) {
+    portraitProblem(err?.message === "too-big"
+      ? "That picture is too detailed to store — crop it, or pick one with less going on."
+      : "That picture couldn't be used. Pick a JPEG, PNG or WebP — a photo from the camera is fine.");
     return;
   }
   // localStorage is a few megabytes for every character together, so a save can fail. Put the
@@ -978,13 +992,12 @@ async function usePortraitFile(file) {
   const before = ch.portrait;
   ch.portrait = url;
   try {
-    saveCharacters();
+    savePortrait(ch.id, url);
   } catch {
     if (before) ch.portrait = before; else delete ch.portrait;
     portraitProblem("No room left in this browser's storage. Export a character or two, remove them from the list, and try again.");
     return;
   }
-  hideImportBanner();
   renderAll();
 }
 

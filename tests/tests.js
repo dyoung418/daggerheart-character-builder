@@ -1280,7 +1280,11 @@ group("Table state: boxes marked at the table (HP, Stress, Hope, Armor)");
     ensureLevelFields(newCharacter()).state, defaultState());
   const kept = newCharacter();
   kept.state = { hp: 3, stress: 1, hope: 5, armor: 2 };
-  eq("and leaves an existing state alone", ensureLevelFields(kept).state, { hp: 3, stress: 1, hope: 5, armor: 2 });
+  // A character saved between the play page and scars existing has a state with no `scars`
+  // field at all — not zero, absent. ensureLevelFields backfills it without touching anything
+  // else already there.
+  eq("and backfills scars onto an existing state that predates it, leaving the rest untouched",
+    ensureLevelFields(kept).state, { hp: 3, stress: 1, hope: 5, armor: 2, scars: 0 });
 
   // A scar crosses out a Hope slot for good (SRD, Avoid Death). They're always the slots at
   // the right-hand end, so scarring is tapBox seen from that end.
@@ -1400,10 +1404,14 @@ group("Play page labels: English by default, Italian when the page says lang=\"i
   check("the three conditions are translated, label and effect",
     ["vulnerable", "hidden", "restrained"].every((id) => it(`condition.${id}.label`) !== en(`condition.${id}.label`) && it(`condition.${id}.effect`) !== `condition.${id}.effect`));
 
-  eq("the scar words exist in both languages",
-    [en("hope.scar"), it("hope.scar")], ["Scar", "Cicatrice"]);
-  eq("the crossed-out slot says so in its label",
-    it("hope.scarred", { n: 6, max: 6 }), "Speranza 6 di 6, cicatrizzata");
+  eq("an unscarred slot's label names it as a box, not a bare number",
+    it("hope.slot", { n: 3, max: 6 }), "Casella di Speranza 3 di 6");
+  eq("the crossed-out slot says so, counting the same way as the unscarred one",
+    it("hope.scarred", { n: 6, max: 6 }), "Casella di Speranza 6 di 6, cicatrizzata");
+  eq("the confirmation names the slot it's about to cross out for good",
+    it("hope.scar.confirmOne", { n: 6 }), "Barrare per sempre la Speranza 6?");
+  eq("or the whole range, when the gesture crosses out more than one",
+    it("hope.scar.confirmMany", { from: 4, to: 6 }), "Barrare per sempre la Speranza da 4 a 6?");
   eq("the end of the road is spelled out, not implied",
     it("hope.journeyEnds"), "Il viaggio di questo personaggio finisce qui.");
 }
