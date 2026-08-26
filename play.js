@@ -139,12 +139,29 @@ function loadCharacters() {
 
 // Re-read, patch one character's state, write back: never the copy loaded at page open, so a
 // change made meanwhile on another page of the same browser (an edit, a level up) survives.
+// Returns false when the write didn't happen: at the table a mark that looks applied but isn't
+// is worse than an error, because it only shows up as a loss on the next reload.
 function saveState(id, state) {
   const characters = loadCharacters();
   const ch = characters.find((c) => c.id === id);
-  if (!ch) return;
+  if (!ch) return false;
   ch.state = state;
-  localStorage.setItem(CHAR_STORAGE_KEY, JSON.stringify(characters));
+  try {
+    localStorage.setItem(CHAR_STORAGE_KEY, JSON.stringify(characters));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Shown once, and never taken back: from the moment a write fails, nothing on this page is
+// being kept.
+function warnNotSaved() {
+  if (document.getElementById("play-unsaved")) return;
+  const note = el("p", "play-unsaved", t("save.failed"));
+  note.id = "play-unsaved";
+  note.setAttribute("role", "alert");
+  document.body.prepend(note);
 }
 
 function line() { return el("span", "dh-line"); }
@@ -565,7 +582,9 @@ async function init() {
   // Clamped on every open: a lighter armor or a lost bonus since the last session must not
   // leave more boxes marked than the row has.
   let state = clampState(character.state, maxes);
-  if (JSON.stringify(state) !== JSON.stringify(character.state)) saveState(id, state);
+  if (JSON.stringify(state) !== JSON.stringify(character.state)) {
+    if (!saveState(id, state)) warnNotSaved();
+  }
 
   const panels = {};
   let hopeBox;
@@ -584,7 +603,7 @@ async function init() {
   function onTap(key, value) {
     if (key === "notes") {
       state = clampState({ ...state, notes: value }, maxes);
-      saveState(id, state);
+      if (!saveState(id, state)) warnNotSaved();
       return;
     }
     // A scar is permanent, so adding one asks first; taking one back doesn't (that's the
@@ -595,14 +614,14 @@ async function init() {
       if (key === "scar-cancel") pendingScar = null;
       else if (key === "scar-confirm") {
         state = clampState({ ...state, scars: scarAt(state.scars, value, max) }, maxes);
-        saveState(id, state);
+        if (!saveState(id, state)) warnNotSaved();
         pendingScar = null;
       } else {
         const next = scarAt(state.scars, value, max);
         if (next > state.scars) pendingScar = value;
         else {
           state = clampState({ ...state, scars: next }, maxes);
-          saveState(id, state);
+          if (!saveState(id, state)) warnNotSaved();
           pendingScar = null;
         }
       }
@@ -614,7 +633,7 @@ async function init() {
       ? { ...state, conditions: toggleCondition(state.conditions, value) }
       : { ...state, [key]: tapBox(state[key], value) };
     state = clampState(next, maxes);
-    saveState(id, state);
+    if (!saveState(id, state)) warnNotSaved();
     if (key === "hope") {
       refreshHope(`.hope-slot[data-slot="${value}"]`);
     } else {

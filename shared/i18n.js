@@ -67,6 +67,7 @@ const EN = {
   "features.ancestry": "Ancestry",
   "features.community": "Community",
   "features.none": "No features yet.",
+  "save.failed": "This browser can't save any more — nothing marked from here on will survive a reload.",
 };
 
 const IT = {
@@ -128,6 +129,7 @@ const IT = {
   "features.ancestry": "Ascendenza",
   "features.community": "Comunità",
   "features.none": "Nessuna abilità.",
+  "save.failed": "Questo browser non riesce più a salvare — quello che segni da adesso sparisce se ricarichi.",
 };
 
 const DICTS = { en: EN, it: IT };

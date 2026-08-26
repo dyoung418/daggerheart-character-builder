@@ -893,8 +893,21 @@ function hideImportBanner() {
 }
 
 function applyImport(incoming, mode) {
+  // An import is the one action that can add megabytes at once, and portraits made that real.
+  // If it doesn't fit, put the list back the way it was: a half-imported list that only exists
+  // in memory would make every later save of this session fail too, quietly.
+  const before = characters;
   characters = mergeImported(characters, incoming, mode);
-  saveCharacters();
+  try {
+    saveCharacters();
+  } catch {
+    characters = before;
+    showImportBanner(
+      "No room left in this browser's storage — nothing was imported. Export a character or two, remove them from the list, and try again.",
+      { error: true, actions: [{ label: "OK", onClick: hideImportBanner }] },
+    );
+    return;
+  }
   pendingDeleteId = null;
   renderAll();
   const n = incoming.length;

@@ -295,3 +295,10 @@ button { font: inherit; color: inherit; }
 .play-empty { color: var(--dh-subtle); font-style: italic; }
 
 .hint { color: var(--dh-subtle); }
+
+/* The one thing on this page that isn't the character: a write that didn't happen. */
+.play-unsaved {
+  margin: 0; padding: 0.6rem 1rem;
+  background: #6b1d1d; color: var(--dh-beige);
+  font-size: 0.8rem; text-align: center;
+}
