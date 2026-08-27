@@ -38,6 +38,10 @@ at all:
 python3 serve.py 8080
 ```
 
+## Contributing
+
+Pull requests welcome. [`CONTRIBUTING.md`](CONTRIBUTING.md) has how to run it, where code goes, and the one house rule that will look unusual (comments say *why*, not *what*).
+
 ## Tests
 
 Open `tests/index.html` in the browser — that's all (or run `node tests/node-runner.mjs` from a terminal, `npm test` for short: same suite, text report, exit code 1 on failure). GitHub Actions runs that same command on every push and pull request. It checks the advancement rules, the level history replay, the derived stats and the effects catalogue in `shared/advancement.js`, `shared/history.js`, `shared/derived-stats.js`, `shared/effects.js`, `shared/table-state.js` and `shared/transfer.js` against hand-written fixtures. No dependencies, no build step, nothing to install, and nothing the app itself loads — `package.json` exists only to give those two commands a short name, and has no dependency section to install. If you delete the `tests/` directory, the app is completely unaffected.
