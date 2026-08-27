@@ -8,6 +8,7 @@
 
 import { openLightbox } from "./lightbox.js";
 import { escapeHtml } from "./escape.js";
+import { CARD_ART_EXT } from "./card-art-config.js";
 
 /**
  * @param {{ art: string, domainClass?: string, level?: number|string, type?: string, name: string, features?: Array<{name: {"en-US": string}, description: Array<{paragraph: {"en-US": string}}>}> }} card
@@ -83,14 +84,14 @@ export function descriptionHtml(description) {
 }
 
 export function domainCardArtPath(id) {
-  return `data/card-art/domain/${id}.png`;
+  return `data/card-art/domain/${id}.${CARD_ART_EXT}`;
 }
 export function subclassCardArtPath(id, tier) {
-  return `data/card-art/subclass/${id}-${tier}.png`;
+  return `data/card-art/subclass/${id}-${tier}.${CARD_ART_EXT}`;
 }
 export function communityCardArtPath(id) {
-  return `data/card-art/community/${id}.png`;
+  return `data/card-art/community/${id}.${CARD_ART_EXT}`;
 }
 export function ancestryCardArtPath(id) {
-  return `data/card-art/ancestry/${id}.png`;
+  return `data/card-art/ancestry/${id}.${CARD_ART_EXT}`;
 }

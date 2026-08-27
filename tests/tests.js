@@ -116,6 +116,15 @@ const {
   groupByTier,
   weaponStats,
 } = await import(`../shared/gear.js${RUN}`);
+const {
+  CARD_ART_EXT,
+} = await import(`../shared/card-art-config.js${RUN}`);
+const {
+  ancestryCardArtPath,
+  communityCardArtPath,
+  domainCardArtPath,
+  subclassCardArtPath,
+} = await import(`../shared/card-render.js${RUN}`);
 
 // ---------- tiny runner ----------
 
@@ -2135,6 +2144,18 @@ group("Downtime: the two moves a rest gives you (SRD p. 105)");
     applyRestMove({ ...beaten, conditions: ["hidden"], notes: "owes Rya 2 gold" }, maxes,
       move("long", "tendToAllWounds")),
     { hp: 0, stress: 4, hope: 1, armor: 3, scars: 0, conditions: ["hidden"], notes: "owes Rya 2 gold" });
+}
+
+// ---------- card-render.js ----------
+
+group("card art paths use the configured extension");
+{
+  eq("CARD_ART_EXT", CARD_ART_EXT, "png");
+  eq("domainCardArtPath", domainCardArtPath("core_x"), `data/card-art/domain/core_x.${CARD_ART_EXT}`);
+  eq("subclassCardArtPath", subclassCardArtPath("core_y", "foundation"),
+    `data/card-art/subclass/core_y-foundation.${CARD_ART_EXT}`);
+  eq("ancestryCardArtPath", ancestryCardArtPath("core_z"), `data/card-art/ancestry/core_z.${CARD_ART_EXT}`);
+  eq("communityCardArtPath", communityCardArtPath("core_w"), `data/card-art/community/core_w.${CARD_ART_EXT}`);
 }
 
 // ---------- report ----------
