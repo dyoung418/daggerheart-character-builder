@@ -23,6 +23,15 @@ python3 -m http.server 8080
 
 then open `http://localhost:8080`. Any static file server works.
 
+If a page ever looks broken after you pull an update — buttons that render but do
+nothing — your browser is mixing cached files with fresh ones. A hard reload
+(Ctrl+Shift+R) fixes it, or run this instead, which tells the browser not to cache
+at all:
+
+```
+python3 serve.py 8080
+```
+
 ## Tests
 
 Open `tests/index.html` in the browser — that's all (or run `node tests/node-runner.mjs` from a terminal: same suite, text report, exit code 1 on failure). It checks the advancement rules, the level history replay, the derived stats and the effects catalogue in `shared/advancement.js`, `shared/history.js`, `shared/derived-stats.js`, `shared/effects.js`, `shared/table-state.js` and `shared/transfer.js` against hand-written fixtures. No dependencies, no build step, nothing to install, and nothing the app itself loads. If you delete the `tests/` directory, the app is completely unaffected.
