@@ -117,6 +117,12 @@ const {
   weaponStats,
 } = await import(`../shared/gear.js${RUN}`);
 
+const {
+  CHOOSE_KEYS,
+  nextIndex,
+  tabStopIndex,
+} = await import(`../shared/choice-keys.js${RUN}`);
+
 // ---------- tiny runner ----------
 
 const groups = [];
@@ -2135,6 +2141,43 @@ group("Downtime: the two moves a rest gives you (SRD p. 105)");
     applyRestMove({ ...beaten, conditions: ["hidden"], notes: "owes Rya 2 gold" }, maxes,
       move("long", "tendToAllWounds")),
     { hp: 0, stress: 4, hope: 1, armor: 3, scars: 0, conditions: ["hidden"], notes: "owes Rya 2 gold" });
+}
+
+group("Every choice in the wizard can be reached from the keyboard");
+{
+  // A grid of 13 classes, four to a row. Right walks along the row; Down lands under your
+  // finger, not on the next option.
+  eq("Right moves to the next option", nextIndex("ArrowRight", 0, 13, 4), 1);
+  eq("Down moves a whole row", nextIndex("ArrowDown", 0, 13, 4), 4);
+  eq("Up moves back a row", nextIndex("ArrowUp", 5, 13, 4), 1);
+  eq("Left moves back one", nextIndex("ArrowLeft", 5, 13, 4), 4);
+
+  // Wrapping: you can never be stuck at an end wondering which way turns back.
+  eq("Right at the last option wraps to the first", nextIndex("ArrowRight", 12, 13, 4), 0);
+  eq("Left at the first option wraps to the last", nextIndex("ArrowLeft", 0, 13, 4), 12);
+  eq("Down past the end wraps round", nextIndex("ArrowDown", 11, 13, 4), 2);
+  eq("Up before the start wraps round", nextIndex("ArrowUp", 1, 13, 4), 10);
+
+  eq("Home goes to the first", nextIndex("Home", 7, 13, 4), 0);
+  eq("End goes to the last", nextIndex("End", 2, 13, 4), 12);
+
+  // -1 means "not ours": the caller must leave the event alone. Swallowing unknown keys is
+  // how a widget eats Tab and traps the person inside it.
+  eq("Tab is not ours", nextIndex("Tab", 3, 13, 4), -1);
+  eq("a letter is not ours", nextIndex("a", 3, 13, 4), -1);
+  eq("an empty grid has nowhere to go", nextIndex("ArrowRight", 0, 0, 4), -1);
+
+  // A single column is the honest fallback when the caller cannot measure the grid: Down
+  // behaves like Right rather than jumping somewhere the eye is not.
+  eq("without a column count Down is just Right", nextIndex("ArrowDown", 0, 13, 1), 1);
+  eq("a nonsense column count still moves by one", nextIndex("ArrowDown", 0, 13, 0), 1);
+
+  // The group holds ONE tab stop, so Tab crosses it instead of visiting all 13.
+  eq("Tab lands on the chosen option", tabStopIndex(6, 13), 6);
+  eq("with nothing chosen Tab lands on the first", tabStopIndex(-1, 13), 0);
+  eq("a stale index falls back to the first", tabStopIndex(99, 13), 0);
+
+  check("Space and Enter both choose", CHOOSE_KEYS.includes(" ") && CHOOSE_KEYS.includes("Enter"));
 }
 
 // ---------- report ----------

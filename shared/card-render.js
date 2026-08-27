@@ -13,9 +13,33 @@ import { escapeHtml } from "./escape.js";
  * @param {{ art: string, domainClass?: string, level?: number|string, type?: string, name: string, features?: Array<{name: {"en-US": string}, description: Array<{paragraph: {"en-US": string}}>}> }} card
  * @returns {HTMLDivElement}
  */
+// Rendered art is kept and reused instead of rebuilt.
+//
+// The wizard rebuilds its whole step on every pick (create.js: `panel.innerHTML = ""`), so
+// picking an ancestry threw away 39 <img> elements and made 39 new ones. Measured right after
+// such a rebuild: 2 of 39 images had pixels. The other 37 were blank until they decoded again
+// — from cache, but a decode is still a frame or two, and 37 of them at once is a flash across
+// the whole grid. That is the flicker you see when you choose anything.
+//
+// Moving an element that is already loaded costs nothing: no request, no decode, no blank
+// frame. So each card's node is built once and handed back on later calls.
+//
+// `isConnected` is the guard that makes this safe: a node still in the document is in use, so
+// that call gets a fresh one rather than having its node stolen. During a wizard rebuild every
+// old node has just been detached, which is exactly when reuse is both safe and wanted.
+//
+// The map grows to the number of distinct cards ever rendered — a few hundred at most, and
+// keeping them decoded is the point, not a leak.
+const renderedArt = new Map();
+
 export function renderCardArt(card) {
+  const key = card.art || card.name;
+  const kept = renderedArt.get(key);
+  if (kept && !kept.isConnected) return kept;
+
   const wrap = document.createElement("div");
   wrap.className = "card-art" + (card.domainClass ? ` domain-${card.domainClass}` : "");
+  if (!kept) renderedArt.set(key, wrap);
 
   const img = document.createElement("img");
   img.loading = "lazy";
