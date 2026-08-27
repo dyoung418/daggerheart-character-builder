@@ -80,6 +80,18 @@ button { font: inherit; color: inherit; }
 }
 .play-toolbar a { color: var(--dh-subtle); text-decoration: none; padding: 0.4rem 0; }
 .play-toolbar a:hover { color: var(--dh-golden); }
+/* Undo lives in the toolbar rather than in a tab: a mis-tap has to be reachable from wherever
+   the player is looking, and it reads as chrome, not as one of the character's own numbers. */
+.play-undo {
+  border: 1px solid var(--dh-golden-40); border-radius: 999px;
+  padding: 0.3rem 0.8rem;
+  background: none; color: var(--dh-golden);
+  font-family: inherit; font-size: inherit; text-transform: uppercase; letter-spacing: 0.04em;
+  cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.play-undo:hover:not(:disabled) { background: var(--dh-golden-10); }
+.play-undo:active:not(:disabled) { transform: scale(0.96); }
+.play-undo:disabled { border-color: transparent; color: var(--dh-subtle); opacity: 0.5; cursor: default; }
 
 /* ---------- header ---------- */
 .play-header { padding-top: 0.25rem; }
@@ -254,6 +266,21 @@ button { font: inherit; color: inherit; }
 .dh-chip:active { transform: scale(0.96); }
 .play-condition-effect { margin: 0.5rem 0 0; text-align: center; font-family: var(--dh-font-description); font-size: 0.82rem; color: var(--dh-beige); }
 .play-condition-effect strong { color: var(--dh-golden); font-family: var(--dh-font-body); font-weight: 600; }
+
+/* Downtime. Closed it's two chips; open it's the menu plus a line per move taken, which is
+   what the player reads back to the table ("1d4+2 rolled 3+2 = 5, cleared 5"). */
+.play-rest { margin: 0.9rem 0 0.5rem; }
+.play-rest-choices { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.4rem; }
+.play-rest-count {
+  margin: 0 0 0.5rem; text-align: center;
+  font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--dh-subtle);
+}
+.play-rest-done {
+  margin: 0.4rem 0 0; text-align: center;
+  font-family: var(--dh-font-description); font-size: 0.82rem; color: var(--dh-beige);
+}
+.play-rest .dh-chip { margin-top: 0; }
+.play-rest > .dh-chip:last-child { display: block; margin: 0.7rem auto 0; }
 
 /* Session notes. */
 .play-notes-field {

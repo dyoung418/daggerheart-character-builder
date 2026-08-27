@@ -7,9 +7,21 @@
 // shared/sheet-data.js) and the tap/clamp rules in shared/table-state.js; this file builds
 // DOM and saves. The look follows the Foundryborne Daggerheart system (see play.css).
 
-import { ensureLevelFields } from "./shared/advancement.js";
+import { ensureLevelFields, tierForLevel } from "./shared/advancement.js";
 import { deriveSheet } from "./shared/sheet-data.js";
-import { CONDITIONS, clampState, maxesFromSheet, scarAt, tapBox, toggleCondition } from "./shared/table-state.js";
+import {
+  CONDITIONS,
+  DOWNTIME_MOVES_PER_REST,
+  REST_MOVES,
+  applyRestMove,
+  clampState,
+  findRestMove,
+  maxesFromSheet,
+  restClearAmount,
+  scarAt,
+  tapBox,
+  toggleCondition,
+} from "./shared/table-state.js";
 import { pickLanguage, translator } from "./shared/i18n.js";
 
 const CHAR_STORAGE_KEY = "dh-characters-v1";
@@ -383,6 +395,60 @@ function renderConditions(active, onToggle) {
   return box;
 }
 
+// Downtime (SRD p. 105): a rest is two moves, and the same move twice is allowed. Closed, it's
+// two buttons; open, it's the menu for the rest you chose, with what each move did underneath.
+// The short rest's "1d4 + your tier" is rolled here — the die is the only randomness on a page
+// that otherwise just counts boxes, so the roll is spelled out rather than folded into a total.
+//
+// Prepare is offered twice, alone and with the party, because that's the only difference the
+// move has (1 Hope or 2) and a toggle for one checkbox would cost more taps than a second button.
+function renderRest(rest, tier, onTap) {
+  const box = el("section", "play-rest");
+  box.appendChild(sectionTitle(t("rest")));
+
+  if (!rest) {
+    const choices = el("div", "play-rest-choices");
+    for (const kind of ["short", "long"]) {
+      const b = el("button", "dh-chip", t(`rest.${kind}`));
+      b.type = "button";
+      b.addEventListener("click", () => onTap("rest-start", kind));
+      choices.appendChild(b);
+    }
+    box.appendChild(choices);
+    return box;
+  }
+
+  const left = DOWNTIME_MOVES_PER_REST - rest.done.length;
+  box.appendChild(el("p", "play-rest-count",
+    left > 0 ? t("rest.movesLeft", { n: left }) : t("rest.movesDone")));
+
+  if (left > 0) {
+    const menu = el("div", "play-chips");
+    menu.setAttribute("role", "group");
+    menu.setAttribute("aria-label", t(`rest.${rest.kind}`));
+    for (const move of REST_MOVES[rest.kind]) {
+      // Prepare is the one move with two versions; every other one is a single button.
+      const variants = move.id === "prepare" ? [false, true] : [false];
+      for (const together of variants) {
+        const key = together ? `${move.id}:together` : move.id;
+        const b = el("button", "dh-chip", t(`move.${key}`));
+        b.type = "button";
+        b.addEventListener("click", () => onTap("rest-move", key));
+        menu.appendChild(b);
+      }
+    }
+    box.appendChild(menu);
+  }
+
+  for (const line of rest.done) box.appendChild(el("p", "play-rest-done", line));
+
+  const end = el("button", "dh-chip", left > 0 ? t("rest.leave") : t("rest.end"));
+  end.type = "button";
+  end.addEventListener("click", () => onTap("rest-end", null));
+  box.appendChild(end);
+  return box;
+}
+
 // Session notes: saved as you type (debounced), never cleared by the app.
 function renderNotes(notes, onChange) {
   const box = el("section", "play-notes");
@@ -402,7 +468,7 @@ function renderNotes(notes, onChange) {
   return box;
 }
 
-function renderStatus(s, state, maxes, onTap) {
+function renderStatus(s, state, maxes, onTap, rest) {
   const panel = el("div");
 
   const res = el("div", "play-resources");
@@ -454,6 +520,7 @@ function renderStatus(s, state, maxes, onTap) {
   if (!s.experiences.length) exps.appendChild(el("p", "play-empty", t("experience.none")));
   panel.appendChild(exps);
 
+  panel.appendChild(renderRest(rest, tierForLevel(s.level), onTap));
   panel.appendChild(renderNotes(state.notes, (text) => onTap("notes", text)));
   return panel;
 }
@@ -566,6 +633,7 @@ async function init() {
   const root = document.getElementById("play-root");
   document.getElementById("nav-characters").textContent = t("nav.characters");
   document.getElementById("print-link").textContent = t("nav.print");
+  document.getElementById("undo").textContent = t("undo");
   document.title = `Daggerheart — ${t("title.play")}`;
   const db = await loadAllData();
 
@@ -593,6 +661,38 @@ async function init() {
   const panels = {};
   let hopeBox;
   let pendingScar = null;
+  let rest = null; // { kind, done: [] } while a rest is open; null the rest of the time
+  // Every change goes through commit(), which keeps the state before it. A tap is one gesture
+  // on a phone held in one hand across a table, and the ones that hurt are the ones that clear
+  // a row: tapping the first HP box when you meant the fourth wipes three marks and there was
+  // no way back. Ten deep is more than enough to walk out of a misread row without turning
+  // this into a history the player has to think about.
+  const UNDO_LIMIT = 10;
+  const undoStack = [];
+  let undoButton;
+
+  function commit(next) {
+    undoStack.push(state);
+    if (undoStack.length > UNDO_LIMIT) undoStack.shift();
+    write(next);
+  }
+  // Notes are a textarea saved on every keystroke: pushing each one would fill the stack with
+  // steps nobody wants, and the field has the browser's own undo already. Same for a state the
+  // clamp rewrote on open — that's not something the player did.
+  function write(next) {
+    state = clampState(next, maxes);
+    if (!saveState(id, state)) warnNotSaved();
+    if (undoButton) undoButton.disabled = undoStack.length === 0;
+  }
+  function undo() {
+    if (!undoStack.length) return;
+    // A rest half-taken is a menu, not a saved thing: stepping back out of one of its moves
+    // would leave the counter claiming a move that's been undone.
+    rest = null;
+    write(undoStack.pop());
+    refreshHope();
+    refreshStatus();
+  }
   // Redrawing the row destroys the button that had the focus, so whoever plays from the
   // keyboard would be dropped back to the top of the page. Say where the focus should land.
   function refreshHope(focusSelector) {
@@ -601,13 +701,16 @@ async function init() {
     hopeBox = fresh;
     if (focusSelector) fresh.querySelector(focusSelector)?.focus();
   }
+  function refreshStatus() {
+    const fresh = renderStatus(sheet, state, maxes, onTap, rest);
+    panels.status.replaceChildren(...fresh.childNodes);
+  }
   // One entry point for every change at the table: a tapped box (key + index), a toggled
   // condition (key "condition" + id) or the notes (key "notes" + text). Notes don't redraw
   // the panel — the textarea being typed in would lose focus.
   function onTap(key, value) {
     if (key === "notes") {
-      state = clampState({ ...state, notes: value }, maxes);
-      if (!saveState(id, state)) warnNotSaved();
+      write({ ...state, notes: value });
       return;
     }
     // A scar is permanent, so adding one asks first; taking one back doesn't (that's the
@@ -617,15 +720,13 @@ async function init() {
       const wasPending = pendingScar;
       if (key === "scar-cancel") pendingScar = null;
       else if (key === "scar-confirm") {
-        state = clampState({ ...state, scars: scarAt(state.scars, value, max) }, maxes);
-        if (!saveState(id, state)) warnNotSaved();
+        commit({ ...state, scars: scarAt(state.scars, value, max) });
         pendingScar = null;
       } else {
         const next = scarAt(state.scars, value, max);
         if (next > state.scars) pendingScar = value;
         else {
-          state = clampState({ ...state, scars: next }, maxes);
-          if (!saveState(id, state)) warnNotSaved();
+          commit({ ...state, scars: next });
           pendingScar = null;
         }
       }
@@ -633,18 +734,55 @@ async function init() {
       refreshHope(pendingScar === null ? `.hope-slot[data-slot="${key === "scar-cancel" ? wasPending : value}"]` : ".hope-confirm-yes");
       return;
     }
+    // Opening, leaving or finishing a rest changes no boxes, so none of it is worth an undo
+    // step: what the moves themselves did already has one each.
+    if (key === "rest-start") {
+      rest = { kind: value, done: [] };
+      refreshStatus();
+      return;
+    }
+    if (key === "rest-end") {
+      rest = null;
+      refreshStatus();
+      return;
+    }
+    if (key === "rest-move") {
+      const [id_, variant] = value.split(":");
+      const move = findRestMove(rest.kind, id_);
+      const together = variant === "together";
+      // The player's die, rolled here: 1d4 + tier, both halves shown so it can be checked
+      // against the one on the table.
+      const roll = move?.clear === "roll" ? 1 + Math.floor(Math.random() * 4) : 0;
+      const tier = tierForLevel(sheet.level);
+      const amount = restClearAmount(roll, tier);
+      const before = state;
+      commit(applyRestMove(state, maxes, move, { amount, together }));
+      // The log names the move plainly: the button carries the "(1d4+tier)" reminder, and
+      // repeating it in the line that reports the actual roll reads as noise.
+      rest.done.push(move?.clear === "roll"
+        ? t("rest.rolled", { move: t(`log.${value}`), roll, tier, total: amount, n: before[move.resource] - state[move.resource] })
+        : t("rest.applied", { move: t(`log.${value}`) }));
+      refreshHope();
+      refreshStatus();
+      return;
+    }
     const next = key === "condition"
       ? { ...state, conditions: toggleCondition(state.conditions, value) }
       : { ...state, [key]: tapBox(state[key], value) };
-    state = clampState(next, maxes);
-    if (!saveState(id, state)) warnNotSaved();
+    commit(next);
     if (key === "hope") {
       refreshHope(`.hope-slot[data-slot="${value}"]`);
+      refreshStatus();
     } else {
-      const fresh = renderStatus(sheet, state, maxes, onTap);
-      panels.status.replaceChildren(...fresh.childNodes);
+      refreshStatus();
     }
   }
+
+  // The toolbar's button is in play.html so it exists before this runs; it stays disabled until
+  // there is something to step back from.
+  undoButton = document.getElementById("undo");
+  undoButton.disabled = true;
+  undoButton.addEventListener("click", undo);
 
   hopeBox = renderHope(state, maxes.hope ?? 0, onTap, pendingScar);
   root.appendChild(renderHeader(sheet, character, domains, hopeBox));
