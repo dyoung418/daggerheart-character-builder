@@ -22,6 +22,7 @@ import {
   spellcastBadge,
   weaponRowContent,
 } from "./shared/gear.js";
+import { openClassDetail } from "./shared/class-detail.js";
 import { escapeHtml } from "./shared/escape.js";
 
 const CHAR_STORAGE_KEY = "dh-characters-v1";
@@ -306,6 +307,23 @@ function renderClassStep(panel) {
       character.subclassId = null;
       onChange();
     });
+
+    // Reading up on a class isn't choosing it, so this click must not reach the tile
+    // underneath: comparing two classes would otherwise keep overwriting the pick and
+    // clearing the subclass that went with it.
+    const info = document.createElement("button");
+    info.type = "button";
+    info.className = "class-info";
+    info.textContent = "i";
+    info.title = `What does a ${titleCase(cls.name)} do?`;
+    info.setAttribute("aria-label", `${titleCase(cls.name)} details`);
+    info.setAttribute("aria-haspopup", "dialog");
+    info.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openClassDetail(cls);
+    });
+    tile.querySelector("strong").appendChild(info);
+
     classGrid.appendChild(tile);
   }
   panel.appendChild(classGrid);
