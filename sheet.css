@@ -308,6 +308,8 @@
 .card-entry.domain-bone { border-left-color: var(--c-bone); }
 .loadout-row.domain-codex,
 .card-entry.domain-codex { border-left-color: var(--c-codex); }
+.loadout-row.domain-dread,
+.card-entry.domain-dread { border-left-color: var(--c-dread); }
 .loadout-row.domain-grace,
 .card-entry.domain-grace { border-left-color: var(--c-grace); }
 .loadout-row.domain-midnight,

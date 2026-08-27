@@ -1,7 +1,7 @@
 import { renderCardArt, domainCardArtPath } from "./shared/card-render.js";
 import { escapeHtml } from "./shared/escape.js";
 
-const DOMAINS = ["ARCANA", "BLADE", "BONE", "CODEX", "GRACE", "MIDNIGHT", "SAGE", "SPLENDOR", "VALOR"];
+const DOMAINS = ["ARCANA", "BLADE", "BONE", "CODEX", "DREAD", "GRACE", "MIDNIGHT", "SAGE", "SPLENDOR", "VALOR"];
 const TYPES = ["ABILITY", "SPELL", "GRIMOIRE"];
 const MAX_LOADOUT = 5;
 const STORAGE_KEY = "dh-card-builder-state-v1";

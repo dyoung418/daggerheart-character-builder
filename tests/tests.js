@@ -23,6 +23,7 @@ const {
   SUBCLASS_TIER_LABELS,
   SUBCLASS_TIER_ORDER,
   TIER_CARD_CAP,
+  advancementCredits,
   availableOptionKeys,
   blankSlotsUsed,
   ensureLevelFields,
@@ -45,10 +46,13 @@ const {
   unresolvedProblems,
   validateEntry,
   validateLevelUps,
+  writeLevelEntry,
 } = await import(`../shared/history.js${RUN}`);
 const {
+  TRAIT_KEYS,
   derivedStats,
   effectBonuses,
+  effectExperienceBonuses,
   evasionTotal,
   hitPointTotal,
   stressTotal,
@@ -62,6 +66,39 @@ const {
 const {
   deriveSheet,
 } = await import(`../shared/sheet-data.js${RUN}`);
+const {
+  CONDITIONS,
+  HOPE_MAX,
+  HOPE_START,
+  clampState,
+  defaultState,
+  maxesFromSheet,
+  scarAt,
+  tapBox,
+  toggleCondition,
+} = await import(`../shared/table-state.js${RUN}`);
+const {
+  LANGUAGES,
+  pickLanguage,
+  translator,
+} = await import(`../shared/i18n.js${RUN}`);
+const {
+  EXPORT_FORMAT,
+  exportFileName,
+  importConflicts,
+  mergeImported,
+  parseImport,
+  serializeCharacters,
+} = await import(`../shared/transfer.js${RUN}`);
+const {
+  MAX_BYTES,
+  MAX_DECODED_EDGE,
+  MAX_EDGE,
+  decodedSize,
+  fitWithin,
+  isPortrait,
+  sanitizePortrait,
+} = await import(`../shared/portrait.js${RUN}`);
 
 // ---------- tiny runner ----------
 
@@ -91,6 +128,9 @@ const DB = {
   classes: [{ id: "cls", domains: ["VALOR", "BLADE"], startingHitPoints: 7, startingEvasion: 9 }],
   domainCards: [
     { id: "c1", level: 1, domain: "VALOR", name: { "en-US": "One" } },
+    // Two more level 1 cards, so a starting card has something legal to be exchanged for.
+    { id: "c1b", level: 1, domain: "BLADE", name: { "en-US": "One again" } },
+    { id: "c1c", level: 1, domain: "BLADE", name: { "en-US": "One once more" } },
     { id: "c2", level: 2, domain: "VALOR", name: { "en-US": "Two" } },
     { id: "c3", level: 3, domain: "BLADE", name: { "en-US": "Three" } },
     { id: "c4", level: 4, domain: "VALOR", name: { "en-US": "Four" } },
@@ -408,6 +448,96 @@ group("An exchange replays in place");
   check("the card taken is there", modern.domainCardIds.includes("off"));
 }
 
+// The exchange is the least-exercised part of a level up — it's optional, it's the only choice
+// that REMOVES something, and the card it takes away can be one the character started with,
+// which is the one card the replay doesn't own. These go through writeLevelEntry, the same
+// function the level up screen writes every entry with, rather than reaching into levelUps.
+
+group("Exchanging a card the character STARTED with");
+{
+  const twoPicks = [{ key: "evasion", slotTier: 2 }, { key: "stress", slotTier: 2 }];
+  const ch = newCharacter();
+  ch.level = 2;
+  writeLevelEntry(ch, entry(2, twoPicks, "c2", { outCardId: "c1", inCardId: "c1b" }));
+
+  eq("the collection has the swap applied", ch.domainCardIds, ["c1b", "c2"]);
+  eq("the starting cards still say what was started with", ch.creationDomainCardIds, ["c1"]);
+  // The bug this pins down: the swap used to be written into the starting cards as well, and
+  // the validation reads those as "what you owned before this level" — so a legal swap was
+  // reported as "the card being given up isn't in the collection at this level" on every load,
+  // and no edit could clear it, because re-saving the level wrote the same list back.
+  eq("and the level is not flagged", validateLevelUps(ch, DB), []);
+
+  writeLevelEntry(ch, entry(2, twoPicks, "c2", { outCardId: "c1", inCardId: "c1c" }));
+  eq("editing the level to swap for something else re-runs from the original card", ch.domainCardIds, ["c1c", "c2"]);
+  eq("still nothing flagged", validateLevelUps(ch, DB), []);
+
+  writeLevelEntry(ch, entry(2, twoPicks, "c2", null));
+  eq("dropping the swap altogether gives the starting card back", ch.domainCardIds, ["c1", "c2"]);
+  eq("and the starting cards never moved", ch.creationDomainCardIds, ["c1"]);
+}
+
+group("Exchanging a card gained on an earlier level");
+{
+  const ch = buildTo([
+    entry(2, [{ key: "evasion", slotTier: 2 }, { key: "stress", slotTier: 2 }], "c2"),
+    entry(3, [{ key: "hitPoint", slotTier: 2 }, { key: "stress", slotTier: 2 }], "c3", { outCardId: "c2", inCardId: "c1b" }),
+  ], 3);
+  eq("the card taken at level 2 is the one that leaves", ch.domainCardIds, ["c1", "c1b", "c3"]);
+  eq("nothing is flagged", validateLevelUps(ch, DB), []);
+
+  // Giving up a card the character no longer has by then IS an error, and has to stay one.
+  const errors = validateEntry(ch, entry(3, [{ key: "hitPoint", slotTier: 2 }, { key: "stress", slotTier: 2 }], "c3", { outCardId: "c7", inCardId: "c1b" }), DB);
+  has("a card that was never owned still can't be given up", errors, "isn't in the collection");
+}
+
+group("An exchange leaves the vault holding only cards still owned");
+{
+  const ch = buildTo([entry(2, [{ key: "evasion", slotTier: 2 }, { key: "stress", slotTier: 2 }], "c2")], 2);
+  ch.domainVaultIds = ["c1"];
+  recomputeCharacter(ch);
+  eq("the vaulted card is there to begin with", ch.domainVaultIds, ["c1"]);
+
+  writeLevelEntry(ch, entry(2, [{ key: "evasion", slotTier: 2 }, { key: "stress", slotTier: 2 }], "c2", { outCardId: "c1", inCardId: "c1b" }));
+  eq("swapping it away empties the vault rather than leaving a card nobody owns", ch.domainVaultIds, []);
+  eq("and the card taken is in the collection", ch.domainCardIds, ["c1b", "c2"]);
+}
+
+group("Repairing a character saved while exchanges were baked into the baseline");
+{
+  const twoPicks = [{ key: "evasion", slotTier: 2 }, { key: "stress", slotTier: 2 }];
+  const stale = newCharacter();
+  stale.level = 3;
+  stale.levelUps.push(entry(2, twoPicks, "c2", { outCardId: "c1", inCardId: "c1b" }));
+  stale.levelUps.push(entry(3, [{ key: "hitPoint", slotTier: 2 }, { key: "stress", slotTier: 2 }], "c3", { outCardId: "c1b", inCardId: "c1c" }));
+  // What the old code left on disk: the same card swapped twice, written into the starting
+  // cards both times, so the baseline ended up naming a card taken two levels later.
+  stale.creationDomainCardIds = ["c1c"];
+  delete stale.creationCardsUnbaked;
+
+  ensureLevelFields(stale);
+  recomputeCharacter(stale);
+  eq("the chain unwinds to the card actually started with", stale.creationDomainCardIds, ["c1"]);
+  eq("the collection is what it always was", stale.domainCardIds, ["c1c", "c2", "c3"]);
+  eq("and the flags clear with no edit from the player", validateLevelUps(stale, DB), []);
+
+  // Repairing a character whose baseline is already honest must not un-swap it a second time.
+  delete stale.creationCardsUnbaked;
+  ensureLevelFields(stale);
+  eq("running the repair again changes nothing", stale.creationDomainCardIds, ["c1"]);
+}
+
+group("Writing a level entry replaces that level rather than adding another");
+{
+  const ch = buildTo([entry(2, [{ key: "evasion", slotTier: 2 }, { key: "stress", slotTier: 2 }], "c2")], 2);
+  ch.levelUps[0].acceptedAsIs = true;
+
+  writeLevelEntry(ch, entry(2, [{ key: "hitPoint", slotTier: 2 }, { key: "stress", slotTier: 2 }], "c2"));
+  eq("the level appears once", ch.levelUps.map((e) => e.level), [2]);
+  eq("the new choices are the ones that count", [ch.evasionBonus, ch.hitPointSlotsBonus], [0, 1]);
+  check("and redeclaring a level withdraws 'keep as is'", !ch.levelUps[0].acceptedAsIs);
+}
+
 group("The same option marked twice in one level applies twice");
 {
   const ch = newCharacter();
@@ -589,6 +719,55 @@ group("Derived stats are worked out in one place");
   eq("a zero bonus isn't listed at all", derivedStats(statChar(), STAT_DB).evasion.parts.length, 1);
 }
 
+group("A breakdown names the level that granted each point");
+{
+  // "Level up advancements +3" is true and useless: it can't be checked against anything the
+  // player remembers doing. The levels come from the recorded entries, so a breakdown can name
+  // them — and a character built above level 1 keeps the generic part for the levels that were
+  // never recorded, rather than having one invented for it.
+  const ch = statChar();
+  record(ch, 2, [{ key: "evasion", slotTier: 2 }, { key: "experience", slotTier: 2, experienceIds: ["e1", "e2"] }], "c2");
+  record(ch, 3, [{ key: "traits", slotTier: 2, traits: ["agility", "strength"] }, { key: "hitPoint", slotTier: 2 }], "c3");
+  const s = derivedStats(ch, STAT_DB);
+  const labels = (stat) => stat.parts.map((p) => p.label);
+
+  eq("Evasion", labels(s.evasion), ["Guardian (class)", "Level 2 advancement"]);
+  eq("Hit Points", labels(s.hitPoints), ["Guardian (class)", "Level 3 advancement"]);
+  eq("a trait separates what was assigned from what was earned", labels(s.traits.agility), ["Assigned at creation", "Level 3 advancement"]);
+  eq("a trait nothing has touched still explains itself", labels(s.traits.finesse), ["Assigned at creation"]);
+  // Proficiency comes from the tier achievement at 2, 5 and 8 as well as from the advancement
+  // option, and the breakdown has to tell the two apart.
+  eq("Proficiency", labels(s.proficiency), ["Base", "Level 2 achievement"]);
+  eq("the parts still add up to the total", s.proficiency.parts.reduce((n, p) => n + p.value, 0), s.proficiency.total);
+
+  const raised = s.experiences.find((e) => e.id === "e1");
+  eq("an Experience raised by an advancement says which level did it", labels(raised), ["Base", "Level 2 advancement"]);
+  // It used to report the modifier itself as a part, which left exactly one part — and the
+  // sheet only offers the "?" from two up, so nothing explained why the Experience wasn't +2.
+  check("so it has the two parts the sheet needs to offer its '?'", raised.parts.length > 1);
+  eq("an Experience nothing has raised keeps a single part", labels(s.experiences.find((e) => e.id === "exp_lv2")), ["Base"]);
+}
+
+group("Advancement credits reconcile with the replay");
+{
+  // The credits are attributed by a second walk over the recorded entries, so the risk is that
+  // it drifts from the replay that produces the numbers. Nothing here checks a label: it checks
+  // that every credit sums to exactly the bonus the replay arrived at.
+  const ch = newCharacter();
+  for (const step of SCRIPT) record(ch, step.level, step.picks, step.card, step.exchange);
+  const credits = advancementCredits(ch);
+  const sum = (list) => (list || []).reduce((n, c) => n + c.value, 0);
+
+  eq("hit point slots", sum(credits.hitPoint), ch.hitPointSlotsBonus - ch.baseline.hitPointSlotsBonus);
+  eq("stress slots", sum(credits.stress), ch.stressSlotsBonus - ch.baseline.stressSlotsBonus);
+  eq("evasion", sum(credits.evasion), ch.evasionBonus - ch.baseline.evasionBonus);
+  eq("proficiency, tier achievements included", sum(credits.proficiency), ch.proficiency - ch.baseline.proficiency);
+  eq("every trait", TRAIT_KEYS.map((k) => sum(credits.traits[k])),
+    TRAIT_KEYS.map((k) => ch.traits[k] - ch.baseline.traits[k]));
+  eq("every Experience", ch.experiences.map((e) => sum(credits.experiences[e.id])),
+    ch.experiences.map((e) => e.modifier - e.baseModifier));
+}
+
 group("Armor Score, thresholds, and the unarmored rule");
 {
   const armored = derivedStats(statChar({ level: 3, equipment: { armorId: "gambeson" } }), STAT_DB);
@@ -654,6 +833,7 @@ const FX_DB = {
     { id: "sub", spellcastTrait: "KNOWLEDGE" },
   ],
   ancestries: [
+    { id: "core_ancestry_clank", name: { "en-US": "Clank" }, features: [{ name: { "en-US": "Purposeful Design" } }] },
     { id: "core_ancestry_giant", name: { "en-US": "Giant" }, features: [{ name: { "en-US": "Endurance" } }, { name: { "en-US": "Reach" } }] },
     { id: "core_ancestry_simiah", name: { "en-US": "Simiah" }, features: [{ name: { "en-US": "Natural Climber" } }, { name: { "en-US": "Nimble" } }] },
   ],
@@ -693,6 +873,53 @@ group("An ancestry feature that grants a stat actually grants it");
   // Nimble is Simiah's SECOND feature, unlike every other stat feature in the book.
   const simiah = derivedStats(statChar(heritage("core_ancestry_simiah", "Nimble")), FX_DB);
   eq("Simiah's Nimble is +1 Evasion", simiah.evasion.total, 10);
+}
+
+group("A permanent Experience bonus reaches the level up picker, not just the sheet");
+{
+  // Purposeful Design is the one effect that raises a named Experience rather than a stat, so
+  // it's the one the replay can't know about: expBonus only counts the +1s taken as
+  // advancements. The picker used to build its numbers from the replay alone, which offered a
+  // Clank an Experience at +2 while the sheet showed it at +3.
+  const clank = (answer) => statChar({
+    ...heritage("core_ancestry_clank", "Purposeful Design"),
+    ...(answer ? { effectChoices: { "core_ancestry_clank:Purposeful Design": answer } } : {}),
+  });
+
+  eq("unanswered, it grants nothing", effectExperienceBonuses(clank(null), FX_DB), {});
+
+  const answered = clank({ optionId: "one", experienceIds: ["e1"] });
+  eq("answered, the chosen Experience carries +1", effectExperienceBonuses(answered, FX_DB), { e1: 1 });
+  eq("and the one it didn't choose carries nothing",
+    effectExperienceBonuses(clank({ optionId: "one", experienceIds: ["e2"] }), FX_DB).e1 || 0, 0);
+
+  // The arithmetic the picker does, against the number the sheet shows for the same Experience.
+  const bonuses = effectExperienceBonuses(answered, FX_DB);
+  const asPicker = (id) => experiencesAtLevel(answered, answered.level, stateAtLevel(answered, answered.level + 1).expBonus)
+    .map((exp) => ({ ...exp, modifier: exp.modifier + (bonuses[exp.id] || 0) }))
+    .find((e) => e.id === id).modifier;
+  const asSheet = (id) => derivedStats(answered, FX_DB).experiences.find((e) => e.id === id).total;
+  eq("the picker and the sheet agree on the boosted Experience", asPicker("e1"), asSheet("e1"));
+  eq("and on the one that wasn't boosted", asPicker("e2"), asSheet("e2"));
+}
+
+group("An Experience breakdown names every source, and no subtotal");
+{
+  // The reported case: a Clank whose Purposeful Design bonus and a level 2 advancement both
+  // landed on the same Experience saw +4 explained as "Experience +3, Permanent bonus +1" —
+  // where the +3 was the very thing being asked about, and the feature that granted the other
+  // +1 went unnamed.
+  const clank = statChar({
+    ...heritage("core_ancestry_clank", "Purposeful Design"),
+    effectChoices: { "core_ancestry_clank:Purposeful Design": { optionId: "one", experienceIds: ["e1"] } },
+  });
+  record(clank, 2, [{ key: "experience", slotTier: 2, experienceIds: ["e1", "e2"] }, { key: "evasion", slotTier: 2 }], "c2");
+
+  const e1 = derivedStats(clank, FX_DB).experiences.find((e) => e.id === "e1");
+  eq("the total is unchanged", e1.total, 4);
+  eq("and every part of it is a real source",
+    e1.parts.map((p) => `${p.label} ${p.value}`),
+    ["Base 2", "Level 2 advancement 1", "Clank — Purposeful Design 1"]);
 }
 
 group("A subclass tier implies the tiers below it, and their bonuses stack");
@@ -1188,6 +1415,377 @@ group("Sheet stats agree with derivedStats() rather than re-deriving anything");
   const capped = deriveSheet(sheetChar({ equipment: { weaponMode: "two-handed", armorId: "absurd" } }), EFFECT_DB);
   eq("Armor Score is capped at 12, not printed as the raw baseScore of 40", capped.armorScore, 12);
   check("and the cap is explained in a note the printed page can show", !!capped.armorScoreNote);
+}
+
+group("Table state: boxes marked at the table (HP, Stress, Hope, Armor)");
+{
+  eq("a new character starts with nothing marked but the two starting Hope, no conditions, no notes",
+    defaultState(), { hp: 0, stress: 0, hope: HOPE_START, armor: 0, scars: 0, conditions: [], notes: "" });
+  eq("Hope starts at 2 and caps at 6, per the SRD", [HOPE_START, HOPE_MAX], [2, 6]);
+
+  // Tapping is "fill up to here / clear from here on": one tap reaches any value.
+  eq("tapping an empty box marks every box up to and including it", tapBox(0, 2), 3);
+  eq("tapping the box right after the marked ones marks one more", tapBox(2, 2), 3);
+  eq("tapping the last marked box clears just that one", tapBox(3, 2), 2);
+  eq("tapping an earlier marked box clears it and everything after", tapBox(5, 1), 1);
+  eq("tapping the first box when it's the only one marked clears everything", tapBox(1, 0), 0);
+
+  const maxes = { hp: 6, stress: 6, hope: HOPE_MAX, armor: 3 };
+  eq("values within the maxima pass through untouched",
+    clampState({ hp: 2, stress: 1, hope: 4, armor: 3 }, maxes), { hp: 2, stress: 1, hope: 4, armor: 3, scars: 0, conditions: [], notes: "" });
+  eq("a value above its maximum (e.g. armor swapped for a lighter one) is pulled down to it",
+    clampState({ hp: 9, stress: 0, hope: 7, armor: 5 }, maxes), { hp: 6, stress: 0, hope: 6, armor: 3, scars: 0, conditions: [], notes: "" });
+
+  // Conditions and notes ride along in the same state object: a clamp must keep them, or the
+  // first tap on an HP box would silently drop every condition marked.
+  eq("conditions and notes survive a clamp",
+    clampState({ hp: 1, stress: 0, hope: 2, armor: 0, conditions: ["hidden", "restrained"], notes: "owes Rya 2 gold" }, maxes),
+    { hp: 1, stress: 0, hope: 2, armor: 0, scars: 0, conditions: ["hidden", "restrained"], notes: "owes Rya 2 gold" });
+  eq("unknown condition ids and non-string entries are dropped, duplicates collapsed",
+    clampState({ conditions: ["vulnerable", "stunned", 3, "vulnerable"] }, maxes).conditions, ["vulnerable"]);
+  eq("non-string notes fall back to empty", clampState({ notes: 42 }, maxes).notes, "");
+
+  eq("the SRD's three conditions, each with the one line a player needs at the table",
+    CONDITIONS.map((c) => c.id), ["vulnerable", "hidden", "restrained"]);
+  check("every condition has a label and an effect", CONDITIONS.every((c) => c.label && c.effect));
+  eq("toggling a condition on adds it in catalogue order", toggleCondition(["restrained"], "vulnerable"), ["vulnerable", "restrained"]);
+  eq("toggling it again removes it", toggleCondition(["vulnerable", "restrained"], "vulnerable"), ["restrained"]);
+  eq("toggling an unknown id changes nothing", toggleCondition(["hidden"], "stunned"), ["hidden"]);
+  eq("negative and non-numeric values fall back to the defaults",
+    clampState({ hp: -1, stress: "x", hope: undefined, armor: null }, maxes), defaultState());
+  eq("an unknown maximum (draft with no class yet) means nothing can be marked",
+    clampState({ hp: 3, stress: 2, hope: 2, armor: 1 }, { hp: null, stress: 6, hope: 6, armor: null }),
+    { hp: 0, stress: 2, hope: 2, armor: 0, scars: 0, conditions: [], notes: "" });
+  eq("a missing state altogether clamps to the defaults", clampState(undefined, maxes), defaultState());
+  check("clampState returns a new object rather than mutating its input", (() => {
+    const input = { hp: 9, stress: 0, hope: 2, armor: 0 };
+    clampState(input, maxes);
+    return input.hp === 9;
+  })());
+
+  eq("the maxima come from the derived sheet: HP, Stress, Hope slots and Armor Score (= armor slots)",
+    maxesFromSheet({ hitPoints: 7, stress: 6, hopeSlots: 6, armorScore: 3 }),
+    { hp: 7, stress: 6, hope: 6, armor: 3 });
+  eq("unknown sheet values stay null so the UI can show a dash",
+    maxesFromSheet({ hitPoints: null, stress: 6, hopeSlots: 6, armorScore: null }),
+    { hp: null, stress: 6, hope: 6, armor: null });
+
+  eq("ensureLevelFields backfills the table state on characters saved before it existed",
+    ensureLevelFields(newCharacter()).state, defaultState());
+  const kept = newCharacter();
+  kept.state = { hp: 3, stress: 1, hope: 5, armor: 2 };
+  // A character saved between the play page and scars existing has a state with no `scars`
+  // field at all — not zero, absent. ensureLevelFields backfills it without touching anything
+  // else already there.
+  eq("and backfills scars onto an existing state that predates it, leaving the rest untouched",
+    ensureLevelFields(kept).state, { hp: 3, stress: 1, hope: 5, armor: 2, scars: 0 });
+
+  // An imported file can say `"state": "x"` (or a number, or an array): not just missing, but
+  // the wrong shape entirely. Writing a field onto a primitive throws in strict mode, which
+  // would take the whole page down rather than just this one character's state.
+  for (const bad of ["rotto", 42, [], null]) {
+    const broken = newCharacter();
+    broken.state = bad;
+    check(`a primitive or array state (${JSON.stringify(bad)}) resets to defaultState() instead of throwing`, (() => {
+      try {
+        return JSON.stringify(ensureLevelFields(broken).state) === JSON.stringify(defaultState());
+      } catch {
+        return false;
+      }
+    })());
+  }
+
+  // A scar crosses out a Hope slot for good (SRD, Avoid Death). They're always the slots at
+  // the right-hand end, so scarring is tapBox seen from that end.
+  eq("no scars to start with", defaultState().scars, 0);
+  eq("long-pressing the last slot crosses out just that one", scarAt(0, 5, 6), 1);
+  eq("long-pressing an earlier one crosses out it and everything after", scarAt(0, 3, 6), 3);
+  eq("long-pressing the leftmost crosses out the lot", scarAt(0, 0, 6), 6);
+  eq("long-pressing the only crossed slot frees it", scarAt(1, 5, 6), 0);
+  eq("long-pressing a crossed slot frees it and the crossed ones before it", scarAt(3, 4, 6), 1);
+  eq("long-pressing the leftmost crossed slot frees just that one, the ones after it stay", scarAt(3, 3, 6), 2);
+  eq("long-pressing the rightmost (last) crossed slot frees them all", scarAt(3, 5, 6), 0);
+
+  eq("scars ride along in the state", clampState({ scars: 2 }, maxes).scars, 2);
+  eq("more scars than there are slots is impossible", clampState({ scars: 9 }, maxes).scars, HOPE_MAX);
+  eq("a negative or non-numeric scar count falls back to none",
+    [clampState({ scars: -1 }, maxes).scars, clampState({ scars: "x" }, maxes).scars], [0, 0]);
+  eq("a scar gained with Hope full pushes the Hope down with it",
+    clampState({ hope: 6, scars: 2 }, maxes).hope, 4);
+  eq("Hope below the reduced maximum is left where it is", clampState({ hope: 1, scars: 2 }, maxes).hope, 1);
+  eq("with no Hope slots at all (a draft with no class) nothing can be scarred",
+    clampState({ scars: 3 }, { hp: 6, stress: 6, hope: null, armor: 3 }).scars, 0);
+  eq("a character saved before scars existed opens with none",
+    ensureLevelFields(newCharacter()).state.scars, 0);
+}
+
+group("JSON transfer: one file format for one character or the whole list");
+{
+  const a = newCharacter(); a.id = "a"; a.name = "Aster";
+  const b = newCharacter(); b.id = "b"; b.name = "Brann Ferro";
+  const when = new Date("2026-08-26T10:00:00Z");
+
+  const text = serializeCharacters([a, b], when);
+  const parsed = JSON.parse(text);
+  eq("the envelope names the format, a version and the export time",
+    [parsed.format, parsed.version, parsed.exportedAt], [EXPORT_FORMAT, 1, "2026-08-26T10:00:00.000Z"]);
+  eq("and carries the characters as saved", parsed.characters.map((c) => c.id), ["a", "b"]);
+  check("the text is pretty-printed so a file is readable and diffable", text.includes("\n  "));
+
+  eq("parsing what serialize wrote gives the characters back", parseImport(text).characters.map((c) => c.name), ["Aster", "Brann Ferro"]);
+  eq("and no errors", parseImport(text).errors, []);
+
+  const old = JSON.stringify({ format: EXPORT_FORMAT, version: 1, characters: [{ id: "x", name: "Old", classId: "cls" }] });
+  check("an older character is backfilled on import (ensureLevelFields), not rejected",
+    parseImport(old).characters[0].levelUps !== undefined && parseImport(old).characters[0].state !== undefined);
+
+  has("not JSON at all is an error", parseImport("nope {").errors, "not valid JSON");
+  has("JSON that isn't one of these files is an error", parseImport(JSON.stringify({ hello: 1 })).errors, "not a Daggerheart character file");
+  has("a bare character object (no envelope) is refused too", parseImport(JSON.stringify(a)).errors, "not a Daggerheart character file");
+  has("an entry without an id is an error", parseImport(JSON.stringify({ format: EXPORT_FORMAT, version: 1, characters: [{ name: "No id" }] })).errors, "missing an id");
+  has("an entry that isn't an object is an error", parseImport(JSON.stringify({ format: EXPORT_FORMAT, version: 1, characters: [42] })).errors, "not a character");
+  eq("an empty list is fine (nothing to import, no error)", parseImport(JSON.stringify({ format: EXPORT_FORMAT, version: 1, characters: [] })), { characters: [], errors: [] });
+  has("a newer version than this app knows is refused, naming the version", parseImport(JSON.stringify({ format: EXPORT_FORMAT, version: 99, characters: [] })).errors, "version 99");
+}
+
+group("JSON transfer: merging an import into the saved list, by id");
+{
+  const a = newCharacter(); a.id = "a"; a.name = "Aster"; a.level = 1;
+  const b = newCharacter(); b.id = "b"; b.name = "Brann";
+  const a2 = newCharacter(); a2.id = "a"; a2.name = "Aster"; a2.level = 3;
+  const c = newCharacter(); c.id = "c"; c.name = "Cato";
+  const existing = [a, b];
+  const incoming = [a2, c];
+
+  eq("conflicts are the incoming characters whose id is already saved", importConflicts(existing, incoming).map((x) => x.id), ["a"]);
+  eq("no conflicts when every id is new", importConflicts(existing, [c]), []);
+
+  const replaced = mergeImported(existing, incoming, "replace");
+  eq("replace: the saved copy is overwritten in place, new ones appended",
+    replaced.map((x) => `${x.id}:${x.name}:${x.level}`), ["a:Aster:3", "b:Brann:1", "c:Cato:1"]);
+
+  let n = 0;
+  const copied = mergeImported(existing, incoming, "copy", () => `new${++n}`);
+  eq("copy: the saved copy stays, the incoming one gets a fresh id and a marker in its name",
+    copied.map((x) => `${x.id}:${x.name}:${x.level}`), ["a:Aster:1", "b:Brann:1", "new1:Aster (imported):3", "c:Cato:1"]);
+
+  check("merging never mutates the saved list", existing.length === 2 && existing[0].level === 1);
+  eq("importing the same file twice with replace is idempotent",
+    mergeImported(replaced, incoming, "replace").map((x) => x.id), ["a", "b", "c"]);
+
+  const stamp = "2026-08-26";
+  eq("one character is named after itself", exportFileName([b], stamp), "brann.json");
+  eq("odd characters in the name become dashes", exportFileName([{ name: "Ser Aëlwyn / the Bold!" }], stamp), "ser-aelwyn-the-bold.json");
+  eq("a nameless character still gets a file name", exportFileName([{ name: "" }], stamp), "character.json");
+  eq("the whole list is named by date, like the CSV", exportFileName([a, b], stamp), `daggerheart-characters-${stamp}.json`);
+}
+
+group("Hope & Fear (the_void release of daggerheart-data) is in data/");
+{
+  const load = async (name) => (await fetch(`../data/${name}.json${RUN}`)).json();
+  const [classes, subclasses, ancestries, communities, cards] = await Promise.all(
+    ["classes", "subclasses", "ancestries", "communities", "domain-cards"].map(load));
+  const voidClasses = classes.filter((c) => c.id.startsWith("the_void_class_"));
+  eq("the four classes", voidClasses.map((c) => c.name).sort(), ["ASSASSIN", "BRAWLER", "WARLOCK", "WITCH"]);
+  check("each of them has two subclasses keyed by class name, the way the wizard looks them up",
+    voidClasses.every((c) => subclasses.filter((s) => s.class === c.name).length === 2));
+  check("the 21 Dread domain cards, levels 1 to 10", cards.filter((c) => c.domain === "DREAD").length === 21);
+  check("the six ancestries and six communities",
+    ancestries.filter((a) => a.id.startsWith("the_void_")).length === 6 && communities.filter((a) => a.id.startsWith("the_void_")).length === 6);
+  check("no id collides with the core set", new Set(classes.map((c) => c.id)).size === classes.length && new Set(cards.map((c) => c.id)).size === cards.length);
+  check("the core set is still complete (9 classes, 189 cards)", classes.filter((c) => c.id.startsWith("core_")).length === 9 && cards.filter((c) => c.id.startsWith("core_")).length === 189);
+}
+
+group("Play page labels: English by default, Italian when the page says lang=\"it\"");
+{
+  eq("the languages on offer", LANGUAGES, ["en", "it"]);
+  eq("a plain tag picks its dictionary", [pickLanguage("it"), pickLanguage("en")], ["it", "en"]);
+  eq("a regional tag picks the base language", pickLanguage("it-IT"), "it");
+  eq("anything unknown, empty or missing falls back to English", [pickLanguage("de"), pickLanguage(""), pickLanguage(undefined)], ["en", "en", "en"]);
+
+  const en = translator("en");
+  const it = translator("it");
+  eq("a key resolves in each language", [en("tab.status"), it("tab.status")], ["Status", "Stato"]);
+  eq("placeholders are filled", it("hope.of", { n: 2, max: 6 }), "Speranza: 2 su 6");
+  eq("an unknown key comes back as the key itself, never blank", it("nope.missing"), "nope.missing");
+  check("every English key has an Italian one — no half-translated page",
+    (() => { const missing = en.keys().filter((k) => it(k) === k && en(k) !== k); return missing.length === 0; })());
+  check("the three conditions are translated, label and effect",
+    ["vulnerable", "hidden", "restrained"].every((id) => it(`condition.${id}.label`) !== en(`condition.${id}.label`) && it(`condition.${id}.effect`) !== `condition.${id}.effect`));
+
+  eq("an unscarred slot's label names it as a box, not a bare number",
+    it("hope.slot", { n: 3, max: 6 }), "Casella di Speranza 3 di 6");
+  eq("the crossed-out slot says so, counting the same way as the unscarred one",
+    it("hope.scarred", { n: 6, max: 6 }), "Casella di Speranza 6 di 6, cicatrizzata");
+  eq("the confirmation names the slot it's about to cross out for good",
+    it("hope.scar.confirmOne", { n: 6 }), "Barrare per sempre la Speranza 6?");
+  eq("or the whole range, when the gesture crosses out more than one",
+    it("hope.scar.confirmMany", { from: 4, to: 6 }), "Barrare per sempre la Speranza da 4 a 6?");
+  eq("the end of the road is spelled out, not implied",
+    it("hope.journeyEnds"), "Il viaggio di questo personaggio finisce qui.");
+}
+
+group("Portrait: a picture small enough to live in localStorage");
+{
+  eq("the limits, in one place", [MAX_EDGE, MAX_BYTES], [512, 120_000]);
+
+  eq("a wide picture is shrunk by its width", fitWithin(1600, 900, 512), { width: 512, height: 288 });
+  eq("a tall one by its height", fitWithin(900, 1600, 512), { width: 288, height: 512 });
+  eq("a square one hits the box on both sides", fitWithin(2000, 2000, 512), { width: 512, height: 512 });
+  eq("one already inside the box is left alone — never enlarged", fitWithin(120, 90, 512), { width: 120, height: 90 });
+  eq("a degenerate size doesn't divide by zero", fitWithin(0, 0, 512), { width: 0, height: 0 });
+
+  const webp = "data:image/webp;base64,AAAA";
+  eq("a small WebP data URL is a portrait", isPortrait(webp), true);
+  eq("JPEG and PNG too", [isPortrait("data:image/jpeg;base64,AA"), isPortrait("data:image/png;base64,AA")], [true, true]);
+  eq("a remote URL is not", isPortrait("https://example.com/face.png"), false);
+  eq("nor is a script URL", isPortrait("javascript:alert(1)"), false);
+  eq("nor is an HTML data URL dressed up as an image", isPortrait("data:text/html;base64,PHNjcmlwdD4="), false);
+  eq("nor an SVG, which can carry script", isPortrait("data:image/svg+xml;base64,AA"), false);
+  eq("nor an empty string, a number or an object", [isPortrait(""), isPortrait(42), isPortrait({})], [false, false, false]);
+  eq("anything past the byte cap is refused", isPortrait("data:image/webp;base64," + "A".repeat(MAX_BYTES)), false);
+
+  eq("sanitizePortrait passes a good one through", sanitizePortrait(webp), webp);
+  eq("and turns anything else into null", [sanitizePortrait("javascript:alert(1)"), sanitizePortrait(undefined)], [null, null]);
+
+  // Everything that gets read back — localStorage and imported files alike — goes through
+  // ensureLevelFields, so that's where a portrait is checked before an <img> ever sees it.
+  const clean = newCharacter();
+  clean.portrait = webp;
+  eq("a good portrait survives ensureLevelFields", ensureLevelFields(clean).portrait, webp);
+
+  const nasty = newCharacter();
+  nasty.name = "Aster";
+  nasty.portrait = "javascript:alert(1)";
+  const fixed = ensureLevelFields(nasty);
+  eq("a portrait that isn't a picture is dropped", "portrait" in fixed, false);
+  eq("and the rest of the character is untouched", fixed.name, "Aster");
+
+  eq("a character with no portrait at all stays without one", "portrait" in ensureLevelFields(newCharacter()), false);
+
+  const shipped = newCharacter();
+  shipped.id = "p1";
+  shipped.portrait = webp;
+  eq("a portrait makes the round trip through an export file",
+    parseImport(serializeCharacters([shipped])).characters[0].portrait, webp);
+}
+
+group("Portrait: a decompression bomb is caught by its header, before it ever decodes");
+{
+  // Bytes built by hand, one format at a time — no files on disk, no real image encoder.
+  // decodedSize only needs enough of the header to read the declared width and height; the
+  // rest of each format (pixel data, CRCs, Huffman tables) is never touched.
+  const u8 = (arr) => Uint8Array.from(arr);
+  const ascii = (s) => Array.from(s, (c) => c.charCodeAt(0));
+  const toDataUrl = (mime, bytes) => {
+    let binary = "";
+    for (const b of bytes) binary += String.fromCharCode(b);
+    return `data:${mime};base64,${btoa(binary)}`;
+  };
+  const u32be = (bytes, offset, value) => {
+    bytes[offset] = (value >>> 24) & 0xff;
+    bytes[offset + 1] = (value >>> 16) & 0xff;
+    bytes[offset + 2] = (value >>> 8) & 0xff;
+    bytes[offset + 3] = value & 0xff;
+  };
+  const u24le = (bytes, offset, value) => {
+    bytes[offset] = value & 0xff;
+    bytes[offset + 1] = (value >> 8) & 0xff;
+    bytes[offset + 2] = (value >> 16) & 0xff;
+  };
+
+  // PNG: signature, then the IHDR chunk with width at byte 16 and height at byte 20
+  // (big-endian, 4 bytes each). Nothing past byte 24 is read.
+  function pngHeader(width, height) {
+    const bytes = new Uint8Array(24);
+    bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 0);
+    bytes.set([0, 0, 0, 13], 8); // IHDR data length, unread by decodedSize
+    bytes.set(ascii("IHDR"), 12);
+    u32be(bytes, 16, width);
+    u32be(bytes, 20, height);
+    return bytes;
+  }
+
+  // JPEG: SOI, then an SOF0 marker directly (real files have DQT/APP0 segments first, but the
+  // scanner has to walk past those to find it — this fixture just puts SOF0 first). The segment
+  // length that follows the marker is never used by decodedSize when the marker IS a SOF, so it
+  //'s left as zeroes.
+  function jpegHeader(width, height) {
+    return u8([
+      0xff, 0xd8,
+      0xff, 0xc0, 0x00, 0x00,
+      0x08, // precision
+      (height >> 8) & 0xff, height & 0xff,
+      (width >> 8) & 0xff, width & 0xff,
+    ]);
+  }
+
+  // WebP VP8X (the "extended" chunk): RIFF/WEBP/VP8X headers, a flags byte, 3 reserved bytes,
+  // then the canvas width and height as 24-bit little-endian values, each one less than the
+  // real size.
+  function webpVp8xHeader(width, height) {
+    const bytes = new Uint8Array(30);
+    bytes.set(ascii("RIFF"), 0);
+    bytes.set(ascii("WEBP"), 8);
+    bytes.set(ascii("VP8X"), 12);
+    bytes[20] = 0; // flags
+    u24le(bytes, 24, width - 1);
+    u24le(bytes, 27, height - 1);
+    return bytes;
+  }
+
+  eq("the cap", MAX_DECODED_EDGE, 2048);
+
+  const pngSmall = toDataUrl("image/png", pngHeader(100, 100));
+  const pngHuge = toDataUrl("image/png", pngHeader(24000, 24000));
+  eq("PNG: a 100x100 header reads back its size", decodedSize(pngSmall), { width: 100, height: 100 });
+  eq("PNG: a 24000x24000 header reads back its size too", decodedSize(pngHuge), { width: 24000, height: 24000 });
+  eq("PNG: the small one is accepted", sanitizePortrait(pngSmall), pngSmall);
+  eq("PNG: the huge one is refused before it ever decodes", sanitizePortrait(pngHuge), null);
+
+  const jpegSmall = toDataUrl("image/jpeg", jpegHeader(100, 100));
+  const jpegHuge = toDataUrl("image/jpeg", jpegHeader(24000, 24000));
+  eq("JPEG: an SOF0 header reads back its size", decodedSize(jpegSmall), { width: 100, height: 100 });
+  eq("JPEG: a huge SOF0 header reads back its size too", decodedSize(jpegHuge), { width: 24000, height: 24000 });
+  eq("JPEG: the small one is accepted", sanitizePortrait(jpegSmall), jpegSmall);
+  eq("JPEG: the huge one is refused", sanitizePortrait(jpegHuge), null);
+
+  // A real photo's EXIF (plus a thumbnail) routinely pushes the SOF marker tens of kilobytes
+  // in — an APP1 segment, walked past the same way any other segment is. A short scan budget
+  // would give up on exactly these files and let the huge one through unread.
+  function jpegHeaderWithApp1(width, height, app1Size) {
+    const app1 = new Uint8Array(2 + app1Size); // marker (2) + length field, which counts itself
+    app1[0] = 0xff; app1[1] = 0xe1;
+    app1[2] = (app1Size >> 8) & 0xff;
+    app1[3] = app1Size & 0xff;
+    // app1[4..] stands in for the EXIF/thumbnail payload — content is never read, only skipped.
+    const sof0 = jpegHeader(width, height).slice(2); // drop jpegHeader's own leading SOI
+    const bytes = new Uint8Array(2 + app1.length + sof0.length);
+    bytes[0] = 0xff; bytes[1] = 0xd8; // SOI
+    bytes.set(app1, 2);
+    bytes.set(sof0, 2 + app1.length);
+    return bytes;
+  }
+  const jpegHugeWithExif = toDataUrl("image/jpeg", jpegHeaderWithApp1(24000, 24000, 8000));
+  const jpegSmallWithExif = toDataUrl("image/jpeg", jpegHeaderWithApp1(100, 100, 8000));
+  eq("JPEG: an 8KB APP1 segment ahead of SOF0 is walked past, size read correctly (huge)",
+    decodedSize(jpegHugeWithExif), { width: 24000, height: 24000 });
+  eq("JPEG: same APP1 size, a real photo's proportions", decodedSize(jpegSmallWithExif), { width: 100, height: 100 });
+  eq("JPEG: the huge one is refused even behind 8KB of EXIF", sanitizePortrait(jpegHugeWithExif), null);
+  eq("JPEG: the small one still passes with the same EXIF", sanitizePortrait(jpegSmallWithExif), jpegSmallWithExif);
+
+  const webpSmall = toDataUrl("image/webp", webpVp8xHeader(100, 100));
+  const webpHuge = toDataUrl("image/webp", webpVp8xHeader(24000, 24000));
+  eq("WebP VP8X: a small canvas reads back its size", decodedSize(webpSmall), { width: 100, height: 100 });
+  eq("WebP VP8X: a huge canvas reads back its size too", decodedSize(webpHuge), { width: 24000, height: 24000 });
+  eq("WebP: the small one is accepted", sanitizePortrait(webpSmall), webpSmall);
+  eq("WebP: the huge one is refused", sanitizePortrait(webpHuge), null);
+
+  // A header that doesn't parse (too short, wrong signature) can't say it's oversized, so it's
+  // let through rather than dropping an honest file the decoder would have handled anyway.
+  eq("an unreadable header comes back null, not a false size", decodedSize("data:image/webp;base64,AAAA"), null);
+  eq("and sanitizePortrait accepts it rather than guessing", sanitizePortrait("data:image/webp;base64,AAAA"), "data:image/webp;base64,AAAA");
+  eq("a non-string is null, not a throw", decodedSize(42), null);
 }
 
 group("Every class carries what the detail card shows");
