@@ -1,0 +1,304 @@
+/* play.html — the character at the table, one hand, one thumb.
+   Look borrowed from the Foundryborne Daggerheart system (MIT): night-blue ground, gold
+   rules and labels, beige text, Cinzel for names and Montserrat for everything else, traits
+   on shields, HP/Stress as pips, armor as shields. Mobile-first; wider screens only get
+   more room, never a different layout. Standalone: this page does NOT load style.css. */
+
+/* ---------- fonts (OFL, from assets/fonts) ---------- */
+@font-face { font-family: "Cinzel"; font-weight: 400; font-display: swap; src: url("assets/fonts/cinzel-regular-latin.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122; }
+@font-face { font-family: "Cinzel"; font-weight: 400; font-display: swap; src: url("assets/fonts/cinzel-regular-latin-ext.woff2") format("woff2"); unicode-range: U+0100-02BA, U+1E00-1EFF, U+2020, U+20A0-20C0; }
+@font-face { font-family: "Cinzel"; font-weight: 700; font-display: swap; src: url("assets/fonts/cinzel-bold-latin.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122; }
+@font-face { font-family: "Cinzel"; font-weight: 700; font-display: swap; src: url("assets/fonts/cinzel-bold-latin-ext.woff2") format("woff2"); unicode-range: U+0100-02BA, U+1E00-1EFF, U+2020, U+20A0-20C0; }
+@font-face { font-family: "Cinzel Decorative"; font-weight: 700; font-display: swap; src: url("assets/fonts/cinzel-decorative-bold-latin.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122; }
+@font-face { font-family: "Cinzel Decorative"; font-weight: 700; font-display: swap; src: url("assets/fonts/cinzel-decorative-bold-latin-ext.woff2") format("woff2"); unicode-range: U+0100-02BA, U+1E00-1EFF, U+2020, U+20A0-20C0; }
+@font-face { font-family: "Montserrat"; font-weight: 400; font-display: swap; src: url("assets/fonts/montserrat-regular-latin.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122; }
+@font-face { font-family: "Montserrat"; font-weight: 400; font-display: swap; src: url("assets/fonts/montserrat-regular-latin-ext.woff2") format("woff2"); unicode-range: U+0100-02BA, U+1E00-1EFF, U+2020, U+20A0-20C0; }
+@font-face { font-family: "Montserrat"; font-weight: 600; font-display: swap; src: url("assets/fonts/montserrat-semibold-latin.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122; }
+@font-face { font-family: "Montserrat"; font-weight: 600; font-display: swap; src: url("assets/fonts/montserrat-semibold-latin-ext.woff2") format("woff2"); unicode-range: U+0100-02BA, U+1E00-1EFF, U+2020, U+20A0-20C0; }
+@font-face { font-family: "Overpass"; font-style: normal; font-weight: 100 900; font-display: swap; src: url("assets/fonts/overpass-regular-latin.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122; }
+@font-face { font-family: "Overpass"; font-style: normal; font-weight: 100 900; font-display: swap; src: url("assets/fonts/overpass-regular-latin-ext.woff2") format("woff2"); unicode-range: U+0100-02BA, U+1E00-1EFF, U+2020, U+20A0-20C0; }
+@font-face { font-family: "Overpass"; font-style: italic; font-weight: 100 900; font-display: swap; src: url("assets/fonts/overpass-italic-latin.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122; }
+@font-face { font-family: "Overpass"; font-style: italic; font-weight: 100 900; font-display: swap; src: url("assets/fonts/overpass-italic-latin-ext.woff2") format("woff2"); unicode-range: U+0100-02BA, U+1E00-1EFF, U+2020, U+20A0-20C0; }
+
+/* ---------- palette (Foundryborne's colors.less) ---------- */
+:root {
+  --dh-golden: #f3c267;
+  --dh-golden-40: #f3c26740;
+  --dh-golden-10: #f3c26710;
+  --dh-dark-golden: #2b1d03;
+  --dh-dark-blue: #18162e;
+  --dh-deep-black: #0e0d15;
+  --dh-beige: #efe6d8;
+  --dh-beige-50: #efe6d880;
+  --dh-subtle: #a29086;
+  --dh-trait-bg: #50433f;
+  --dh-trait-border: #927952;
+  --dh-red: #e54e4e;
+  --dh-hp: #be0000;
+  --dh-stress: #fc8e45;
+
+  --dh-font-title: "Cinzel Decorative", "Cinzel", Georgia, serif;
+  --dh-font-subtitle: "Cinzel", Georgia, serif;
+  --dh-font-body: "Montserrat", "Helvetica Neue", Arial, sans-serif;
+  --dh-font-description: "Overpass", "Helvetica Neue", Arial, sans-serif;
+
+  /* The night-blue ground. An overlay stylesheet may swap in a parchment texture. */
+  --dh-ground: var(--dh-dark-blue);
+  --dh-ground-image: radial-gradient(120% 80% at 50% 0%, #221f3f 0%, var(--dh-dark-blue) 60%, var(--dh-deep-black) 100%);
+
+  --c-arcana: #7b5cff; --c-blade: #c0392b; --c-bone: #8a7f6a; --c-codex: #3b6ea5; --c-grace: #d472a6;
+  --c-midnight: #4a3f80; --c-sage: #4f9d5c; --c-splendor: #d9a441; --c-valor: #b23b3b; --c-dread: #5b6b7a;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body.play-body {
+  margin: 0;
+  min-height: 100vh;
+  padding: 0.5rem 0.9rem calc(2rem + env(safe-area-inset-bottom));
+  background: var(--dh-ground-image) fixed, var(--dh-ground);
+  color: var(--dh-beige);
+  font-family: var(--dh-font-body);
+  font-size: 0.9rem;
+  line-height: 1.35;
+}
+.play-sheet { max-width: 40rem; margin: 0 auto; }
+h1, h2, h3, h4 { margin: 0; font-weight: normal; }
+a { color: var(--dh-golden); }
+button { font: inherit; color: inherit; }
+
+/* Foundry's line-div: a gold hairline fading out at both ends. */
+.dh-line { display: block; height: 1px; width: 100%; border-bottom: 1px solid var(--dh-golden); mask-image: linear-gradient(270deg, transparent 0%, black 50%, transparent 100%); -webkit-mask-image: linear-gradient(270deg, transparent 0%, black 50%, transparent 100%); }
+.dh-side-line { display: block; flex: 1; height: 1px; border-bottom: 1px solid var(--dh-golden); mask-image: linear-gradient(270deg, transparent 0%, black 100%); -webkit-mask-image: linear-gradient(270deg, transparent 0%, black 100%); }
+.dh-side-line.invert { mask-image: linear-gradient(90deg, transparent 0%, black 100%); -webkit-mask-image: linear-gradient(90deg, transparent 0%, black 100%); }
+
+/* ---------- toolbar ---------- */
+.play-toolbar {
+  display: flex; justify-content: space-between; align-items: center;
+  max-width: 40rem; margin: 0 auto 0.5rem;
+  font-size: 0.8rem;
+}
+.play-toolbar a { color: var(--dh-subtle); text-decoration: none; padding: 0.4rem 0; }
+.play-toolbar a:hover { color: var(--dh-golden); }
+
+/* ---------- header ---------- */
+.play-header { padding-top: 0.25rem; }
+.play-identity { display: flex; align-items: center; gap: 0.7rem; }
+.play-identity-text { flex: 1; min-width: 0; }
+.play-portrait {
+  flex: 0 0 auto;
+  width: 4rem; height: 4rem;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid var(--dh-golden);
+  background: var(--dh-dark-blue);
+}
+.play-name-row { display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem; padding-top: 0.5rem; }
+.play-name {
+  font-family: var(--dh-font-title);
+  font-size: clamp(1.25rem, 5.5vw, 1.9rem);
+  line-height: 1.15;
+  color: var(--dh-golden);
+  word-break: break-word;
+}
+.play-level { white-space: nowrap; font-family: var(--dh-font-subtitle); font-size: 0.85rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--dh-beige); }
+.play-level strong { font-size: 1.1rem; font-weight: 700; color: var(--dh-golden); margin-left: 0.25rem; }
+.play-details { margin: 0.3rem 0 0.7rem; font-size: 0.75rem; color: var(--dh-golden); display: flex; flex-wrap: wrap; gap: 0.15rem 0.4rem; }
+.play-details .dot { color: var(--dh-beige-50); }
+
+/* The Hope / domains / thresholds pills all share one look. */
+.dh-pill {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  min-height: 2rem; padding: 0.25rem 0.65rem;
+  background: var(--dh-dark-blue);
+  border: 1px solid var(--dh-golden); border-radius: 6px;
+  color: var(--dh-golden); font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em;
+}
+.play-pills { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-bottom: 0.9rem; }
+
+/* Hope: diamonds you tap. A scar is a struck-out slot. */
+.dh-hope .hope-label { margin-right: 0.2rem; }
+.dh-hope .hope-slot { display: grid; place-items: center; width: 1.6rem; height: 1.7rem; margin: -0.25rem 0; padding: 0; border: 0; background: transparent; cursor: pointer; -webkit-tap-highlight-color: transparent; touch-action: manipulation; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+.dh-hope .hope-slot::before { content: ""; width: 0.65rem; height: 0.65rem; border: 1.5px solid var(--dh-golden); border-radius: 50%; transition: transform 80ms ease, background 80ms ease; }
+.dh-hope .hope-slot.filled::before { border-radius: 1px; background: var(--dh-golden); transform: rotate(45deg) scale(0.95); }
+.dh-hope .hope-slot:active::before { transform: scale(0.8); }
+.dh-hope .hope-slot.filled:active::before { transform: rotate(45deg) scale(0.75); }
+
+/* A scarred slot: the diamond stays, struck through. It can't be spent, only freed. */
+.dh-hope .hope-slot.scarred::before { opacity: 0.35; background: transparent; border-radius: 50%; transform: none; }
+.dh-hope .hope-slot.scarred::after {
+  content: ""; position: absolute; top: 50%; left: 50%;
+  width: 1.05rem; height: 1.5px;
+  background: var(--dh-golden);
+  transform: translate(-50%, -50%) rotate(-45deg);
+}
+.dh-hope .hope-slot { position: relative; }
+.dh-hope-box { display: flex; flex-direction: column; gap: 0.35rem; min-width: 0; }
+.hope-confirm {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; max-width: min(100%, 24rem);
+  font-size: 0.75rem; color: var(--dh-beige); text-transform: none; letter-spacing: 0;
+}
+.hope-confirm button {
+  padding: 0.2rem 0.6rem; border: 1px solid var(--dh-golden); border-radius: 4px;
+  background: transparent; color: var(--dh-golden); font: inherit; cursor: pointer;
+}
+.hope-confirm-yes { background: var(--dh-golden) !important; color: var(--dh-dark-blue) !important; }
+.hope-ended { margin: 0; font-size: 0.75rem; color: var(--dh-beige); text-transform: none; letter-spacing: 0; }
+
+.dh-domains .play-domain { display: inline-flex; align-items: center; gap: 0.3rem; }
+.play-domain::before { content: ""; width: 0.55rem; height: 0.55rem; border-radius: 50%; background: var(--domain-color, var(--dh-golden)); box-shadow: 0 0 0 1px var(--dh-golden-40); }
+.play-domain[data-domain="arcana"] { --domain-color: var(--c-arcana); } .play-domain[data-domain="blade"] { --domain-color: var(--c-blade); }
+.play-domain[data-domain="bone"] { --domain-color: var(--c-bone); } .play-domain[data-domain="codex"] { --domain-color: var(--c-codex); }
+.play-domain[data-domain="grace"] { --domain-color: var(--c-grace); } .play-domain[data-domain="midnight"] { --domain-color: var(--c-midnight); }
+.play-domain[data-domain="sage"] { --domain-color: var(--c-sage); } .play-domain[data-domain="splendor"] { --domain-color: var(--c-splendor); }
+.play-domain[data-domain="valor"] { --domain-color: var(--c-valor); } .play-domain[data-domain="dread"] { --domain-color: var(--c-dread); }
+
+/* ---------- traits on shields ---------- */
+.play-traits { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.7rem 0.9rem; padding: 0 0.25rem 0 0.75rem; margin-bottom: 0.9rem; }
+@media (min-width: 34rem) { .play-traits { grid-template-columns: repeat(6, 1fr); gap: 0.5rem; } }
+.play-trait { position: relative; display: flex; flex-direction: column; align-items: center; }
+.trait-name {
+  position: relative; width: 100%; height: 1.15rem; line-height: 1.15rem;
+  background: var(--dh-trait-bg); border: 1px solid var(--dh-trait-border); border-radius: 3px;
+  color: var(--dh-golden); font-size: 0.68rem; font-weight: 600; text-align: center; white-space: nowrap;
+  padding-left: 0.45rem; text-shadow: 1px 1px 3px #22222280;
+}
+.trait-name .tier-mark {
+  position: absolute; left: -0.5rem; top: 50%; transform: translateY(-50%);
+  width: 1rem; height: 1rem; border-radius: 50%;
+  background: var(--dh-dark-blue); border: 1px solid var(--dh-golden);
+  display: grid; place-items: center;
+}
+.trait-name .tier-mark.marked::before { content: ""; width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--dh-golden); }
+.trait-shield { position: relative; width: 3.25rem; height: 2.9rem; margin-top: -1px; }
+.trait-shield svg { width: 100%; height: 100%; display: block; }
+.trait-shield .shield-border { fill: var(--dh-trait-border); }
+.trait-shield .shield-face { fill: var(--dh-dark-blue); }
+.trait-value { position: absolute; inset: 0 0 0.35rem; display: grid; place-items: center; font-size: 1.25rem; font-weight: 600; color: var(--dh-beige); }
+.spellcast-mark {
+  position: absolute; left: 50%; bottom: -0.4rem; transform: translateX(-50%);
+  width: 1.1rem; height: 1.1rem; border-radius: 50%; border: 1px solid var(--dh-golden);
+  background: radial-gradient(190% 190% at 50% -80%, #18152e 70%, #4d4494 80%, #a0837e 90%, var(--dh-golden) 100%);
+  color: var(--dh-golden); font-size: 0.6rem; display: grid; place-items: center;
+}
+
+/* ---------- tabs ---------- */
+.play-tabs { position: relative; display: flex; align-items: center; gap: 0.5rem; margin: 0.25rem 0 0.9rem; }
+.play-tabs nav { display: flex; gap: 0.25rem; }
+.play-tabs button {
+  padding: 0.45rem 0.55rem; border: 0; background: transparent; cursor: pointer;
+  color: var(--dh-golden); font-family: var(--dh-font-subtitle); font-size: 0.8rem; letter-spacing: 0.04em; text-transform: uppercase; opacity: 0.6;
+  border-bottom: 2px solid transparent; -webkit-tap-highlight-color: transparent;
+}
+.play-tabs button[aria-selected="true"] { opacity: 1; border-bottom-color: var(--dh-golden); text-shadow: 0 0 8px #f3c26780; }
+.play-panel[hidden] { display: none; }
+
+/* ---------- section titles (sidebar .title in Foundry) ---------- */
+.dh-title { display: flex; align-items: center; gap: 0.75rem; margin: 1rem 0 0.5rem; }
+.dh-title h3 { font-family: var(--dh-font-subtitle); font-size: 1.05rem; color: var(--dh-golden); white-space: nowrap; }
+
+/* ---------- status panel ---------- */
+.play-resources { display: grid; grid-template-columns: 1fr; gap: 0.8rem; margin-bottom: 0.9rem; }
+@media (min-width: 34rem) { .play-resources { grid-template-columns: 1fr 1fr; gap: 0.6rem; } }
+.dh-slot-value { display: flex; flex-direction: column; align-items: center; }
+.dh-slot-bar {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 0.3rem; padding: 0.4rem;
+  width: 100%; min-height: 2.4rem;
+  background: var(--dh-dark-blue); border: 1px solid var(--dh-golden); border-radius: 6px 6px 0 0;
+}
+.dh-slot { display: grid; place-items: center; width: 2.1rem; height: 1.9rem; padding: 0; border: 0; background: transparent; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.dh-slot::before { content: ""; width: 1.5rem; height: 0.95rem; border-radius: 3px; border: 1px solid var(--dh-golden); background: var(--dh-golden-10); transition: background 80ms ease, transform 80ms ease; }
+.dh-slot.filled::before { background: var(--dh-golden); }
+.dh-slot:active::before { transform: scale(0.85); }
+.dh-slot-bar.hp .dh-slot.filled::before { background: linear-gradient(15deg, #46140a 0%, var(--dh-hp) 42%, #fcb045 100%); }
+.dh-slot-bar.stress .dh-slot.filled::before { background: linear-gradient(15deg, #823b01 0%, var(--dh-stress) 65%, var(--dh-hp) 100%); }
+.dh-slot-label {
+  display: flex; align-items: center; width: fit-content; padding: 0.1rem 0.5rem;
+  background: var(--dh-golden); color: var(--dh-dark-blue); border-radius: 0 0 5px 5px;
+  font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+}
+.dh-slot-label .value { margin-left: 0.4rem; padding-left: 0.4rem; border-left: 1px solid var(--dh-dark-golden); font-variant-numeric: tabular-nums; }
+.dh-slot-note { margin-top: 0.3rem; font-size: 0.68rem; font-style: italic; color: var(--dh-subtle); text-align: center; }
+
+.play-status-row { display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-end; gap: 0.5rem; margin-bottom: 0.9rem; }
+.dh-status-number { display: flex; flex-direction: column; align-items: center; }
+.dh-status-number .status-value {
+  display: grid; place-items: center; width: 3.4rem; height: 2.1rem;
+  border: 1px solid var(--dh-golden); border-bottom: 0; border-radius: 6px 6px 0 0;
+  background: var(--dh-dark-blue); font-size: 1.25rem; color: var(--dh-beige);
+}
+.dh-status-number .status-label { width: 100%; padding: 0.1rem 0.5rem; background: var(--dh-golden); color: var(--dh-dark-blue); border-radius: 3px; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; text-align: center; }
+
+/* Armor: shields, filled when the slot is spent. */
+.dh-armor .dh-slot-bar { min-width: 6rem; }
+.dh-armor .dh-slot::before { content: none; }
+.dh-armor .dh-slot svg { width: 1.1rem; height: 1.25rem; fill: var(--dh-golden-40); transition: fill 80ms ease, transform 80ms ease; }
+.dh-armor .dh-slot.filled svg { fill: var(--dh-golden); }
+.dh-armor .dh-slot:active svg { transform: scale(0.85); }
+
+.dh-thresholds { justify-content: center; gap: 0.6rem; margin: 0 auto 0.5rem; width: fit-content; display: flex; }
+.dh-thresholds .th-label { font-size: 0.72rem; }
+.dh-thresholds .th-value { color: var(--dh-beige); font-size: 0.95rem; }
+
+/* Conditions: chips that fill gold when on, the effect line under the active ones. */
+.play-conditions { margin: 0.9rem 0 0.5rem; }
+.play-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.4rem; }
+.dh-chip {
+  min-height: 2.1rem; padding: 0.35rem 0.8rem;
+  border: 1px solid var(--dh-golden); border-radius: 999px;
+  background: var(--dh-golden-10); color: var(--dh-golden);
+  font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+  cursor: pointer; -webkit-tap-highlight-color: transparent; transition: background 80ms ease, color 80ms ease;
+}
+.dh-chip.active { background: var(--dh-golden); color: var(--dh-dark-blue); }
+.dh-chip:active { transform: scale(0.96); }
+.play-condition-effect { margin: 0.5rem 0 0; text-align: center; font-family: var(--dh-font-description); font-size: 0.82rem; color: var(--dh-beige); }
+.play-condition-effect strong { color: var(--dh-golden); font-family: var(--dh-font-body); font-weight: 600; }
+
+/* Session notes. */
+.play-notes-field {
+  display: block; width: 100%; min-height: 6rem; padding: 0.6rem 0.7rem;
+  border: 1px solid var(--dh-golden-40); border-radius: 6px;
+  background: #18162ec0; color: var(--dh-beige);
+  font-family: var(--dh-font-description); font-size: 0.9rem; line-height: 1.4;
+  resize: vertical;
+}
+.play-notes-field:focus { outline: none; border-color: var(--dh-golden); box-shadow: 0 0 0 2px var(--dh-golden-40); }
+.play-notes-field::placeholder { color: var(--dh-subtle); font-style: italic; }
+
+.play-experiences { display: flex; flex-direction: column; gap: 0.35rem; }
+.experience-row { display: flex; align-items: center; gap: 0.6rem; }
+.experience-value { position: relative; width: 2.2rem; height: 1.6rem; flex: none; display: grid; place-items: center; color: var(--dh-beige); font-size: 0.85rem; font-weight: 600; }
+.experience-value svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.experience-value span { position: relative; }
+.experience-name { line-height: 1.2; }
+
+.play-warning { margin: 0.5rem 0 0.9rem; padding: 0.6rem 0.75rem; border: 1px solid var(--dh-red); border-radius: 6px; background: #e54e4e10; font-size: 0.8rem; }
+.play-warning ul { margin: 0.3rem 0 0; padding-left: 1.1rem; }
+
+/* ---------- weapons / cards / features ---------- */
+.dh-item { display: grid; grid-template-columns: 1fr auto; gap: 0.1rem 0.6rem; padding: 0.55rem 0.7rem; margin-bottom: 0.45rem; background: #18162ec0; border: 1px solid var(--dh-golden-40); border-left: 3px solid var(--dh-golden); border-radius: 6px; }
+.dh-item .item-name { font-family: var(--dh-font-subtitle); font-size: 0.95rem; color: var(--dh-golden); }
+.dh-item .item-roll { grid-row: 1 / span 2; align-self: center; text-align: right; font-size: 1.05rem; font-weight: 600; color: var(--dh-beige); white-space: nowrap; }
+.dh-item .item-roll small { display: block; font-size: 0.68rem; font-weight: 400; color: var(--dh-subtle); }
+.dh-item .item-labels { font-size: 0.72rem; color: var(--dh-subtle); }
+.dh-item .item-labels span + span::before { content: " – "; }
+.dh-item .item-text { grid-column: 1 / -1; margin-top: 0.35rem; font-family: var(--dh-font-description); font-size: 0.85rem; color: var(--dh-beige); }
+.dh-item .item-text p { margin: 0 0 0.35rem; }
+.dh-item .item-text ul { margin: 0 0 0.35rem; padding-left: 1.1rem; }
+.dh-item .item-text h4 { font-family: var(--dh-font-body); font-weight: 600; font-size: 0.8rem; color: var(--dh-golden); margin: 0.3rem 0 0.15rem; }
+.dh-item.domain-arcana { border-left-color: var(--c-arcana); } .dh-item.domain-blade { border-left-color: var(--c-blade); }
+.dh-item.domain-bone { border-left-color: var(--c-bone); } .dh-item.domain-codex { border-left-color: var(--c-codex); }
+.dh-item.domain-grace { border-left-color: var(--c-grace); } .dh-item.domain-midnight { border-left-color: var(--c-midnight); }
+.dh-item.domain-sage { border-left-color: var(--c-sage); } .dh-item.domain-splendor { border-left-color: var(--c-splendor); }
+.dh-item.domain-valor { border-left-color: var(--c-valor); } .dh-item.domain-dread { border-left-color: var(--c-dread); }
+.play-empty { color: var(--dh-subtle); font-style: italic; }
+
+.hint { color: var(--dh-subtle); }
+
+/* The one thing on this page that isn't the character: a write that didn't happen. */
+.play-unsaved {
+  margin: 0; padding: 0.6rem 1rem;
+  background: #6b1d1d; color: var(--dh-beige);
+  font-size: 0.8rem; text-align: center;
+}
