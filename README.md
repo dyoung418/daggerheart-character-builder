@@ -1,5 +1,7 @@
 # Daggerheart Character Builder
 
+[![tests](https://github.com/vietts/daggerheart-character-builder/actions/workflows/tests.yml/badge.svg)](https://github.com/vietts/daggerheart-character-builder/actions/workflows/tests.yml)
+
 A small, framework-free web app for browsing Daggerheart domain cards and building/leveling up characters — a companion tool for players and GMs running the *Daggerheart* tabletop RPG.
 
 Built out of a personal need: converting a tabletop party from D&D 5e to Daggerheart. Sharing it in case it's useful to anyone else going through the same switch.
@@ -34,7 +36,7 @@ python3 serve.py 8080
 
 ## Tests
 
-Open `tests/index.html` in the browser — that's all (or run `node tests/node-runner.mjs` from a terminal: same suite, text report, exit code 1 on failure). It checks the advancement rules, the level history replay, the derived stats and the effects catalogue in `shared/advancement.js`, `shared/history.js`, `shared/derived-stats.js`, `shared/effects.js`, `shared/table-state.js` and `shared/transfer.js` against hand-written fixtures. No dependencies, no build step, nothing to install, and nothing the app itself loads. If you delete the `tests/` directory, the app is completely unaffected.
+Open `tests/index.html` in the browser — that's all (or run `node tests/node-runner.mjs` from a terminal, `npm test` for short: same suite, text report, exit code 1 on failure). GitHub Actions runs that same command on every push and pull request. It checks the advancement rules, the level history replay, the derived stats and the effects catalogue in `shared/advancement.js`, `shared/history.js`, `shared/derived-stats.js`, `shared/effects.js`, `shared/table-state.js` and `shared/transfer.js` against hand-written fixtures. No dependencies, no build step, nothing to install, and nothing the app itself loads — `package.json` exists only to give those two commands a short name, and has no dependency section to install. If you delete the `tests/` directory, the app is completely unaffected.
 
 ## Security notes
 
@@ -86,4 +88,4 @@ One deliberate divergence from upstream, in `data/classes.json`: the Guardian's 
 
 ## License
 
-The code in this repository is MIT-licensed (see `LICENSE`). Daggerheart itself, its rules, and its SRD content are © Darrington Press, used here under the DPCGL. This is an unofficial, fan-made tool, not affiliated with or endorsed by Darrington Press.
+The code in this repository is MIT-licensed (see `LICENSE`). The SRD content in `data/` is © Critical Role, LLC., used under the Darrington Press Community Gaming License — the notice that licence asks for, along with what this project changed and what it deliberately leaves out, is in [`NOTICE.md`](NOTICE.md). This is an unofficial, fan-made tool, neither affiliated with nor endorsed by Darrington Press or Critical Role.

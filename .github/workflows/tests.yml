@@ -1,0 +1,21 @@
+# The suite in tests/ is the only gate this repository has: no build, no linter, nothing to
+# install. It runs on every push and every pull request so a contributor sees a red check
+# instead of finding out after a merge.
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          # The suite uses top-level await and node:fs/promises, both long since stable.
+          # No dependencies, so there is nothing to cache and nothing to install.
+          node-version: 22
+      - run: node tests/node-runner.mjs
