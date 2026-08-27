@@ -84,3 +84,69 @@ export function maxesFromSheet(sheet) {
     armor: sheet.armorScore ?? null,
   };
 }
+
+// ---------- downtime (SRD p. 105) ----------
+
+// A party rests before moving on, and each character makes TWO downtime moves — the same move
+// twice is allowed. The four moves that matter to a tracker are exactly the four rows this page
+// draws: Hit Points, Stress, Armor Slots and Hope. Work on a Project changes nothing here (it
+// ticks a countdown the GM keeps), but it's listed so the long rest offers the whole menu rather
+// than a silently shortened one.
+//
+// `clear: "roll"` is the short rest's "clear a number of X equal to 1d4 + your tier": the die is
+// the player's, so the amount comes in from the caller — this module stays pure and play.js is
+// the one that rolls, the same split that keeps the DOM out of here.
+export const DOWNTIME_MOVES_PER_REST = 2;
+
+export const REST_MOVES = {
+  short: [
+    { id: "tendToWounds", resource: "hp", clear: "roll" },
+    { id: "clearStress", resource: "stress", clear: "roll" },
+    { id: "repairArmor", resource: "armor", clear: "roll" },
+    { id: "prepare", resource: "hope", gain: 1, gainTogether: 2 },
+  ],
+  long: [
+    { id: "tendToAllWounds", resource: "hp", clear: "all" },
+    { id: "clearAllStress", resource: "stress", clear: "all" },
+    { id: "repairAllArmor", resource: "armor", clear: "all" },
+    { id: "prepare", resource: "hope", gain: 1, gainTogether: 2 },
+    { id: "workOnProject", resource: null },
+  ],
+};
+
+export const REST_KINDS = ["short", "long"];
+
+export function findRestMove(kind, id) {
+  return (REST_MOVES[kind] || []).find((m) => m.id === id) || null;
+}
+
+// 1d4 + tier. Kept here rather than inlined in play.js so the rule is stated once and tested.
+export function restClearAmount(roll, tier) {
+  const d = Number.isInteger(roll) && roll > 0 ? roll : 0;
+  const t = Number.isInteger(tier) && tier > 0 ? tier : 0;
+  return d + t;
+}
+
+/**
+ * One downtime move applied to the marked boxes. HP, Stress and Armor count what's been spent
+ * or taken, so clearing them counts DOWN; Hope counts what you hold, so Prepare counts up —
+ * and clampState() stops it above the slots that scars have left.
+ *
+ * @param {object} state the current table state
+ * @param {object} maxes from maxesFromSheet()
+ * @param {object|null} move an entry of REST_MOVES, or null (unknown id: nothing happens)
+ * @param {{ amount?: number, together?: boolean }} opts amount = the rolled 1d4 + tier;
+ *   together = Prepare taken with at least one other party member, which gives 2 Hope not 1.
+ * @returns {object} a new, clamped state
+ */
+export function applyRestMove(state, maxes, move, { amount = 0, together = false } = {}) {
+  const base = clampState(state, maxes);
+  if (!move || !move.resource) return base;
+  if (move.clear === "all") return clampState({ ...base, [move.resource]: 0 }, maxes);
+  if (move.clear === "roll") {
+    const by = Number.isInteger(amount) && amount > 0 ? amount : 0;
+    return clampState({ ...base, [move.resource]: Math.max(0, base[move.resource] - by) }, maxes);
+  }
+  const gain = together ? move.gainTogether : move.gain;
+  return clampState({ ...base, [move.resource]: base[move.resource] + gain }, maxes);
+}

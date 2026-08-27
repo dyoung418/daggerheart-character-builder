@@ -70,11 +70,16 @@ const {
 } = await import(`../shared/sheet-data.js${RUN}`);
 const {
   CONDITIONS,
+  DOWNTIME_MOVES_PER_REST,
   HOPE_MAX,
   HOPE_START,
+  REST_MOVES,
+  applyRestMove,
   clampState,
   defaultState,
+  findRestMove,
   maxesFromSheet,
+  restClearAmount,
   scarAt,
   tapBox,
   toggleCondition,
@@ -2060,6 +2065,76 @@ group("Every class carries what the detail card shows");
 
   check(`all ${classes.length} classes carry every field the card reads`, incomplete.length === 0,
     incomplete.length ? `incomplete: ${incomplete.join(", ")}` : undefined);
+}
+
+group("Downtime: the two moves a rest gives you (SRD p. 105)");
+{
+  const maxes = { hp: 6, stress: 6, hope: HOPE_MAX, armor: 3 };
+  const beaten = { hp: 5, stress: 4, hope: 1, armor: 3, scars: 0, conditions: [], notes: "" };
+  const move = (kind, id) => findRestMove(kind, id);
+
+  eq("a rest is two moves, and the same move twice is allowed", DOWNTIME_MOVES_PER_REST, 2);
+  eq("the short rest's menu", REST_MOVES.short.map((m) => m.id),
+    ["tendToWounds", "clearStress", "repairArmor", "prepare"]);
+  eq("the long rest's, which adds Work on a Project", REST_MOVES.long.map((m) => m.id),
+    ["tendToAllWounds", "clearAllStress", "repairAllArmor", "prepare", "workOnProject"]);
+  eq("an id that isn't on the menu comes back null, not undefined", findRestMove("short", "nope"), null);
+  eq("and neither is a rest that doesn't exist", findRestMove("epic", "prepare"), null);
+
+  // "clear a number of Hit Points equal to 1d4 + your tier"
+  eq("the short rest's amount is the die plus the tier", restClearAmount(3, 2), 5);
+  eq("a tier 1 character adds 1", restClearAmount(4, 1), 5);
+  eq("a missing or nonsense roll clears nothing rather than throwing",
+    [restClearAmount(0, 2), restClearAmount("x", 2), restClearAmount(undefined, undefined)], [2, 2, 0]);
+
+  // HP, Stress and Armor count what's been spent or taken, so a rest counts them DOWN.
+  eq("Tend to Wounds clears the rolled amount of HP",
+    applyRestMove(beaten, maxes, move("short", "tendToWounds"), { amount: 3 }).hp, 2);
+  eq("Clear Stress does the same to Stress",
+    applyRestMove(beaten, maxes, move("short", "clearStress"), { amount: 2 }).stress, 2);
+  eq("Repair Armor does the same to Armor Slots",
+    applyRestMove(beaten, maxes, move("short", "repairArmor"), { amount: 1 }).armor, 2);
+  eq("clearing more than was marked stops at nothing marked, it doesn't go negative",
+    applyRestMove(beaten, maxes, move("short", "tendToWounds"), { amount: 99 }).hp, 0);
+  eq("and a move with no amount passed clears nothing",
+    applyRestMove(beaten, maxes, move("short", "tendToWounds")).hp, 5);
+
+  eq("Tend to All Wounds clears the lot, no die involved",
+    applyRestMove(beaten, maxes, move("long", "tendToAllWounds")).hp, 0);
+  eq("so does Clear All Stress", applyRestMove(beaten, maxes, move("long", "clearAllStress")).stress, 0);
+  eq("so does Repair All Armor", applyRestMove(beaten, maxes, move("long", "repairAllArmor")).armor, 0);
+
+  // Hope is the one row that counts what you HOLD, so Prepare counts up.
+  eq("Prepare gains a Hope", applyRestMove(beaten, maxes, move("short", "prepare")).hope, 2);
+  eq("and two when you prepare with the party",
+    applyRestMove(beaten, maxes, move("long", "prepare"), { together: true }).hope, 3);
+  eq("Hope can't be prepared past the six slots",
+    applyRestMove({ ...beaten, hope: 6 }, maxes, move("short", "prepare"), { together: true }).hope, 6);
+  eq("nor past the slots a scar has taken away",
+    applyRestMove({ ...beaten, hope: 4, scars: 2 }, maxes, move("short", "prepare"), { together: true }).hope, 4);
+
+  eq("Work on a Project ticks a countdown the GM keeps, so the sheet is unchanged",
+    applyRestMove(beaten, maxes, move("long", "workOnProject")), beaten);
+  eq("an unknown move leaves the state alone rather than throwing",
+    applyRestMove(beaten, maxes, null, { amount: 3 }), beaten);
+
+  // A rest goes through the same clamp as a tap: an armor swap since the last session must not
+  // survive as an impossible count just because a rest touched a different row.
+  eq("a rest clamps the rest of the state too, like every other change",
+    applyRestMove({ hp: 9, stress: 0, hope: 2, armor: 5 }, maxes, move("long", "clearAllStress")),
+    { hp: 6, stress: 0, hope: 2, armor: 3, scars: 0, conditions: [], notes: "" });
+  check("applyRestMove returns a new object rather than mutating its input", (() => {
+    const input = { hp: 5, stress: 0, hope: 2, armor: 0, scars: 0, conditions: [], notes: "" };
+    applyRestMove(input, maxes, move("long", "tendToAllWounds"));
+    return input.hp === 5;
+  })());
+
+  // Conditions and notes are not what a rest is for: nothing in the SRD's downtime moves ends
+  // one, so a rest that quietly cleared them would be the app inventing a rule.
+  eq("a rest leaves conditions and notes exactly where they are",
+    applyRestMove({ ...beaten, conditions: ["hidden"], notes: "owes Rya 2 gold" }, maxes,
+      move("long", "tendToAllWounds")),
+    { hp: 0, stress: 4, hope: 1, armor: 3, scars: 0, conditions: ["hidden"], notes: "owes Rya 2 gold" });
 }
 
 // ---------- report ----------
