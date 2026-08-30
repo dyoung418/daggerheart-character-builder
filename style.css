@@ -588,8 +588,15 @@ h1, h2, h3, .btn-primary, .btn-ghost, .btn-small, .top-nav a {
 .import-banner .import-actions .btn-small { width: auto; flex: none; }
 .characters-list { display: flex; flex-direction: column; gap: 0.6rem; max-width: 700px; }
 
+/* Wrapping is not decoration here. The row holds six buttons — Sheet, Play, Print sheet, Edit,
+   Export, Delete — and at 390px they are 385px of content in a 338px box. Without wrap a flex
+   row does not wrap, it OVERFLOWS: Delete sits half outside the rounded border, clipped and
+   unreachable, on the one screen size this app is most likely to be read on. Wrapping drops the
+   buttons onto their own line and gives the name the full width it was squeezing out of. */
 .character-row {
   display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
   justify-content: space-between;
   align-items: center;
   background: var(--panel);
@@ -604,7 +611,9 @@ h1, h2, h3, .btn-primary, .btn-ghost, .btn-small, .top-nav a {
 .character-row-main { display: flex; flex-direction: column; gap: 0.2rem; }
 .character-row-main strong { font-family: var(--font-display); letter-spacing: 0.01em; font-size: 1.05rem; }
 .character-row-main span { font-size: 0.78rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.02em; }
-.character-row-actions { display: flex; gap: 0.4rem; }
+/* And again inside the group, so a seventh button or a longer label degrades by wrapping
+   rather than by clipping the last one. */
+.character-row-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; }
 .character-row-actions a.btn-small { text-decoration: none; }
 .badge-draft { display: inline-block; background: var(--panel-alt); color: var(--accent); font-size: 0.65rem; padding: 0.1rem 0.4rem; border-radius: 4px; width: fit-content; letter-spacing: 0.04em; }
 .badge-spellcast { display: inline-block; background: var(--panel-alt); color: var(--accent-bright); font-size: 0.65rem; padding: 0.1rem 0.4rem; border-radius: 4px; letter-spacing: 0.04em; white-space: nowrap; }
