@@ -4,12 +4,13 @@ import { loadContent } from "./shared/content-load.js";
 import { mountContentSettings } from "./shared/content-settings.js";
 import { visibleRecords } from "./shared/content-sources.js";
 
-// The nine SRD domains, in the order the book lists them. Not the whole list: content sources may
-// bring their own — Hope and Fear adds one — so the chips are these plus whatever else turns up in
-// the cards actually loaded. A domain with no CSS rule of its own simply gets the default card
-// border, which is fine; a domain with no CHIP would be unfilterable, and worse, ticking any other
-// chip would hide its cards with no way to bring them back.
-const SRD_DOMAINS = ["ARCANA", "BLADE", "BONE", "CODEX", "GRACE", "MIDNIGHT", "SAGE", "SPLENDOR", "VALOR"];
+// The ten SRD domains, in the order the book lists them — nine from the core SRD plus DREAD,
+// which arrived with the Hope & Fear release of the dataset and is SRD content like the rest.
+// Not the whole list: content sources may bring their own, so the chips are these plus whatever
+// else turns up in the cards actually loaded. A domain with no CSS rule of its own simply gets
+// the default card border, which is fine; a domain with no CHIP would be unfilterable, and
+// worse, ticking any other chip would hide its cards with no way to bring them back.
+const SRD_DOMAINS = ["ARCANA", "BLADE", "BONE", "CODEX", "DREAD", "GRACE", "MIDNIGHT", "SAGE", "SPLENDOR", "VALOR"];
 const TYPES = ["ABILITY", "SPELL", "GRIMOIRE"];
 const MAX_LOADOUT = 5;
 const STORAGE_KEY = "dh-card-builder-state-v1";

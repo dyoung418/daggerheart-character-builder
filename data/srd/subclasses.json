@@ -1,14 +1,21 @@
 [
   {
     "id": "core_subclass_beastbound",
-    "name": { "en-US": "Beastbound" },
+    "name": {
+      "en-US": "Beastbound"
+    },
     "class": "RANGER",
-    "domains": ["BONE", "SAGE"],
+    "domains": [
+      "BONE",
+      "SAGE"
+    ],
     "spellcastTrait": "AGILITY",
     "foundation": {
       "features": [
         {
-          "name": { "en-US": "Companion" },
+          "name": {
+            "en-US": "Companion"
+          },
           "description": [
             {
               "paragraph": {
@@ -27,7 +34,9 @@
     "specialization": {
       "features": [
         {
-          "name": { "en-US": "Expert Training" },
+          "name": {
+            "en-US": "Expert Training"
+          },
           "description": [
             {
               "paragraph": {
@@ -37,7 +46,9 @@
           ]
         },
         {
-          "name": { "en-US": "Battle-Bonded" },
+          "name": {
+            "en-US": "Battle-Bonded"
+          },
           "description": [
             {
               "paragraph": {
@@ -51,7 +62,9 @@
     "mastery": {
       "features": [
         {
-          "name": { "en-US": "Advanced Training" },
+          "name": {
+            "en-US": "Advanced Training"
+          },
           "description": [
             {
               "paragraph": {
@@ -61,7 +74,9 @@
           ]
         },
         {
-          "name": { "en-US": "Loyal Friend" },
+          "name": {
+            "en-US": "Loyal Friend"
+          },
           "description": [
             {
               "paragraph": {
@@ -75,13 +90,20 @@
   },
   {
     "id": "core_subclass_call_of_the_brave",
-    "name": { "en-US": "Call of the Brave" },
+    "name": {
+      "en-US": "Call of the Brave"
+    },
     "class": "WARRIOR",
-    "domains": ["BLADE", "BONE"],
+    "domains": [
+      "BLADE",
+      "BONE"
+    ],
     "foundation": {
       "features": [
         {
-          "name": { "en-US": "Courage" },
+          "name": {
+            "en-US": "Courage"
+          },
           "description": [
             {
               "paragraph": {
@@ -91,7 +113,9 @@
           ]
         },
         {
-          "name": { "en-US": "Battle Ritual" },
+          "name": {
+            "en-US": "Battle Ritual"
+          },
           "description": [
             {
               "paragraph": {
@@ -105,7 +129,9 @@
     "specialization": {
       "features": [
         {
-          "name": { "en-US": "Rise to the Challenge" },
+          "name": {
+            "en-US": "Rise to the Challenge"
+          },
           "description": [
             {
               "paragraph": {
@@ -119,7 +145,9 @@
     "mastery": {
       "features": [
         {
-          "name": { "en-US": "Camaraderie" },
+          "name": {
+            "en-US": "Camaraderie"
+          },
           "description": [
             {
               "paragraph": {
@@ -133,13 +161,20 @@
   },
   {
     "id": "core_subclass_call_of_the_slayer",
-    "name": { "en-US": "Call of the Slayer" },
+    "name": {
+      "en-US": "Call of the Slayer"
+    },
     "class": "WARRIOR",
-    "domains": ["BLADE", "BONE"],
+    "domains": [
+      "BLADE",
+      "BONE"
+    ],
     "foundation": {
       "features": [
         {
-          "name": { "en-US": "Slayer" },
+          "name": {
+            "en-US": "Slayer"
+          },
           "description": [
             {
               "paragraph": {
@@ -153,7 +188,9 @@
     "specialization": {
       "features": [
         {
-          "name": { "en-US": "Weapon Specialist" },
+          "name": {
+            "en-US": "Weapon Specialist"
+          },
           "description": [
             {
               "paragraph": {
@@ -167,7 +204,9 @@
     "mastery": {
       "features": [
         {
-          "name": { "en-US": "Martial Preparation" },
+          "name": {
+            "en-US": "Martial Preparation"
+          },
           "description": [
             {
               "paragraph": {
@@ -181,14 +220,21 @@
   },
   {
     "id": "core_subclass_divine_wielder",
-    "name": { "en-US": "Divine Wielder" },
+    "name": {
+      "en-US": "Divine Wielder"
+    },
     "class": "SERAPH",
-    "domains": ["SPLENDOR", "VALOR"],
+    "domains": [
+      "SPLENDOR",
+      "VALOR"
+    ],
     "spellcastTrait": "STRENGTH",
     "foundation": {
       "features": [
         {
-          "name": { "en-US": "Spirit Weapon" },
+          "name": {
+            "en-US": "Spirit Weapon"
+          },
           "description": [
             {
               "paragraph": {
@@ -198,7 +244,9 @@
           ]
         },
         {
-          "name": { "en-US": "Sparing Touch" },
+          "name": {
+            "en-US": "Sparing Touch"
+          },
           "description": [
             {
               "paragraph": {
@@ -212,7 +260,9 @@
     "specialization": {
       "features": [
         {
-          "name": { "en-US": "Devout" },
+          "name": {
+            "en-US": "Devout"
+          },
           "description": [
             {
               "paragraph": {
@@ -226,7 +276,9 @@
     "mastery": {
       "features": [
         {
-          "name": { "en-US": "Sacred Resonance" },
+          "name": {
+            "en-US": "Sacred Resonance"
+          },
           "description": [
             {
               "paragraph": {
@@ -240,14 +292,21 @@
   },
   {
     "id": "core_subclass_elemental_origin",
-    "name": { "en-US": "Elemental Origin" },
+    "name": {
+      "en-US": "Elemental Origin"
+    },
     "class": "SORCERER",
-    "domains": ["MIDNIGHT", "ARCANA"],
+    "domains": [
+      "MIDNIGHT",
+      "ARCANA"
+    ],
     "spellcastTrait": "INSTINCT",
     "foundation": {
       "features": [
         {
-          "name": { "en-US": "Elementalist" },
+          "name": {
+            "en-US": "Elementalist"
+          },
           "description": [
             {
               "paragraph": {
@@ -261,7 +320,9 @@
     "specialization": {
       "features": [
         {
-          "name": { "en-US": "Natural Evasion" },
+          "name": {
+            "en-US": "Natural Evasion"
+          },
           "description": [
             {
               "paragraph": {
@@ -275,7 +336,9 @@
     "mastery": {
       "features": [
         {
-          "name": { "en-US": "Transcendence" },
+          "name": {
+            "en-US": "Transcendence"
+          },
           "description": [
             {
               "paragraph": {
@@ -284,10 +347,18 @@
             },
             {
               "list": [
-                { "en-US": "+4 bonus to your Severe threshold" },
-                { "en-US": "+1 bonus to a character trait of your choice" },
-                { "en-US": "+1 bonus to your Proficiency" },
-                { "en-US": "+2 bonus to your Evasion" }
+                {
+                  "en-US": "+4 bonus to your Severe threshold"
+                },
+                {
+                  "en-US": "+1 bonus to a character trait of your choice"
+                },
+                {
+                  "en-US": "+1 bonus to your Proficiency"
+                },
+                {
+                  "en-US": "+2 bonus to your Evasion"
+                }
               ]
             }
           ]
@@ -297,14 +368,21 @@
   },
   {
     "id": "core_subclass_nightwalker",
-    "name": { "en-US": "Nightwalker" },
+    "name": {
+      "en-US": "Nightwalker"
+    },
     "class": "ROGUE",
-    "domains": ["MIDNIGHT", "GRACE"],
+    "domains": [
+      "MIDNIGHT",
+      "GRACE"
+    ],
     "spellcastTrait": "FINESSE",
     "foundation": {
       "features": [
         {
-          "name": { "en-US": "Shadow Stepper" },
+          "name": {
+            "en-US": "Shadow Stepper"
+          },
           "description": [
             {
               "paragraph": {
@@ -318,7 +396,9 @@
     "specialization": {
       "features": [
         {
-          "name": { "en-US": "Dark Cloud" },
+          "name": {
+            "en-US": "Dark Cloud"
+          },
           "description": [
             {
               "paragraph": {
@@ -328,7 +408,9 @@
           ]
         },
         {
-          "name": { "en-US": "Adrenaline" },
+          "name": {
+            "en-US": "Adrenaline"
+          },
           "description": [
             {
               "paragraph": {
@@ -342,7 +424,9 @@
     "mastery": {
       "features": [
         {
-          "name": { "en-US": "Fleeting Shadow" },
+          "name": {
+            "en-US": "Fleeting Shadow"
+          },
           "description": [
             {
               "paragraph": {
@@ -352,7 +436,9 @@
           ]
         },
         {
-          "name": { "en-US": "Vanishing Act" },
+          "name": {
+            "en-US": "Vanishing Act"
+          },
           "description": [
             {
               "paragraph": {
@@ -366,14 +452,21 @@
   },
   {
     "id": "core_subclass_primal_origin",
-    "name": { "en-US": "Primal Origin" },
+    "name": {
+      "en-US": "Primal Origin"
+    },
     "class": "SORCERER",
-    "domains": ["MIDNIGHT", "ARCANA"],
+    "domains": [
+      "MIDNIGHT",
+      "ARCANA"
+    ],
     "spellcastTrait": "INSTINCT",
     "foundation": {
       "features": [
         {
-          "name": { "en-US": "Manipulate Magic" },
+          "name": {
+            "en-US": "Manipulate Magic"
+          },
           "description": [
             {
               "paragraph": {
@@ -382,10 +475,18 @@
             },
             {
               "list": [
-                { "en-US": "Extend the spell or attack's reach by one range" },
-                { "en-US": "Gain a +2 bonus to the action roll's result" },
-                { "en-US": "Double a damage die of your choice" },
-                { "en-US": "Hit an additional target within range" }
+                {
+                  "en-US": "Extend the spell or attack's reach by one range"
+                },
+                {
+                  "en-US": "Gain a +2 bonus to the action roll's result"
+                },
+                {
+                  "en-US": "Double a damage die of your choice"
+                },
+                {
+                  "en-US": "Hit an additional target within range"
+                }
               ]
             }
           ]
@@ -395,7 +496,9 @@
     "specialization": {
       "features": [
         {
-          "name": { "en-US": "Enchanted Aid" },
+          "name": {
+            "en-US": "Enchanted Aid"
+          },
           "description": [
             {
               "paragraph": {
@@ -409,7 +512,9 @@
     "mastery": {
       "features": [
         {
-          "name": { "en-US": "Arcane Charge" },
+          "name": {
+            "en-US": "Arcane Charge"
+          },
           "description": [
             {
               "paragraph": {
@@ -423,14 +528,21 @@
   },
   {
     "id": "core_subclass_school_of_knowledge",
-    "name": { "en-US": "School of Knowledge" },
+    "name": {
+      "en-US": "School of Knowledge"
+    },
     "class": "WIZARD",
-    "domains": ["CODEX", "SPLENDOR"],
+    "domains": [
+      "CODEX",
+      "SPLENDOR"
+    ],
     "spellcastTrait": "KNOWLEDGE",
     "foundation": {
       "features": [
         {
-          "name": { "en-US": "Prepared" },
+          "name": {
+            "en-US": "Prepared"
+          },
           "description": [
             {
               "paragraph": {
@@ -440,7 +552,9 @@
           ]
         },
         {
-          "name": { "en-US": "Adept" },
+          "name": {
+            "en-US": "Adept"
+          },
           "description": [
             {
               "paragraph": {
@@ -454,7 +568,9 @@
     "specialization": {
       "features": [
         {
-          "name": { "en-US": "Accomplished" },
+          "name": {
+            "en-US": "Accomplished"
+          },
           "description": [
             {
               "paragraph": {
@@ -464,7 +580,9 @@
           ]
         },
         {
-          "name": { "en-US": "Perfect Recall" },
+          "name": {
+            "en-US": "Perfect Recall"
+          },
           "description": [
             {
               "paragraph": {
@@ -478,7 +596,9 @@
     "mastery": {
       "features": [
         {
-          "name": { "en-US": "Brilliant" },
+          "name": {
+            "en-US": "Brilliant"
+          },
           "description": [
             {
               "paragraph": {
@@ -488,7 +608,9 @@
           ]
         },
         {
-          "name": { "en-US": "Honed Expertise" },
+          "name": {
+            "en-US": "Honed Expertise"
+          },
           "description": [
             {
               "paragraph": {
@@ -502,14 +624,21 @@
   },
   {
     "id": "core_subclass_school_of_war",
-    "name": { "en-US": "School of War" },
+    "name": {
+      "en-US": "School of War"
+    },
     "class": "WIZARD",
-    "domains": ["CODEX", "SPLENDOR"],
+    "domains": [
+      "CODEX",
+      "SPLENDOR"
+    ],
     "spellcastTrait": "KNOWLEDGE",
     "foundation": {
       "features": [
         {
-          "name": { "en-US": "Battlemage" },
+          "name": {
+            "en-US": "Battlemage"
+          },
           "description": [
             {
               "paragraph": {
@@ -519,7 +648,9 @@
           ]
         },
         {
-          "name": { "en-US": "Face Your Fear" },
+          "name": {
+            "en-US": "Face Your Fear"
+          },
           "description": [
             {
               "paragraph": {
@@ -533,7 +664,9 @@
     "specialization": {
       "features": [
         {
-          "name": { "en-US": "Conjure Shield" },
+          "name": {
+            "en-US": "Conjure Shield"
+          },
           "description": [
             {
               "paragraph": {
@@ -543,7 +676,9 @@
           ]
         },
         {
-          "name": { "en-US": "Fueled by Fear" },
+          "name": {
+            "en-US": "Fueled by Fear"
+          },
           "description": [
             {
               "paragraph": {
@@ -557,7 +692,9 @@
     "mastery": {
       "features": [
         {
-          "name": { "en-US": "Thrive in Chaos" },
+          "name": {
+            "en-US": "Thrive in Chaos"
+          },
           "description": [
             {
               "paragraph": {
@@ -567,7 +704,9 @@
           ]
         },
         {
-          "name": { "en-US": "Have No Fear" },
+          "name": {
+            "en-US": "Have No Fear"
+          },
           "description": [
             {
               "paragraph": {
@@ -581,13 +720,20 @@
   },
   {
     "id": "core_subclass_stalwart",
-    "name": { "en-US": "Stalwart" },
+    "name": {
+      "en-US": "Stalwart"
+    },
     "class": "GUARDIAN",
-    "domains": ["VALOR", "BLADE"],
+    "domains": [
+      "VALOR",
+      "BLADE"
+    ],
     "foundation": {
       "features": [
         {
-          "name": { "en-US": "Unwavering" },
+          "name": {
+            "en-US": "Unwavering"
+          },
           "description": [
             {
               "paragraph": {
@@ -597,7 +743,9 @@
           ]
         },
         {
-          "name": { "en-US": "Iron Will" },
+          "name": {
+            "en-US": "Iron Will"
+          },
           "description": [
             {
               "paragraph": {
@@ -611,7 +759,9 @@
     "specialization": {
       "features": [
         {
-          "name": { "en-US": "Unrelenting" },
+          "name": {
+            "en-US": "Unrelenting"
+          },
           "description": [
             {
               "paragraph": {
@@ -621,7 +771,9 @@
           ]
         },
         {
-          "name": { "en-US": "Partners-in-Arms" },
+          "name": {
+            "en-US": "Partners-in-Arms"
+          },
           "description": [
             {
               "paragraph": {
@@ -635,7 +787,9 @@
     "mastery": {
       "features": [
         {
-          "name": { "en-US": "Undaunted" },
+          "name": {
+            "en-US": "Undaunted"
+          },
           "description": [
             {
               "paragraph": {
@@ -645,7 +799,9 @@
           ]
         },
         {
-          "name": { "en-US": "Loyal Protector" },
+          "name": {
+            "en-US": "Loyal Protector"
+          },
           "description": [
             {
               "paragraph": {
@@ -659,14 +815,21 @@
   },
   {
     "id": "core_subclass_syndicate",
-    "name": { "en-US": "Syndicate" },
+    "name": {
+      "en-US": "Syndicate"
+    },
     "class": "ROGUE",
-    "domains": ["MIDNIGHT", "GRACE"],
+    "domains": [
+      "MIDNIGHT",
+      "GRACE"
+    ],
     "spellcastTrait": "FINESSE",
     "foundation": {
       "features": [
         {
-          "name": { "en-US": "Well-Connected" },
+          "name": {
+            "en-US": "Well-Connected"
+          },
           "description": [
             {
               "paragraph": {
@@ -678,10 +841,18 @@
                 {
                   "en-US": "They owe me a favor, but they'll be hard to find."
                 },
-                { "en-US": "They're going to ask for something in exchange." },
-                { "en-US": "They're always in a great deal of trouble." },
-                { "en-US": "We used to be together. It's a long story." },
-                { "en-US": "We didn't part on great terms." }
+                {
+                  "en-US": "They're going to ask for something in exchange."
+                },
+                {
+                  "en-US": "They're always in a great deal of trouble."
+                },
+                {
+                  "en-US": "We used to be together. It's a long story."
+                },
+                {
+                  "en-US": "We didn't part on great terms."
+                }
               ]
             }
           ]
@@ -691,7 +862,9 @@
     "specialization": {
       "features": [
         {
-          "name": { "en-US": "Contacts Everywhere" },
+          "name": {
+            "en-US": "Contacts Everywhere"
+          },
           "description": [
             {
               "paragraph": {
@@ -718,7 +891,9 @@
     "mastery": {
       "features": [
         {
-          "name": { "en-US": "Reliable Backup" },
+          "name": {
+            "en-US": "Reliable Backup"
+          },
           "description": [
             {
               "paragraph": {
@@ -742,14 +917,21 @@
   },
   {
     "id": "core_subclass_troubadour",
-    "name": { "en-US": "Troubadour" },
+    "name": {
+      "en-US": "Troubadour"
+    },
     "class": "BARD",
-    "domains": ["GRACE", "CODEX"],
+    "domains": [
+      "GRACE",
+      "CODEX"
+    ],
     "spellcastTrait": "PRESENCE",
     "foundation": {
       "features": [
         {
-          "name": { "en-US": "Gifted Performer" },
+          "name": {
+            "en-US": "Gifted Performer"
+          },
           "description": [
             {
               "paragraph": {
@@ -776,7 +958,9 @@
     "specialization": {
       "features": [
         {
-          "name": { "en-US": "Maestro" },
+          "name": {
+            "en-US": "Maestro"
+          },
           "description": [
             {
               "paragraph": {
@@ -790,7 +974,9 @@
     "mastery": {
       "features": [
         {
-          "name": { "en-US": "Virtuoso" },
+          "name": {
+            "en-US": "Virtuoso"
+          },
           "description": [
             {
               "paragraph": {
@@ -804,19 +990,32 @@
   },
   {
     "id": "core_subclass_vengeance",
-    "name": { "en-US": "Vengeance" },
+    "name": {
+      "en-US": "Vengeance"
+    },
     "class": "GUARDIAN",
-    "domains": ["VALOR", "BLADE"],
+    "domains": [
+      "VALOR",
+      "BLADE"
+    ],
     "foundation": {
       "features": [
         {
-          "name": { "en-US": "At Ease" },
+          "name": {
+            "en-US": "At Ease"
+          },
           "description": [
-            { "paragraph": { "en-US": "Gain an additional Stress slot." } }
+            {
+              "paragraph": {
+                "en-US": "Gain an additional Stress slot."
+              }
+            }
           ]
         },
         {
-          "name": { "en-US": "Revenge" },
+          "name": {
+            "en-US": "Revenge"
+          },
           "description": [
             {
               "paragraph": {
@@ -830,7 +1029,9 @@
     "specialization": {
       "features": [
         {
-          "name": { "en-US": "Act of Reprisal" },
+          "name": {
+            "en-US": "Act of Reprisal"
+          },
           "description": [
             {
               "paragraph": {
@@ -844,7 +1045,9 @@
     "mastery": {
       "features": [
         {
-          "name": { "en-US": "Nemesis" },
+          "name": {
+            "en-US": "Nemesis"
+          },
           "description": [
             {
               "paragraph": {
@@ -858,14 +1061,21 @@
   },
   {
     "id": "core_subclass_warden_of_renewal",
-    "name": { "en-US": "Warden of Renewal" },
+    "name": {
+      "en-US": "Warden of Renewal"
+    },
     "class": "DRUID",
-    "domains": ["SAGE", "ARCANA"],
+    "domains": [
+      "SAGE",
+      "ARCANA"
+    ],
     "spellcastTrait": "INSTINCT",
     "foundation": {
       "features": [
         {
-          "name": { "en-US": "Clarity of Nature" },
+          "name": {
+            "en-US": "Clarity of Nature"
+          },
           "description": [
             {
               "paragraph": {
@@ -875,7 +1085,9 @@
           ]
         },
         {
-          "name": { "en-US": "Regeneration" },
+          "name": {
+            "en-US": "Regeneration"
+          },
           "description": [
             {
               "paragraph": {
@@ -889,7 +1101,9 @@
     "specialization": {
       "features": [
         {
-          "name": { "en-US": "Regenerative Reach" },
+          "name": {
+            "en-US": "Regenerative Reach"
+          },
           "description": [
             {
               "paragraph": {
@@ -899,7 +1113,9 @@
           ]
         },
         {
-          "name": { "en-US": "Warden's Protection" },
+          "name": {
+            "en-US": "Warden's Protection"
+          },
           "description": [
             {
               "paragraph": {
@@ -913,7 +1129,9 @@
     "mastery": {
       "features": [
         {
-          "name": { "en-US": "Defender" },
+          "name": {
+            "en-US": "Defender"
+          },
           "description": [
             {
               "paragraph": {
@@ -927,14 +1145,21 @@
   },
   {
     "id": "core_subclass_warden_of_the_elements",
-    "name": { "en-US": "Warden of the Elements" },
+    "name": {
+      "en-US": "Warden of the Elements"
+    },
     "class": "DRUID",
-    "domains": ["SAGE", "ARCANA"],
+    "domains": [
+      "SAGE",
+      "ARCANA"
+    ],
     "spellcastTrait": "INSTINCT",
     "foundation": {
       "features": [
         {
-          "name": { "en-US": "Elemental Incarnation" },
+          "name": {
+            "en-US": "Elemental Incarnation"
+          },
           "description": [
             {
               "paragraph": {
@@ -964,7 +1189,9 @@
     "specialization": {
       "features": [
         {
-          "name": { "en-US": "Elemental Aura" },
+          "name": {
+            "en-US": "Elemental Aura"
+          },
           "description": [
             {
               "paragraph": {
@@ -976,7 +1203,9 @@
                 {
                   "en-US": "Fire: When an adversary marks 1 or more Hit Points, they must also mark a Stress."
                 },
-                { "en-US": "Earth: Your allies gain a +1 bonus to Strength." },
+                {
+                  "en-US": "Earth: Your allies gain a +1 bonus to Strength."
+                },
                 {
                   "en-US": "Water: When an adversary deals damage to you, you can mark a Stress to move them anywhere within Very Close range of where they are."
                 },
@@ -992,7 +1221,9 @@
     "mastery": {
       "features": [
         {
-          "name": { "en-US": "Elemental Dominion" },
+          "name": {
+            "en-US": "Elemental Dominion"
+          },
           "description": [
             {
               "paragraph": {
@@ -1022,14 +1253,21 @@
   },
   {
     "id": "core_subclass_wayfinder",
-    "name": { "en-US": "Wayfinder" },
+    "name": {
+      "en-US": "Wayfinder"
+    },
     "class": "RANGER",
-    "domains": ["BONE", "SAGE"],
+    "domains": [
+      "BONE",
+      "SAGE"
+    ],
     "spellcastTrait": "AGILITY",
     "foundation": {
       "features": [
         {
-          "name": { "en-US": "Ruthless Predator" },
+          "name": {
+            "en-US": "Ruthless Predator"
+          },
           "description": [
             {
               "paragraph": {
@@ -1039,7 +1277,9 @@
           ]
         },
         {
-          "name": { "en-US": "Path Forward" },
+          "name": {
+            "en-US": "Path Forward"
+          },
           "description": [
             {
               "paragraph": {
@@ -1053,7 +1293,9 @@
     "specialization": {
       "features": [
         {
-          "name": { "en-US": "Elusive Predator" },
+          "name": {
+            "en-US": "Elusive Predator"
+          },
           "description": [
             {
               "paragraph": {
@@ -1067,7 +1309,9 @@
     "mastery": {
       "features": [
         {
-          "name": { "en-US": "Apex Predator" },
+          "name": {
+            "en-US": "Apex Predator"
+          },
           "description": [
             {
               "paragraph": {
@@ -1081,14 +1325,21 @@
   },
   {
     "id": "core_subclass_winged_sentinel",
-    "name": { "en-US": "Winged Sentinel" },
+    "name": {
+      "en-US": "Winged Sentinel"
+    },
     "class": "SERAPH",
-    "domains": ["SPLENDOR", "VALOR"],
+    "domains": [
+      "SPLENDOR",
+      "VALOR"
+    ],
     "spellcastTrait": "STRENGTH",
     "foundation": {
       "features": [
         {
-          "name": { "en-US": "Wings of Light" },
+          "name": {
+            "en-US": "Wings of Light"
+          },
           "description": [
             {
               "paragraph": {
@@ -1112,7 +1363,9 @@
     "specialization": {
       "features": [
         {
-          "name": { "en-US": "Ethereal Visage" },
+          "name": {
+            "en-US": "Ethereal Visage"
+          },
           "description": [
             {
               "paragraph": {
@@ -1126,7 +1379,9 @@
     "mastery": {
       "features": [
         {
-          "name": { "en-US": "Ascendant" },
+          "name": {
+            "en-US": "Ascendant"
+          },
           "description": [
             {
               "paragraph": {
@@ -1136,7 +1391,9 @@
           ]
         },
         {
-          "name": { "en-US": "Power of the Gods" },
+          "name": {
+            "en-US": "Power of the Gods"
+          },
           "description": [
             {
               "paragraph": {
@@ -1150,14 +1407,21 @@
   },
   {
     "id": "core_subclass_wordsmith",
-    "name": { "en-US": "Wordsmith" },
+    "name": {
+      "en-US": "Wordsmith"
+    },
     "class": "BARD",
-    "domains": ["GRACE", "CODEX"],
+    "domains": [
+      "GRACE",
+      "CODEX"
+    ],
     "spellcastTrait": "PRESENCE",
     "foundation": {
       "features": [
         {
-          "name": { "en-US": "Rousing Speech" },
+          "name": {
+            "en-US": "Rousing Speech"
+          },
           "description": [
             {
               "paragraph": {
@@ -1167,7 +1431,9 @@
           ]
         },
         {
-          "name": { "en-US": "Heart of a Poet" },
+          "name": {
+            "en-US": "Heart of a Poet"
+          },
           "description": [
             {
               "paragraph": {
@@ -1181,7 +1447,9 @@
     "specialization": {
       "features": [
         {
-          "name": { "en-US": "Eloquent" },
+          "name": {
+            "en-US": "Eloquent"
+          },
           "description": [
             {
               "paragraph": {
@@ -1193,7 +1461,9 @@
                 {
                   "en-US": "Allow them to find a mundane object or tool they need."
                 },
-                { "en-US": "Help an Ally without spending Hope." },
+                {
+                  "en-US": "Help an Ally without spending Hope."
+                },
                 {
                   "en-US": "Give them an additional downtime move during their next rest."
                 }
@@ -1206,7 +1476,9 @@
     "mastery": {
       "features": [
         {
-          "name": { "en-US": "Epic Poetry" },
+          "name": {
+            "en-US": "Epic Poetry"
+          },
           "description": [
             {
               "paragraph": {
@@ -1217,5 +1489,793 @@
         }
       ]
     }
+  },
+  {
+    "id": "the_void_subclass_executioners_guild",
+    "name": {
+      "en-US": "Executioners Guild"
+    },
+    "class": "ASSASSIN",
+    "domains": [
+      "BLADE",
+      "MIDNIGHT"
+    ],
+    "foundation": {
+      "features": [
+        {
+          "name": {
+            "en-US": "First Strike"
+          },
+          "description": [
+            {
+              "paragraph": {
+                "en-US": "The first time in a scene you succeed on an attack roll, double the damage of the attack."
+              }
+            }
+          ]
+        },
+        {
+          "name": {
+            "en-US": "Ambush"
+          },
+          "description": [
+            {
+              "paragraph": {
+                "en-US": "Your Marked for Death feature uses d6s instead of d4s."
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "specialization": {
+      "features": [
+        {
+          "name": {
+            "en-US": "Death Strike"
+          },
+          "description": [
+            {
+              "paragraph": {
+                "en-US": "When you deal Severe damage to a creature, you can mark a Stress to make them mark an additional Hit Point."
+              }
+            }
+          ]
+        },
+        {
+          "name": {
+            "en-US": "Scorpion's Poise"
+          },
+          "description": [
+            {
+              "paragraph": {
+                "en-US": "You gain a +2 bonus to your Evasion against any attacks made by a creature Marked for Death."
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "mastery": {
+      "features": [
+        {
+          "name": {
+            "en-US": "True Strike"
+          },
+          "description": [
+            {
+              "paragraph": {
+                "en-US": "Once per long rest, when you fail an attack roll, you can spend a Hope to make it a success instead."
+              }
+            }
+          ]
+        },
+        {
+          "name": {
+            "en-US": "Backstab"
+          },
+          "description": [
+            {
+              "paragraph": {
+                "en-US": "Your Marked for Death feature uses d8s instead of d6s."
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "spellcastTrait": "AGILITY"
+  },
+  {
+    "id": "the_void_subclass_poisoners_guild",
+    "name": {
+      "en-US": "Poisoners Guild"
+    },
+    "class": "ASSASSIN",
+    "domains": [
+      "BLADE",
+      "MIDNIGHT"
+    ],
+    "foundation": {
+      "features": [
+        {
+          "name": {
+            "en-US": "Toxic Concoctions"
+          },
+          "description": [
+            {
+              "paragraph": {
+                "en-US": "Mark a Stress to add 1d4+1 tokens to this card. On your next long rest, clear this card. You know these poisons:"
+              }
+            },
+            {
+              "list": [
+                {
+                  "en-US": "Gorgon Root: The target gains a permanent -1 penalty to their Difficulty. This can only affect them once."
+                },
+                {
+                  "en-US": "Grave Spore: The target must also mark a Stress."
+                },
+                {
+                  "en-US": "Leech Weed: Gain a +1d6 damage bonus on this attack."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": {
+            "en-US": "Envenomate"
+          },
+          "description": [
+            {
+              "paragraph": {
+                "en-US": "When you make a successful weapon attack, you can spend a token from this card to afflict the target with a known poison's effect."
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "specialization": {
+      "features": [
+        {
+          "name": {
+            "en-US": "Poison Compendium"
+          },
+          "description": [
+            {
+              "paragraph": {
+                "en-US": "You also know these poisons:"
+              }
+            },
+            {
+              "list": [
+                {
+                  "en-US": "Midnight's Veil: The target gains a permanent -2 penalty to attack rolls. This can only affect them once."
+                },
+                {
+                  "en-US": "Ghost Petal: Permanently decrease the damage dice of the target's standard attack by one step (d10 to d8, d8 to d6, etc.). This can only affect them once."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": {
+            "en-US": "Adder's Blessing"
+          },
+          "description": [
+            {
+              "paragraph": {
+                "en-US": "You are immune to poisons and other toxins."
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "mastery": {
+      "features": [
+        {
+          "name": {
+            "en-US": "Venomancer"
+          },
+          "description": [
+            {
+              "paragraph": {
+                "en-US": "You also know these poisons:"
+              }
+            },
+            {
+              "list": [
+                {
+                  "en-US": "Blight Seed: The target gains a permanent -3 penalty to their damage thresholds. This can only affect them once."
+                },
+                {
+                  "en-US": "Fear Leaf: This attack gains a damage bonus equal to the result of your Fear Die."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": {
+            "en-US": "Twin Fang"
+          },
+          "description": [
+            {
+              "paragraph": {
+                "en-US": "When you afflict a target with a known poison's effect, you can spend an additional token to inflict the effect of a second known poison."
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "spellcastTrait": "KNOWLEDGE"
+  },
+  {
+    "id": "the_void_subclass_juggernaut",
+    "name": {
+      "en-US": "Juggernaut"
+    },
+    "class": "BRAWLER",
+    "domains": [
+      "VALOR",
+      "BONE"
+    ],
+    "foundation": {
+      "features": [
+        {
+          "name": {
+            "en-US": "Powerhouse"
+          },
+          "description": [
+            {
+              "paragraph": {
+                "en-US": "Increase the d8 damage dice for your unarmed attack to d10s. Additionally, you can mark a Stress to target two creatures within Melee range with a single attack roll."
+              }
+            }
+          ]
+        },
+        {
+          "name": {
+            "en-US": "Overwhelm"
+          },
+          "description": [
+            {
+              "paragraph": {
+                "en-US": "On a successful attack, you can spend a Hope to force the target to mark a Stress or to throw them within Close range."
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "specialization": {
+      "features": [
+        {
+          "name": {
+            "en-US": "Rugged"
+          },
+          "description": [
+            {
+              "paragraph": {
+                "en-US": "Gain a permanent +3 bonus to your Severe damage threshold. Additionally, your Powerhouse feature can target up to three creatures instead of two."
+              }
+            }
+          ]
+        },
+        {
+          "name": {
+            "en-US": "Eye for an Eye"
+          },
+          "description": [
+            {
+              "paragraph": {
+                "en-US": "When you mark more than one Hit Point from an attack in Melee range, the attacker must make a Reaction Roll (13). On a failure, once per rest, they immediately mark the same number of Hit Points in return."
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "mastery": {
+      "features": [
+        {
+          "name": {
+            "en-US": "Pummeljoy"
+          },
+          "description": [
+            {
+              "paragraph": {
+                "en-US": "When you critically succeed on a weapon attack in Melee range, you gain an additional Hope, clear an additional Stress, and gain a +1 bonus to your Proficiency for the attack."
+              }
+            }
+          ]
+        },
+        {
+          "name": {
+            "en-US": "Not Done Yet"
+          },
+          "description": [
+            {
+              "paragraph": {
+                "en-US": "When you mark more than one HP from an attack, you can gain a Hope or clear a Stress."
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "the_void_subclass_martial_artist",
+    "name": {
+      "en-US": "Martial Artist"
+    },
+    "class": "BRAWLER",
+    "domains": [
+      "VALOR",
+      "BONE"
+    ],
+    "foundation": {
+      "features": [
+        {
+          "name": {
+            "en-US": "Martial Form"
+          },
+          "description": [
+            {
+              "paragraph": {
+                "en-US": "Take the Martial Form sheet. You start with two martial stances from Tier 1. When you reach a new tier, take two additional stances at your tier or lower."
+              }
+            }
+          ]
+        },
+        {
+          "name": {
+            "en-US": "Focus"
+          },
+          "description": [
+            {
+              "paragraph": {
+                "en-US": "During a rest, roll a number of d6s equal to your Instinct and place a number of Focus tokens equal to the highest value rolled on this card. Spend a Focus to shift into a stance until you take Severe damage, the scene ends, you mark your last Hit Point, or you shift into another stance."
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "specialization": {
+      "features": [
+        {
+          "name": {
+            "en-US": "Keen Defenses"
+          },
+          "description": [
+            {
+              "paragraph": {
+                "en-US": "When you are targeted by an attack, you can spend a Focus to give the attack roll disadvantage."
+              }
+            }
+          ]
+        },
+        {
+          "name": {
+            "en-US": "Spirit Blast"
+          },
+          "description": [
+            {
+              "paragraph": {
+                "en-US": "Spend a Focus to make an Instinct Roll against an adversary within Close range. On a success, deal d20+3 magic damage using your Proficiency, and you can spend an additional Focus to make them temporarily Vulnerable."
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "mastery": {
+      "features": [
+        {
+          "name": {
+            "en-US": "Limit Breaker"
+          },
+          "description": [
+            {
+              "paragraph": {
+                "en-US": "Once per rest, you can perform an unbelievable feat such as running across water, leaping between distant rooftops, or scaling the side of a building without needing to roll. When you do, gain a Hope and clear a Stress."
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "the_void_subclass_pact_of_the_endless",
+    "name": {
+      "en-US": "Pact of the Endless"
+    },
+    "class": "WARLOCK",
+    "domains": [
+      "DREAD",
+      "GRACE"
+    ],
+    "foundation": {
+      "features": [
+        {
+          "name": {
+            "en-US": "Patron's Mantle"
+          },
+          "description": [
+            {
+              "paragraph": {
+                "en-US": "Mark a Stress to cloak yourself in a terrifying aspect of your Patron that lasts until you take Severe damage or the scene ends:"
+              }
+            },
+            {
+              "list": [
+                {
+                  "en-US": "When you would mark an Armor Slot, you can spend 2 Favor instead."
+                },
+                {
+                  "en-US": "You gain a bonus equal to your tier on action rolls to intimidate a target."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": {
+            "en-US": "Deadly Devotion"
+          },
+          "description": [
+            {
+              "paragraph": {
+                "en-US": "On a successful attack, you can spend a Favor to gain a +1 bonus to your Evasion until you mark a Hit Point or take a rest."
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "specialization": {
+      "features": [
+        {
+          "name": {
+            "en-US": "Draining Invocation"
+          },
+          "description": [
+            {
+              "paragraph": {
+                "en-US": "When an adversary attacks you or an ally within Very Close range, you can spend a Favor to make them use a d12 instead of a d20 for the attack roll. Additionally, the adversary must mark a Stress, and you can clear a Stress."
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "mastery": {
+      "features": [
+        {
+          "name": {
+            "en-US": "Dark Aegis"
+          },
+          "description": [
+            {
+              "paragraph": {
+                "en-US": "Once per long rest, when you would mark any number of Hit Points, you can spend a Favor instead."
+              }
+            }
+          ]
+        },
+        {
+          "name": {
+            "en-US": "Draining Bane"
+          },
+          "description": [
+            {
+              "paragraph": {
+                "en-US": "When an adversary attacks you or an ally within Very Close range, you can spend 2 Favor to temporarily Drain them. When you do, they must mark a Stress and you can clear a Stress. A Drained creature uses a d12 instead of a d20 for attack rolls."
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "spellcastTrait": "PRESENCE"
+  },
+  {
+    "id": "the_void_subclass_pact_of_the_wrathful",
+    "name": {
+      "en-US": "Pact of the Wrathful"
+    },
+    "class": "WARLOCK",
+    "domains": [
+      "DREAD",
+      "GRACE"
+    ],
+    "foundation": {
+      "features": [
+        {
+          "name": {
+            "en-US": "Favored Weapon"
+          },
+          "description": [
+            {
+              "paragraph": {
+                "en-US": "Mark a Stress to imbue your weapon with your Patron's fury until you deal Severe damage. On a successful imbued weapon attack, you can spend any number of Favor to gain a +1d6 damage bonus for each Favor spent."
+              }
+            }
+          ]
+        },
+        {
+          "name": {
+            "en-US": "Herald of Death"
+          },
+          "description": [
+            {
+              "paragraph": {
+                "en-US": "When you fail an attack roll, you can spend a Favor to reroll it. If it fails again, mark a Stress and take the new result."
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "specialization": {
+      "features": [
+        {
+          "name": {
+            "en-US": "Menacing Reach"
+          },
+          "description": [
+            {
+              "paragraph": {
+                "en-US": "When you imbue your weapon with your Patron's fury, you can mark an additional Stress to increase its range by one step (Melee to Very Close, Very Close to Close, etc.)."
+              }
+            }
+          ]
+        },
+        {
+          "name": {
+            "en-US": "Diminish MyFoes"
+          },
+          "description": [
+            {
+              "paragraph": {
+                "en-US": "When you succeed with Hope on an action roll against a target, you can spend a Hope to make your target mark a Stress."
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "mastery": {
+      "features": [
+        {
+          "name": {
+            "en-US": "Fearsome Attack"
+          },
+          "description": [
+            {
+              "paragraph": {
+                "en-US": "You can always spend a Favor to reroll any number of your damage dice. You can continue spending Favor to reroll the same dice as many times as you'd like."
+              }
+            }
+          ]
+        },
+        {
+          "name": {
+            "en-US": "Divine Ire"
+          },
+          "description": [
+            {
+              "paragraph": {
+                "en-US": "Once per rest, when you take damage, you can spend any number of Favor to target that many adversaries within Close range. Each target must mark a Hit Point."
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "spellcastTrait": "PRESENCE"
+  },
+  {
+    "id": "the_void_subclass_hedge",
+    "name": {
+      "en-US": "Hedge"
+    },
+    "class": "WITCH",
+    "domains": [
+      "DREAD",
+      "SAGE"
+    ],
+    "foundation": {
+      "features": [
+        {
+          "name": {
+            "en-US": "Herbal Remedies"
+          },
+          "description": [
+            {
+              "paragraph": {
+                "en-US": "When you or an ally clear one or more Hit Points or Stress as the result of using a consumable, increase the number cleared by one."
+              }
+            }
+          ]
+        },
+        {
+          "name": {
+            "en-US": "Tethered Talisman"
+          },
+          "description": [
+            {
+              "paragraph": {
+                "en-US": "Once per rest, you can imbue a small item with your protective essence. When the person holding the talisman takes damage, you can expend its magic to reduce the number of Hit Points they mark by one. You can't create a new talisman until the old one has been used."
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "specialization": {
+      "features": [
+        {
+          "name": {
+            "en-US": "Walk Between Worlds"
+          },
+          "description": [
+            {
+              "paragraph": {
+                "en-US": "Make a Spellcast Roll (13) to step beyond the veil of death and converse with any nearby spirits. Place a number of tokens equal to your Spellcast trait on this card and remove one each time a spirit answers a question. You return to the mortal realm when the last token is removed."
+              }
+            }
+          ]
+        },
+        {
+          "name": {
+            "en-US": "Enhanced Hex"
+          },
+          "description": [
+            {
+              "paragraph": {
+                "en-US": "Attacks you make against Hexed creatures gain a damage bonus equal to your Proficiency."
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "mastery": {
+      "features": [
+        {
+          "name": {
+            "en-US": "Circle of Power"
+          },
+          "description": [
+            {
+              "paragraph": {
+                "en-US": "Once per rest, mark a circle on the ground around you up to Very Close range and place a number of tokens equal to your Spellcast Trait on this card. Each time you or any ally within the circle makes an action roll or is hit with an attack, remove a token. This spell lasts until the last token is removed or you step out of the circle. While within this circle, you and any allies:"
+              }
+            },
+            {
+              "list": [
+                {
+                  "en-US": "Gain a +4 bonus to your damage thresholds."
+                },
+                {
+                  "en-US": "Gain a +2 bonus to your attack rolls."
+                },
+                {
+                  "en-US": "Gain a +1 bonus to your Evasion."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "spellcastTrait": "KNOWLEDGE"
+  },
+  {
+    "id": "the_void_subclass_moon",
+    "name": {
+      "en-US": "Moon"
+    },
+    "class": "WITCH",
+    "domains": [
+      "DREAD",
+      "SAGE"
+    ],
+    "foundation": {
+      "features": [
+        {
+          "name": {
+            "en-US": "Night's Glamour"
+          },
+          "description": [
+            {
+              "paragraph": {
+                "en-US": "Mark a Stress to Glamour yourself in a magical facade that lasts until you mark a Hit Point, make an attack, or take a rest. While Glamoured, you can:"
+              }
+            },
+            {
+              "list": [
+                {
+                  "en-US": "Disguise yourself to look like any creature of your approximate size that you've seen."
+                },
+                {
+                  "en-US": "Enhance your own appearance. You gain advantage on Presence Rolls that leverage this change."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "specialization": {
+      "features": [
+        {
+          "name": {
+            "en-US": "Moonbeam"
+          },
+          "description": [
+            {
+              "paragraph": {
+                "en-US": "Once per session, you can conjure a column of moonlight that illuminates the area within Close range until the end of the scene. While bathed in this moonlight, you and any allies gain a +1 bonus to Spellcast Rolls and advantage on rolls to see through illusions."
+              }
+            }
+          ]
+        },
+        {
+          "name": {
+            "en-US": "Ire of Pale Light"
+          },
+          "description": [
+            {
+              "paragraph": {
+                "en-US": "When a Hexed creature within Far range fails an attack roll, they must mark a Stress."
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "mastery": {
+      "features": [
+        {
+          "name": {
+            "en-US": "Lunar Phases"
+          },
+          "description": [
+            {
+              "paragraph": {
+                "en-US": "Your spirit ebbs and flows like the phases of the moon. At the beginning of each session, roll a d4 and gain the matching effect until the end of the session:"
+              }
+            },
+            {
+              "list": [
+                {
+                  "en-US": "1: New - You can always spend a Hope to reduce Minor damage to None."
+                },
+                {
+                  "en-US": "2: Waxing - Gain a +2 bonus to your damage rolls."
+                },
+                {
+                  "en-US": "3: Full - Gain a +2 bonus to your damage thresholds."
+                },
+                {
+                  "en-US": "4: Waning - Gain a +1 bonus to your Evasion."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "spellcastTrait": "INSTINCT"
   }
 ]

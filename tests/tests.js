@@ -168,6 +168,52 @@ const {
   MAX_HOPE,
 } = await import(`../shared/advancement.js${RUN}`);
 
+// ---------- modules that arrived with upstream's play page ----------
+const {
+  CONDITIONS,
+  DOWNTIME_MOVES_PER_REST,
+  HOPE_MAX,
+  HOPE_START,
+  REST_MOVES,
+  applyRestMove,
+  clampState,
+  defaultState,
+  findRestMove,
+  maxesFromSheet,
+  restClearAmount,
+  scarAt,
+  tapBox,
+  toggleCondition,
+} = await import(`../shared/table-state.js${RUN}`);
+const {
+  LANGUAGES,
+  pickLanguage,
+  translator,
+} = await import(`../shared/i18n.js${RUN}`);
+const {
+  MAX_BYTES,
+  MAX_DECODED_EDGE,
+  MAX_EDGE,
+  decodedSize,
+  fitWithin,
+  isPortrait,
+  sanitizePortrait,
+} = await import(`../shared/portrait.js${RUN}`);
+const {
+  CHOOSE_KEYS,
+  nextIndex,
+  tabStopIndex,
+} = await import(`../shared/choice-keys.js${RUN}`);
+const {
+  CARD_ART_EXT,
+} = await import(`../shared/card-art-config.js${RUN}`);
+const {
+  ancestryCardArtPath,
+  communityCardArtPath,
+  domainCardArtPath,
+  subclassCardArtPath,
+} = await import(`../shared/card-render.js${RUN}`);
+
 // ---------- tiny runner ----------
 
 const groups = [];
@@ -6118,6 +6164,451 @@ group("The attack line, one clause of the rule at a time");
     attackText(alternatives, { bracketBonus: true }), "(+2) Strength / (0) Finesse");
   eq("a label on top of those is separated by a bracket, not welded onto the last trait named",
     attackText({ ...alternatives, traitLabel: "Spellcast" }), "(+2) Strength / (0) Finesse (Spellcast)");
+}
+
+
+// ===========================================================================================
+// Groups that came in with upstream's 2026-08-27 merge. Two of its groups are deliberately
+// absent: the JSON transfer pair tested upstream's shared/transfer.js, and this fork keeps its
+// own — the transfer groups above cover it. "Every id in effects.js still exists in data/" is
+// also upstream's; the data/srd/ version of it above is the same check on this fork's layout.
+// ===========================================================================================
+
+group("Table state: boxes marked at the table (HP, Stress, Hope, Armor)");
+{
+  eq("a new character starts with nothing marked but the two starting Hope, no conditions, no notes",
+    defaultState(), { hp: 0, stress: 0, hope: HOPE_START, armor: 0, scars: 0, conditions: [], notes: "" });
+  eq("Hope starts at 2 and caps at 6, per the SRD", [HOPE_START, HOPE_MAX], [2, 6]);
+
+  // Tapping is "fill up to here / clear from here on": one tap reaches any value.
+  eq("tapping an empty box marks every box up to and including it", tapBox(0, 2), 3);
+  eq("tapping the box right after the marked ones marks one more", tapBox(2, 2), 3);
+  eq("tapping the last marked box clears just that one", tapBox(3, 2), 2);
+  eq("tapping an earlier marked box clears it and everything after", tapBox(5, 1), 1);
+  eq("tapping the first box when it's the only one marked clears everything", tapBox(1, 0), 0);
+
+  const maxes = { hp: 6, stress: 6, hope: HOPE_MAX, armor: 3 };
+  eq("values within the maxima pass through untouched",
+    clampState({ hp: 2, stress: 1, hope: 4, armor: 3 }, maxes), { hp: 2, stress: 1, hope: 4, armor: 3, scars: 0, conditions: [], notes: "" });
+  eq("a value above its maximum (e.g. armor swapped for a lighter one) is pulled down to it",
+    clampState({ hp: 9, stress: 0, hope: 7, armor: 5 }, maxes), { hp: 6, stress: 0, hope: 6, armor: 3, scars: 0, conditions: [], notes: "" });
+
+  // Conditions and notes ride along in the same state object: a clamp must keep them, or the
+  // first tap on an HP box would silently drop every condition marked.
+  eq("conditions and notes survive a clamp",
+    clampState({ hp: 1, stress: 0, hope: 2, armor: 0, conditions: ["hidden", "restrained"], notes: "owes Rya 2 gold" }, maxes),
+    { hp: 1, stress: 0, hope: 2, armor: 0, scars: 0, conditions: ["hidden", "restrained"], notes: "owes Rya 2 gold" });
+  eq("unknown condition ids and non-string entries are dropped, duplicates collapsed",
+    clampState({ conditions: ["vulnerable", "stunned", 3, "vulnerable"] }, maxes).conditions, ["vulnerable"]);
+  eq("non-string notes fall back to empty", clampState({ notes: 42 }, maxes).notes, "");
+
+  eq("the SRD's three conditions, each with the one line a player needs at the table",
+    CONDITIONS.map((c) => c.id), ["vulnerable", "hidden", "restrained"]);
+  check("every condition has a label and an effect", CONDITIONS.every((c) => c.label && c.effect));
+  eq("toggling a condition on adds it in catalogue order", toggleCondition(["restrained"], "vulnerable"), ["vulnerable", "restrained"]);
+  eq("toggling it again removes it", toggleCondition(["vulnerable", "restrained"], "vulnerable"), ["restrained"]);
+  eq("toggling an unknown id changes nothing", toggleCondition(["hidden"], "stunned"), ["hidden"]);
+  eq("negative and non-numeric values fall back to the defaults",
+    clampState({ hp: -1, stress: "x", hope: undefined, armor: null }, maxes), defaultState());
+  eq("an unknown maximum (draft with no class yet) means nothing can be marked",
+    clampState({ hp: 3, stress: 2, hope: 2, armor: 1 }, { hp: null, stress: 6, hope: 6, armor: null }),
+    { hp: 0, stress: 2, hope: 2, armor: 0, scars: 0, conditions: [], notes: "" });
+  eq("a missing state altogether clamps to the defaults", clampState(undefined, maxes), defaultState());
+  check("clampState returns a new object rather than mutating its input", (() => {
+    const input = { hp: 9, stress: 0, hope: 2, armor: 0 };
+    clampState(input, maxes);
+    return input.hp === 9;
+  })());
+
+  eq("the maxima come from the derived sheet: HP, Stress, Hope slots and Armor Score (= armor slots)",
+    maxesFromSheet({ hitPoints: 7, stress: 6, hopeSlots: 6, armorScore: 3 }),
+    { hp: 7, stress: 6, hope: 6, armor: 3 });
+  eq("unknown sheet values stay null so the UI can show a dash",
+    maxesFromSheet({ hitPoints: null, stress: 6, hopeSlots: 6, armorScore: null }),
+    { hp: null, stress: 6, hope: 6, armor: null });
+
+  eq("ensureLevelFields backfills the table state on characters saved before it existed",
+    ensureLevelFields(newCharacter()).state, defaultState());
+  const kept = newCharacter();
+  kept.state = { hp: 3, stress: 1, hope: 5, armor: 2 };
+  // A character saved between the play page and scars existing has a state with no `scars`
+  // field at all — not zero, absent. ensureLevelFields backfills it without touching anything
+  // else already there.
+  eq("and backfills scars onto an existing state that predates it, leaving the rest untouched",
+    ensureLevelFields(kept).state, { hp: 3, stress: 1, hope: 5, armor: 2, scars: 0 });
+
+  // An imported file can say `"state": "x"` (or a number, or an array): not just missing, but
+  // the wrong shape entirely. Writing a field onto a primitive throws in strict mode, which
+  // would take the whole page down rather than just this one character's state.
+  for (const bad of ["rotto", 42, [], null]) {
+    const broken = newCharacter();
+    broken.state = bad;
+    check(`a primitive or array state (${JSON.stringify(bad)}) resets to defaultState() instead of throwing`, (() => {
+      try {
+        return JSON.stringify(ensureLevelFields(broken).state) === JSON.stringify(defaultState());
+      } catch {
+        return false;
+      }
+    })());
+  }
+
+  // A scar crosses out a Hope slot for good (SRD, Avoid Death). They're always the slots at
+  // the right-hand end, so scarring is tapBox seen from that end.
+  eq("no scars to start with", defaultState().scars, 0);
+  eq("long-pressing the last slot crosses out just that one", scarAt(0, 5, 6), 1);
+  eq("long-pressing an earlier one crosses out it and everything after", scarAt(0, 3, 6), 3);
+  eq("long-pressing the leftmost crosses out the lot", scarAt(0, 0, 6), 6);
+  eq("long-pressing the only crossed slot frees it", scarAt(1, 5, 6), 0);
+  eq("long-pressing a crossed slot frees it and the crossed ones before it", scarAt(3, 4, 6), 1);
+  eq("long-pressing the leftmost crossed slot frees just that one, the ones after it stay", scarAt(3, 3, 6), 2);
+  eq("long-pressing the rightmost (last) crossed slot frees them all", scarAt(3, 5, 6), 0);
+
+  eq("scars ride along in the state", clampState({ scars: 2 }, maxes).scars, 2);
+  eq("more scars than there are slots is impossible", clampState({ scars: 9 }, maxes).scars, HOPE_MAX);
+  eq("a negative or non-numeric scar count falls back to none",
+    [clampState({ scars: -1 }, maxes).scars, clampState({ scars: "x" }, maxes).scars], [0, 0]);
+  eq("a scar gained with Hope full pushes the Hope down with it",
+    clampState({ hope: 6, scars: 2 }, maxes).hope, 4);
+  eq("Hope below the reduced maximum is left where it is", clampState({ hope: 1, scars: 2 }, maxes).hope, 1);
+  eq("with no Hope slots at all (a draft with no class) nothing can be scarred",
+    clampState({ scars: 3 }, { hp: 6, stress: 6, hope: null, armor: 3 }).scars, 0);
+  eq("a character saved before scars existed opens with none",
+    ensureLevelFields(newCharacter()).state.scars, 0);
+}
+
+group("Downtime: the two moves a rest gives you (SRD p. 105)");
+{
+  const maxes = { hp: 6, stress: 6, hope: HOPE_MAX, armor: 3 };
+  const beaten = { hp: 5, stress: 4, hope: 1, armor: 3, scars: 0, conditions: [], notes: "" };
+  const move = (kind, id) => findRestMove(kind, id);
+
+  eq("a rest is two moves, and the same move twice is allowed", DOWNTIME_MOVES_PER_REST, 2);
+  eq("the short rest's menu", REST_MOVES.short.map((m) => m.id),
+    ["tendToWounds", "clearStress", "repairArmor", "prepare"]);
+  eq("the long rest's, which adds Work on a Project", REST_MOVES.long.map((m) => m.id),
+    ["tendToAllWounds", "clearAllStress", "repairAllArmor", "prepare", "workOnProject"]);
+  eq("an id that isn't on the menu comes back null, not undefined", findRestMove("short", "nope"), null);
+  eq("and neither is a rest that doesn't exist", findRestMove("epic", "prepare"), null);
+
+  // "clear a number of Hit Points equal to 1d4 + your tier"
+  eq("the short rest's amount is the die plus the tier", restClearAmount(3, 2), 5);
+  eq("a tier 1 character adds 1", restClearAmount(4, 1), 5);
+  eq("a missing or nonsense roll clears nothing rather than throwing",
+    [restClearAmount(0, 2), restClearAmount("x", 2), restClearAmount(undefined, undefined)], [2, 2, 0]);
+
+  // HP, Stress and Armor count what's been spent or taken, so a rest counts them DOWN.
+  eq("Tend to Wounds clears the rolled amount of HP",
+    applyRestMove(beaten, maxes, move("short", "tendToWounds"), { amount: 3 }).hp, 2);
+  eq("Clear Stress does the same to Stress",
+    applyRestMove(beaten, maxes, move("short", "clearStress"), { amount: 2 }).stress, 2);
+  eq("Repair Armor does the same to Armor Slots",
+    applyRestMove(beaten, maxes, move("short", "repairArmor"), { amount: 1 }).armor, 2);
+  eq("clearing more than was marked stops at nothing marked, it doesn't go negative",
+    applyRestMove(beaten, maxes, move("short", "tendToWounds"), { amount: 99 }).hp, 0);
+  eq("and a move with no amount passed clears nothing",
+    applyRestMove(beaten, maxes, move("short", "tendToWounds")).hp, 5);
+
+  eq("Tend to All Wounds clears the lot, no die involved",
+    applyRestMove(beaten, maxes, move("long", "tendToAllWounds")).hp, 0);
+  eq("so does Clear All Stress", applyRestMove(beaten, maxes, move("long", "clearAllStress")).stress, 0);
+  eq("so does Repair All Armor", applyRestMove(beaten, maxes, move("long", "repairAllArmor")).armor, 0);
+
+  // Hope is the one row that counts what you HOLD, so Prepare counts up.
+  eq("Prepare gains a Hope", applyRestMove(beaten, maxes, move("short", "prepare")).hope, 2);
+  eq("and two when you prepare with the party",
+    applyRestMove(beaten, maxes, move("long", "prepare"), { together: true }).hope, 3);
+  eq("Hope can't be prepared past the six slots",
+    applyRestMove({ ...beaten, hope: 6 }, maxes, move("short", "prepare"), { together: true }).hope, 6);
+  eq("nor past the slots a scar has taken away",
+    applyRestMove({ ...beaten, hope: 4, scars: 2 }, maxes, move("short", "prepare"), { together: true }).hope, 4);
+
+  eq("Work on a Project ticks a countdown the GM keeps, so the sheet is unchanged",
+    applyRestMove(beaten, maxes, move("long", "workOnProject")), beaten);
+  eq("an unknown move leaves the state alone rather than throwing",
+    applyRestMove(beaten, maxes, null, { amount: 3 }), beaten);
+
+  // A rest goes through the same clamp as a tap: an armor swap since the last session must not
+  // survive as an impossible count just because a rest touched a different row.
+  eq("a rest clamps the rest of the state too, like every other change",
+    applyRestMove({ hp: 9, stress: 0, hope: 2, armor: 5 }, maxes, move("long", "clearAllStress")),
+    { hp: 6, stress: 0, hope: 2, armor: 3, scars: 0, conditions: [], notes: "" });
+  check("applyRestMove returns a new object rather than mutating its input", (() => {
+    const input = { hp: 5, stress: 0, hope: 2, armor: 0, scars: 0, conditions: [], notes: "" };
+    applyRestMove(input, maxes, move("long", "tendToAllWounds"));
+    return input.hp === 5;
+  })());
+
+  // Conditions and notes are not what a rest is for: nothing in the SRD's downtime moves ends
+  // one, so a rest that quietly cleared them would be the app inventing a rule.
+  eq("a rest leaves conditions and notes exactly where they are",
+    applyRestMove({ ...beaten, conditions: ["hidden"], notes: "owes Rya 2 gold" }, maxes,
+      move("long", "tendToAllWounds")),
+    { hp: 0, stress: 4, hope: 1, armor: 3, scars: 0, conditions: ["hidden"], notes: "owes Rya 2 gold" });
+}
+
+// ---------- card-render.js ----------
+
+group("Play page labels: English by default, Italian when the page says lang=\"it\"");
+{
+  eq("the languages on offer", LANGUAGES, ["en", "it"]);
+  eq("a plain tag picks its dictionary", [pickLanguage("it"), pickLanguage("en")], ["it", "en"]);
+  eq("a regional tag picks the base language", pickLanguage("it-IT"), "it");
+  eq("anything unknown, empty or missing falls back to English", [pickLanguage("de"), pickLanguage(""), pickLanguage(undefined)], ["en", "en", "en"]);
+
+  const en = translator("en");
+  const it = translator("it");
+  eq("a key resolves in each language", [en("tab.status"), it("tab.status")], ["Status", "Stato"]);
+  eq("placeholders are filled", it("hope.of", { n: 2, max: 6 }), "Speranza: 2 su 6");
+  eq("an unknown key comes back as the key itself, never blank", it("nope.missing"), "nope.missing");
+  check("every English key has an Italian one — no half-translated page",
+    (() => { const missing = en.keys().filter((k) => it(k) === k && en(k) !== k); return missing.length === 0; })());
+  check("the three conditions are translated, label and effect",
+    ["vulnerable", "hidden", "restrained"].every((id) => it(`condition.${id}.label`) !== en(`condition.${id}.label`) && it(`condition.${id}.effect`) !== `condition.${id}.effect`));
+
+  eq("an unscarred slot's label names it as a box, not a bare number",
+    it("hope.slot", { n: 3, max: 6 }), "Casella di Speranza 3 di 6");
+  eq("the crossed-out slot says so, counting the same way as the unscarred one",
+    it("hope.scarred", { n: 6, max: 6 }), "Casella di Speranza 6 di 6, cicatrizzata");
+  eq("the confirmation names the slot it's about to cross out for good",
+    it("hope.scar.confirmOne", { n: 6 }), "Barrare per sempre la Speranza 6?");
+  eq("or the whole range, when the gesture crosses out more than one",
+    it("hope.scar.confirmMany", { from: 4, to: 6 }), "Barrare per sempre la Speranza da 4 a 6?");
+  eq("the end of the road is spelled out, not implied",
+    it("hope.journeyEnds"), "Il viaggio di questo personaggio finisce qui.");
+}
+
+group("Portrait: a picture small enough to live in localStorage");
+{
+  eq("the limits, in one place", [MAX_EDGE, MAX_BYTES], [512, 120_000]);
+
+  eq("a wide picture is shrunk by its width", fitWithin(1600, 900, 512), { width: 512, height: 288 });
+  eq("a tall one by its height", fitWithin(900, 1600, 512), { width: 288, height: 512 });
+  eq("a square one hits the box on both sides", fitWithin(2000, 2000, 512), { width: 512, height: 512 });
+  eq("one already inside the box is left alone — never enlarged", fitWithin(120, 90, 512), { width: 120, height: 90 });
+  eq("a degenerate size doesn't divide by zero", fitWithin(0, 0, 512), { width: 0, height: 0 });
+
+  const webp = "data:image/webp;base64,AAAA";
+  eq("a small WebP data URL is a portrait", isPortrait(webp), true);
+  eq("JPEG and PNG too", [isPortrait("data:image/jpeg;base64,AA"), isPortrait("data:image/png;base64,AA")], [true, true]);
+  eq("a remote URL is not", isPortrait("https://example.com/face.png"), false);
+  eq("nor is a script URL", isPortrait("javascript:alert(1)"), false);
+  eq("nor is an HTML data URL dressed up as an image", isPortrait("data:text/html;base64,PHNjcmlwdD4="), false);
+  eq("nor an SVG, which can carry script", isPortrait("data:image/svg+xml;base64,AA"), false);
+  eq("nor an empty string, a number or an object", [isPortrait(""), isPortrait(42), isPortrait({})], [false, false, false]);
+  eq("anything past the byte cap is refused", isPortrait("data:image/webp;base64," + "A".repeat(MAX_BYTES)), false);
+
+  eq("sanitizePortrait passes a good one through", sanitizePortrait(webp), webp);
+  eq("and turns anything else into null", [sanitizePortrait("javascript:alert(1)"), sanitizePortrait(undefined)], [null, null]);
+
+  // Everything that gets read back — localStorage and imported files alike — goes through
+  // ensureLevelFields, so that's where a portrait is checked before an <img> ever sees it.
+  const clean = newCharacter();
+  clean.portrait = webp;
+  eq("a good portrait survives ensureLevelFields", ensureLevelFields(clean).portrait, webp);
+
+  const nasty = newCharacter();
+  nasty.name = "Aster";
+  nasty.portrait = "javascript:alert(1)";
+  const fixed = ensureLevelFields(nasty);
+  eq("a portrait that isn't a picture is dropped", "portrait" in fixed, false);
+  eq("and the rest of the character is untouched", fixed.name, "Aster");
+
+  eq("a character with no portrait at all stays without one", "portrait" in ensureLevelFields(newCharacter()), false);
+
+  const shipped = newCharacter();
+  shipped.id = "p1";
+  shipped.portrait = webp;
+  // Upstream's version of this used its own transfer API; this fork's transfer file is the one
+  // that has to carry a portrait, so the same check runs through parseTransferFile.
+  eq("a portrait makes the round trip through a transfer file",
+    parseTransferFile(serializeTransferFile([shipped])).characters[0].portrait, webp);
+}
+
+group("Portrait: a decompression bomb is caught by its header, before it ever decodes");
+{
+  // Bytes built by hand, one format at a time — no files on disk, no real image encoder.
+  // decodedSize only needs enough of the header to read the declared width and height; the
+  // rest of each format (pixel data, CRCs, Huffman tables) is never touched.
+  const u8 = (arr) => Uint8Array.from(arr);
+  const ascii = (s) => Array.from(s, (c) => c.charCodeAt(0));
+  const toDataUrl = (mime, bytes) => {
+    let binary = "";
+    for (const b of bytes) binary += String.fromCharCode(b);
+    return `data:${mime};base64,${btoa(binary)}`;
+  };
+  const u32be = (bytes, offset, value) => {
+    bytes[offset] = (value >>> 24) & 0xff;
+    bytes[offset + 1] = (value >>> 16) & 0xff;
+    bytes[offset + 2] = (value >>> 8) & 0xff;
+    bytes[offset + 3] = value & 0xff;
+  };
+  const u24le = (bytes, offset, value) => {
+    bytes[offset] = value & 0xff;
+    bytes[offset + 1] = (value >> 8) & 0xff;
+    bytes[offset + 2] = (value >> 16) & 0xff;
+  };
+
+  // PNG: signature, then the IHDR chunk with width at byte 16 and height at byte 20
+  // (big-endian, 4 bytes each). Nothing past byte 24 is read.
+  function pngHeader(width, height) {
+    const bytes = new Uint8Array(24);
+    bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 0);
+    bytes.set([0, 0, 0, 13], 8); // IHDR data length, unread by decodedSize
+    bytes.set(ascii("IHDR"), 12);
+    u32be(bytes, 16, width);
+    u32be(bytes, 20, height);
+    return bytes;
+  }
+
+  // JPEG: SOI, then an SOF0 marker directly (real files have DQT/APP0 segments first, but the
+  // scanner has to walk past those to find it — this fixture just puts SOF0 first). The segment
+  // length that follows the marker is never used by decodedSize when the marker IS a SOF, so it
+  //'s left as zeroes.
+  function jpegHeader(width, height) {
+    return u8([
+      0xff, 0xd8,
+      0xff, 0xc0, 0x00, 0x00,
+      0x08, // precision
+      (height >> 8) & 0xff, height & 0xff,
+      (width >> 8) & 0xff, width & 0xff,
+    ]);
+  }
+
+  // WebP VP8X (the "extended" chunk): RIFF/WEBP/VP8X headers, a flags byte, 3 reserved bytes,
+  // then the canvas width and height as 24-bit little-endian values, each one less than the
+  // real size.
+  function webpVp8xHeader(width, height) {
+    const bytes = new Uint8Array(30);
+    bytes.set(ascii("RIFF"), 0);
+    bytes.set(ascii("WEBP"), 8);
+    bytes.set(ascii("VP8X"), 12);
+    bytes[20] = 0; // flags
+    u24le(bytes, 24, width - 1);
+    u24le(bytes, 27, height - 1);
+    return bytes;
+  }
+
+  eq("the cap", MAX_DECODED_EDGE, 2048);
+
+  const pngSmall = toDataUrl("image/png", pngHeader(100, 100));
+  const pngHuge = toDataUrl("image/png", pngHeader(24000, 24000));
+  eq("PNG: a 100x100 header reads back its size", decodedSize(pngSmall), { width: 100, height: 100 });
+  eq("PNG: a 24000x24000 header reads back its size too", decodedSize(pngHuge), { width: 24000, height: 24000 });
+  eq("PNG: the small one is accepted", sanitizePortrait(pngSmall), pngSmall);
+  eq("PNG: the huge one is refused before it ever decodes", sanitizePortrait(pngHuge), null);
+
+  const jpegSmall = toDataUrl("image/jpeg", jpegHeader(100, 100));
+  const jpegHuge = toDataUrl("image/jpeg", jpegHeader(24000, 24000));
+  eq("JPEG: an SOF0 header reads back its size", decodedSize(jpegSmall), { width: 100, height: 100 });
+  eq("JPEG: a huge SOF0 header reads back its size too", decodedSize(jpegHuge), { width: 24000, height: 24000 });
+  eq("JPEG: the small one is accepted", sanitizePortrait(jpegSmall), jpegSmall);
+  eq("JPEG: the huge one is refused", sanitizePortrait(jpegHuge), null);
+
+  // A real photo's EXIF (plus a thumbnail) routinely pushes the SOF marker tens of kilobytes
+  // in — an APP1 segment, walked past the same way any other segment is. A short scan budget
+  // would give up on exactly these files and let the huge one through unread.
+  function jpegHeaderWithApp1(width, height, app1Size) {
+    const app1 = new Uint8Array(2 + app1Size); // marker (2) + length field, which counts itself
+    app1[0] = 0xff; app1[1] = 0xe1;
+    app1[2] = (app1Size >> 8) & 0xff;
+    app1[3] = app1Size & 0xff;
+    // app1[4..] stands in for the EXIF/thumbnail payload — content is never read, only skipped.
+    const sof0 = jpegHeader(width, height).slice(2); // drop jpegHeader's own leading SOI
+    const bytes = new Uint8Array(2 + app1.length + sof0.length);
+    bytes[0] = 0xff; bytes[1] = 0xd8; // SOI
+    bytes.set(app1, 2);
+    bytes.set(sof0, 2 + app1.length);
+    return bytes;
+  }
+  const jpegHugeWithExif = toDataUrl("image/jpeg", jpegHeaderWithApp1(24000, 24000, 8000));
+  const jpegSmallWithExif = toDataUrl("image/jpeg", jpegHeaderWithApp1(100, 100, 8000));
+  eq("JPEG: an 8KB APP1 segment ahead of SOF0 is walked past, size read correctly (huge)",
+    decodedSize(jpegHugeWithExif), { width: 24000, height: 24000 });
+  eq("JPEG: same APP1 size, a real photo's proportions", decodedSize(jpegSmallWithExif), { width: 100, height: 100 });
+  eq("JPEG: the huge one is refused even behind 8KB of EXIF", sanitizePortrait(jpegHugeWithExif), null);
+  eq("JPEG: the small one still passes with the same EXIF", sanitizePortrait(jpegSmallWithExif), jpegSmallWithExif);
+
+  const webpSmall = toDataUrl("image/webp", webpVp8xHeader(100, 100));
+  const webpHuge = toDataUrl("image/webp", webpVp8xHeader(24000, 24000));
+  eq("WebP VP8X: a small canvas reads back its size", decodedSize(webpSmall), { width: 100, height: 100 });
+  eq("WebP VP8X: a huge canvas reads back its size too", decodedSize(webpHuge), { width: 24000, height: 24000 });
+  eq("WebP: the small one is accepted", sanitizePortrait(webpSmall), webpSmall);
+  eq("WebP: the huge one is refused", sanitizePortrait(webpHuge), null);
+
+  // A header that doesn't parse (too short, wrong signature) can't say it's oversized, so it's
+  // let through rather than dropping an honest file the decoder would have handled anyway.
+  eq("an unreadable header comes back null, not a false size", decodedSize("data:image/webp;base64,AAAA"), null);
+  eq("and sanitizePortrait accepts it rather than guessing", sanitizePortrait("data:image/webp;base64,AAAA"), "data:image/webp;base64,AAAA");
+  eq("a non-string is null, not a throw", decodedSize(42), null);
+}
+
+group("Every choice in the wizard can be reached from the keyboard");
+{
+  // A grid of 13 classes, four to a row. Right walks along the row; Down lands under your
+  // finger, not on the next option.
+  eq("Right moves to the next option", nextIndex("ArrowRight", 0, 13, 4), 1);
+  eq("Down moves a whole row", nextIndex("ArrowDown", 0, 13, 4), 4);
+  eq("Up moves back a row", nextIndex("ArrowUp", 5, 13, 4), 1);
+  eq("Left moves back one", nextIndex("ArrowLeft", 5, 13, 4), 4);
+
+  // Wrapping: you can never be stuck at an end wondering which way turns back.
+  eq("Right at the last option wraps to the first", nextIndex("ArrowRight", 12, 13, 4), 0);
+  eq("Left at the first option wraps to the last", nextIndex("ArrowLeft", 0, 13, 4), 12);
+  eq("Down past the end wraps round", nextIndex("ArrowDown", 11, 13, 4), 2);
+  eq("Up before the start wraps round", nextIndex("ArrowUp", 1, 13, 4), 10);
+
+  eq("Home goes to the first", nextIndex("Home", 7, 13, 4), 0);
+  eq("End goes to the last", nextIndex("End", 2, 13, 4), 12);
+
+  // -1 means "not ours": the caller must leave the event alone. Swallowing unknown keys is
+  // how a widget eats Tab and traps the person inside it.
+  eq("Tab is not ours", nextIndex("Tab", 3, 13, 4), -1);
+  eq("a letter is not ours", nextIndex("a", 3, 13, 4), -1);
+  eq("an empty grid has nowhere to go", nextIndex("ArrowRight", 0, 0, 4), -1);
+
+  // A single column is the honest fallback when the caller cannot measure the grid: Down
+  // behaves like Right rather than jumping somewhere the eye is not.
+  eq("without a column count Down is just Right", nextIndex("ArrowDown", 0, 13, 1), 1);
+  eq("a nonsense column count still moves by one", nextIndex("ArrowDown", 0, 13, 0), 1);
+
+  // The group holds ONE tab stop, so Tab crosses it instead of visiting all 13.
+  eq("Tab lands on the chosen option", tabStopIndex(6, 13), 6);
+  eq("with nothing chosen Tab lands on the first", tabStopIndex(-1, 13), 0);
+  eq("a stale index falls back to the first", tabStopIndex(99, 13), 0);
+
+  check("Space and Enter both choose", CHOOSE_KEYS.includes(" ") && CHOOSE_KEYS.includes("Enter"));
+}
+
+group("Card art paths use the configured extension, under the source the record came from");
+{
+  // Upstream's versions of these take an id and a flat data/card-art/. This fork's take the
+  // RECORD, because the id alone can't say which source folder to look in — so the checks are
+  // upstream's, rewritten for that signature. The extension is still one shared constant.
+  eq("CARD_ART_EXT", CARD_ART_EXT, "png");
+  eq("domainCardArtPath", domainCardArtPath({ id: "core_x" }), `data/srd/card-art/domain/core_x.${CARD_ART_EXT}`);
+  eq("subclassCardArtPath", subclassCardArtPath({ id: "core_y" }, "foundation"),
+    `data/srd/card-art/subclass/core_y-foundation.${CARD_ART_EXT}`);
+  eq("ancestryCardArtPath", ancestryCardArtPath({ id: "core_z" }), `data/srd/card-art/ancestry/core_z.${CARD_ART_EXT}`);
+  eq("communityCardArtPath", communityCardArtPath({ id: "core_w" }), `data/srd/card-art/community/core_w.${CARD_ART_EXT}`);
+  eq("a record from another source resolves under that source's folder",
+    domainCardArtPath({ id: "hf_x", contentSource: "hopeandfear" }),
+    `data/hopeandfear/card-art/domain/hf_x.${CARD_ART_EXT}`);
+}
+
+group("Hope & Fear (the_void release of daggerheart-data) is in data/srd/");
+{
+  const load = async (name) => (await fetch(`../data/srd/${name}.json${RUN}`)).json();
+  const [classes, subclasses, ancestries, communities, cards] = await Promise.all(
+    ["classes", "subclasses", "ancestries", "communities", "domain-cards"].map(load));
+  const voidClasses = classes.filter((c) => c.id.startsWith("the_void_class_"));
+  eq("the four classes", voidClasses.map((c) => c.name).sort(), ["ASSASSIN", "BRAWLER", "WARLOCK", "WITCH"]);
+  check("each of them has two subclasses keyed by class name, the way the wizard looks them up",
+    voidClasses.every((c) => subclasses.filter((s) => s.class === c.name).length === 2));
+  check("the 21 Dread domain cards, levels 1 to 10", cards.filter((c) => c.domain === "DREAD").length === 21);
+  check("the six ancestries and six communities",
+    ancestries.filter((a) => a.id.startsWith("the_void_")).length === 6 && communities.filter((a) => a.id.startsWith("the_void_")).length === 6);
+  check("no id collides with the core set", new Set(classes.map((c) => c.id)).size === classes.length && new Set(cards.map((c) => c.id)).size === cards.length);
+  check("the core set is still complete (9 classes, 189 cards)", classes.filter((c) => c.id.startsWith("core_")).length === 9 && cards.filter((c) => c.id.startsWith("core_")).length === 189);
 }
 
 // ---------- report ----------

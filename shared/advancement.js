@@ -12,6 +12,9 @@
 // the reason stated there: it costs both of a level's points, and optionCost/slotsPerPick answer
 // by key alone because the replay resolves a recorded pick with no content in hand.
 
+import { defaultState } from "./table-state.js";
+import { sanitizePortrait } from "./portrait.js";
+
 // NEW slots that unlock starting at each tier (cumulative, not replaced: at tier 3
 // you have tier 2's slots plus the new tier 3 ones, and so on).
 export const TIER_SLOT_TABLE = {
@@ -455,6 +458,19 @@ export function ensureLevelFields(ch) {
   // of the Craft. Keyed by the shared/effects.js key that asked. Missing answers are shown as a
   // nudge on the sheet, never enforced — characters saved before this existed must stay editable.
   if (!ch.effectChoices) ch.effectChoices = {};
+  // Boxes marked at the table (HP, Stress, Hope, Armor) — see shared/table-state.js. A
+  // character saved before the play page existed starts clean, with the SRD's two Hope.
+  // Not just missing: an imported file can say `"state": "x"`, and writing a field onto a
+  // primitive throws in strict mode — which would take down every page that opens this character.
+  if (!ch.state || typeof ch.state !== "object" || Array.isArray(ch.state)) ch.state = defaultState();
+  // A character saved between the play page and the scars has a state without this field.
+  if (!Number.isInteger(ch.state.scars) || ch.state.scars < 0) ch.state.scars = 0;
+  // The portrait is the only field that comes from a file the app didn't write, so it's the
+  // only one that can arrive as something else entirely: an old export, a hand-edited JSON.
+  // Anything that isn't a small image data URL is dropped rather than handed to an <img>.
+  const portrait = sanitizePortrait(ch.portrait);
+  if (portrait) ch.portrait = portrait;
+  else delete ch.portrait;
   // The cards picked during character creation, kept apart from the ones gained on level up so
   // the creation wizard can edit them without touching the rest of the collection.
   //

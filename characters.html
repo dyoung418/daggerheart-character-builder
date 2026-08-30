@@ -8,7 +8,7 @@
     script-src 'self';
     style-src 'self' https://fonts.googleapis.com;
     font-src https://fonts.gstatic.com;
-    img-src 'self';
+    img-src 'self' data:;
     connect-src 'self';
     object-src 'none';
     base-uri 'none';
@@ -35,6 +35,12 @@
       <button id="export-csv-btn" class="btn-ghost export-csv-btn">Export CSV for the GM</button>
       <button id="transfer-btn" class="btn-ghost export-csv-btn">Backup &amp; transfer</button>
     </div>
+    <!-- Upstream's JSON import/export buttons are deliberately absent: Backup & transfer above is
+         the fork's own round-trip, and two file formats side by side would be a trap. The hidden
+         portrait input and the banner stay — the portrait feature came in with the play page and
+         reports its failures through #import-banner. -->
+    <input id="portrait-file" type="file" accept="image/*" hidden />
+    <div id="import-banner" class="import-banner" hidden></div>
     <div id="characters-list" class="characters-list"></div>
     <div id="character-detail" class="character-detail"></div>
   </div>

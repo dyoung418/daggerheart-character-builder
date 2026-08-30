@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta http-equiv="Content-Security-Policy" content="
+    default-src 'self';
+    script-src 'self';
+    style-src 'self';
+    font-src 'self';
+    img-src 'self' data:;
+    connect-src 'self';
+    object-src 'none';
+    base-uri 'none';
+    form-action 'none'" />
+  <meta name="referrer" content="no-referrer" />
+  <meta name="theme-color" content="#18162e" />
+  <title>Daggerheart — At the Table</title>
+  <link rel="stylesheet" href="play.css" />
+</head>
+<body class="play-body">
+  <div class="play-toolbar">
+    <a id="nav-characters" href="characters.html">← My Characters</a>
+    <a id="print-link" href="#">Print sheet</a>
+    <button id="undo" type="button" class="play-undo" disabled>Undo</button>
+  </div>
+
+  <main id="play-root" class="play-sheet"></main>
+
+  <script type="module" src="play.js"></script>
+</body>
+</html>

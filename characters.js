@@ -17,6 +17,7 @@ import {
   subclassTiersUpTo,
   tierForLevel,
 } from "./shared/advancement.js";
+import { encodePortrait } from "./shared/portrait.js";
 import {
   describeCards,
   describeLevelUp,
@@ -102,6 +103,28 @@ function saveCharacters() {
   localStorage.setItem(CHAR_STORAGE_KEY, JSON.stringify(characters));
 }
 
+// Re-read, patch one character's portrait, write back — the same care play.js takes with the
+// marked boxes, for the same reason: the play page may have written since this list was loaded,
+// and the portrait is a new reason to come back here mid-session. Returns false when nothing was
+// written, so the caller can put its own copy back instead of showing a portrait that isn't saved.
+function savePortrait(id, portrait) {
+  let list;
+  try {
+    const raw = localStorage.getItem(CHAR_STORAGE_KEY);
+    list = raw ? JSON.parse(raw) : [];
+  } catch {
+    return false;
+  }
+  const target = list.find((c) => c.id === id);
+  if (!target) return false;
+  if (portrait) target.portrait = portrait; else delete target.portrait;
+  localStorage.setItem(CHAR_STORAGE_KEY, JSON.stringify(list));
+  // What's on disk is now ahead of what this page loaded; the next saveCharacters() would write
+  // the stale copy back over it.
+  loadCharacters();
+  return true;
+}
+
 function findClass(id) { return db.classes.find((c) => c.id === id); }
 function findSubclass(id) { return db.subclasses.find((s) => s.id === id); }
 function findAncestry(id) { return db.ancestries.find((a) => a.id === id); }
@@ -157,8 +180,10 @@ function renderList() {
       `
       : `
         <button class="btn-small" data-action="view">Sheet</button>
-        <a class="btn-small" href="sheet.html?id=${ch.id}">Print sheet</a>
+        <a class="btn-small" href="play.html?id=${encodeURIComponent(ch.id)}">Play</a>
+        <a class="btn-small" href="sheet.html?id=${encodeURIComponent(ch.id)}">Print sheet</a>
         <button class="btn-small" data-action="edit">Edit</button>
+        <button class="btn-small" data-action="export">Export</button>
         <button class="btn-small btn-danger" data-action="delete">Delete</button>
       `;
 
@@ -184,6 +209,7 @@ function renderList() {
     } else {
       row.querySelector('[data-action="view"]').addEventListener("click", () => { openId = ch.id; renderAll(); });
       row.querySelector('[data-action="edit"]').addEventListener("click", () => { location.href = `create.html?id=${ch.id}`; });
+      row.querySelector('[data-action="export"]').addEventListener("click", () => downloadTransferFile([ch]));
       row.querySelector('[data-action="delete"]').addEventListener("click", () => {
         pendingDeleteId = ch.id;
         renderAll();
@@ -511,6 +537,13 @@ function renderDetail() {
     : "";
   header.innerHTML = `<h2>${escapeHtml(ch.name || "(unnamed)")}</h2>` +
     `<p>${escapeHtml(ch.pronouns || "")} · Level ${escapeHtml(ch.level)}${escapeHtml(mcLine)}</p>`;
+  if (ch.portrait) {
+    const face = document.createElement("img");
+    face.className = "detail-portrait";
+    face.src = ch.portrait;
+    face.alt = "";
+    header.prepend(face);
+  }
   container.appendChild(header);
 
   // Levelling up on top of choices that no longer add up just compounds the problem, so
@@ -552,8 +585,14 @@ function renderDetail() {
     container.appendChild(levelUpBtn);
   }
 
+  const playLink = document.createElement("a");
+  playLink.className = "btn-ghost detail-print-link" + (ch.level < 10 ? " detail-print-link--spaced" : "");
+  playLink.href = `play.html?id=${ch.id}`;
+  playLink.textContent = "Play";
+  container.appendChild(playLink);
+
   const printSheetLink = document.createElement("a");
-  printSheetLink.className = "btn-ghost detail-print-link" + (ch.level < 10 ? " detail-print-link--spaced" : "");
+  printSheetLink.className = "btn-ghost detail-print-link";
   printSheetLink.href = `sheet.html?id=${ch.id}`;
   printSheetLink.textContent = "Print sheet";
   container.appendChild(printSheetLink);
@@ -584,6 +623,37 @@ function renderDetail() {
       "btn-ghost detail-print-link detail-print-link--spaced",
       () => openSheetPdfPicker(ch),
     ));
+  }
+
+  const portraitBtn = document.createElement("button");
+  portraitBtn.type = "button";
+  portraitBtn.className = "btn-ghost detail-print-link";
+  portraitBtn.textContent = ch.portrait ? "Replace portrait" : "Add portrait";
+  portraitBtn.addEventListener("click", () => pickPortrait(ch.id));
+  container.appendChild(portraitBtn);
+
+  if (ch.portrait) {
+    const dropBtn = document.createElement("button");
+    dropBtn.type = "button";
+    dropBtn.className = "btn-ghost detail-print-link";
+    dropBtn.textContent = "Remove portrait";
+    dropBtn.addEventListener("click", () => {
+      const before = ch.portrait;
+      delete ch.portrait;
+      let saved = false;
+      try {
+        saved = savePortrait(ch.id, null);
+      } catch {
+        saved = false;
+      }
+      if (!saved) {
+        ch.portrait = before;
+        portraitProblem("The portrait couldn't be removed — the character may have been removed in another tab.");
+        return;
+      }
+      renderAll();
+    });
+    container.appendChild(dropBtn);
   }
 
   const cardsRow = document.createElement("div");
@@ -1323,8 +1393,12 @@ function openTransferModal(opts = {}) {
   if (opts.pick) fileInput.click();
 }
 
-function downloadTransferFile() {
-  downloadFile(transferFilename(), serializeTransferFile(characters), "application/json");
+// `list` defaults to everyone, which is what the Backup & transfer modal wants; the roster row's
+// own Export button passes the one character it belongs to. Same format either way — a transfer
+// file has always been a list, so a file holding one character needs no separate shape and reads
+// back through exactly the same import.
+function downloadTransferFile(list = characters) {
+  downloadFile(transferFilename(), serializeTransferFile(list), "application/json");
 }
 
 async function readTransferFile(input) {
@@ -1567,6 +1641,95 @@ function clearImportState() {
   importUndo = null;
 }
 
+// Portrait support came from upstream with the play page. The JSON import/export it arrived
+// beside did not: shared/transfer.js here is the fork's own, with per-character conflict
+// resolution, so upstream's exportJson/importFromFile/applyImport were dropped rather than
+// kept alongside a second file format. showImportBanner survives because portraitProblem uses it.
+function showImportBanner(text, { error = false, actions = [] } = {}) {
+  const banner = document.getElementById("import-banner");
+  banner.replaceChildren();
+  banner.className = "import-banner" + (error ? " error" : "");
+  banner.hidden = false;
+  const p = document.createElement("p");
+  p.textContent = text;
+  banner.appendChild(p);
+  if (actions.length) {
+    const row = document.createElement("div");
+    row.className = "import-actions";
+    for (const { label, onClick, danger } of actions) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "btn-small" + (danger ? " btn-danger" : "");
+      b.textContent = label;
+      b.addEventListener("click", onClick);
+      row.appendChild(b);
+    }
+    banner.appendChild(row);
+  }
+}
+
+function hideImportBanner() {
+  const banner = document.getElementById("import-banner");
+  banner.hidden = true;
+  banner.replaceChildren();
+}
+
+// Which character the hidden file input is about to serve. The input is one, shared, and
+// lives in the page rather than in the detail, so re-rendering the detail can't lose it
+// mid-dialog.
+let portraitTarget = null;
+
+function pickPortrait(id) {
+  portraitTarget = id;
+  document.getElementById("portrait-file").click();
+}
+
+// Whether the banner currently showing is one of ours. An import conflict waiting for an answer
+// is not, and a portrait going well must not throw that question away.
+let portraitBannerUp = false;
+
+function portraitProblem(text) {
+  portraitBannerUp = true;
+  showImportBanner(text, { error: true, actions: [{ label: "OK", onClick: () => { portraitBannerUp = false; hideImportBanner(); } }] });
+}
+
+function clearPortraitProblem() {
+  if (!portraitBannerUp) return;
+  portraitBannerUp = false;
+  hideImportBanner();
+}
+
+async function usePortraitFile(file) {
+  const ch = characters.find((c) => c.id === portraitTarget);
+  if (!file || !ch) return;
+  let url;
+  try {
+    url = await encodePortrait(file);
+  } catch (err) {
+    portraitProblem(err?.message === "too-big"
+      ? "That picture is too detailed to store — crop it, or pick one with less going on."
+      : "That picture couldn't be used. Pick a JPEG, PNG or WebP — a photo from the camera is fine.");
+    return;
+  }
+  // localStorage is a few megabytes for every character together, so a save can fail. Put the
+  // old value back rather than leaving the list and what's on disk saying different things.
+  const before = ch.portrait;
+  ch.portrait = url;
+  let saved = false;
+  try {
+    saved = savePortrait(ch.id, url);
+  } catch {
+    saved = false;
+  }
+  if (!saved) {
+    if (before) ch.portrait = before; else delete ch.portrait;
+    portraitProblem("The portrait couldn't be saved — this browser may be out of storage, or the character may have been removed in another tab.");
+    return;
+  }
+  clearPortraitProblem();
+  renderAll();
+}
+
 async function init() {
   // The template probe rides along with the content load rather than happening where it's used.
   // renderDetail() is synchronous and has to KNOW whether to offer the official-sheet export, not
@@ -1597,6 +1760,12 @@ async function init() {
   });
   document.getElementById("export-csv-btn").addEventListener("click", openExportPicker);
   document.getElementById("transfer-btn").addEventListener("click", () => openTransferModal());
+  const portraitInput = document.getElementById("portrait-file");
+  portraitInput.addEventListener("change", async () => {
+    const file = portraitInput.files[0];
+    portraitInput.value = ""; // so picking the same file again fires change
+    await usePortraitFile(file);
+  });
 }
 
 init();

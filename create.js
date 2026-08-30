@@ -17,6 +17,7 @@ import { loadContent } from "./shared/content-load.js";
 import { mountContentSettings } from "./shared/content-settings.js";
 import { visibleRecords } from "./shared/content-sources.js";
 import { openClassDetail } from "./shared/class-detail.js";
+import { CHOOSE_KEYS, nextIndex, tabStopIndex } from "./shared/choice-keys.js";
 import {
   armorRowContent,
   burdenWarning,
@@ -289,11 +290,14 @@ function renderStepPanel() {
     connections: renderConnectionsStep,
   };
   renderers[step.key](panel);
+  restoreFocusAfterRender();
 }
 
 function cardTile(card, selected, onClick) {
   const tile = document.createElement("div");
   tile.className = "card-tile" + (selected ? " selected" : "");
+  // Which choice this is, so focus can be put back on it after the panel is rebuilt.
+  tile.dataset.choice = card.id;
   tile.appendChild(renderCardArt(card));
   const label = document.createElement("div");
   label.className = "card-tile-label";
@@ -301,6 +305,101 @@ function cardTile(card, selected, onClick) {
   tile.appendChild(label);
   tile.addEventListener("click", onClick);
   return tile;
+}
+
+// ---------- choosing without a pointer ----------
+//
+// Every choice in this wizard — class, subclass, ancestry, community, domain cards — was a
+// <div> with a click listener. No role, no tabindex: `grep -c tabindex create.js` returned 0.
+// So none of them could be reached from the keyboard, let alone chosen. Character creation
+// worked only for people with a pointer, and nothing said so.
+//
+// What a grid of choices actually is, in ARIA terms: a radiogroup of radios when you pick one
+// (class, subclass, community), a group of checkboxes when you pick several (mixed ancestry,
+// domain cards). Both come with a keyboard contract people already know, and the arithmetic
+// for it is in shared/choice-keys.js, where it can be tested.
+
+// A pick rebuilds the whole step, which throws away the focused element. Without this, every
+// choice would drop the keyboard user back to the top of the document — a fix that fixes
+// nothing. The tile is remembered by grid and id, and found again after the rebuild.
+let focusAfterRender = null;
+
+/** How many tiles share the first row — Down should land under your finger, not next along. */
+function columnsIn(tiles) {
+  const top = tiles[0].offsetTop;
+  let n = 0;
+  for (const t of tiles) {
+    if (t.offsetTop !== top) break;
+    n++;
+  }
+  return n || 1;
+}
+
+/**
+ * Makes a populated .tile-grid usable from the keyboard.
+ *
+ * Call it AFTER the grid is in the document: the column count is measured from layout, and an
+ * unattached grid measures as a single column.
+ */
+function makeGridChoosable(grid, { key, label, multi = false }) {
+  const tiles = [...grid.children];
+  if (!tiles.length) return;
+
+  grid.setAttribute("role", multi ? "group" : "radiogroup");
+  grid.setAttribute("aria-label", label);
+
+  const stop = tabStopIndex(tiles.findIndex((t) => t.classList.contains("selected")), tiles.length);
+  const perRow = columnsIn(tiles);
+
+  // Note which tile was chosen BEFORE the choice is acted on, because acting on it rebuilds
+  // the step and the tile stops existing. Hence capture, and on the grid rather than the tile:
+  // each tile already carries its own click listener, registered first, which calls onChange()
+  // and rebuilds everything. A second listener on the tile would run after that — too late to
+  // record anything. A capture listener on the parent runs before both.
+  grid.addEventListener("click", (e) => {
+    // The "i" button opens a dialog and chooses nothing: it must not claim the focus that the
+    // next rebuild will restore, or it would steal it from wherever it belongs.
+    if (e.target.closest(".class-info")) return;
+    const tile = e.target.closest("[data-choice]");
+    if (tile && grid.contains(tile)) focusAfterRender = { key, choice: tile.dataset.choice };
+  }, true);
+
+  tiles.forEach((tile, i) => {
+    tile.dataset.grid = key;
+    tile.setAttribute("role", multi ? "checkbox" : "radio");
+    tile.setAttribute("aria-checked", String(tile.classList.contains("selected")));
+    if (tile.classList.contains("disabled")) tile.setAttribute("aria-disabled", "true");
+    // One tab stop for the whole group: Tab crosses it and lands on what is chosen. Thirteen
+    // classes that each swallow a Tab would be its own kind of trap.
+    tile.tabIndex = i === stop ? 0 : -1;
+
+    tile.addEventListener("keydown", (e) => {
+      if (CHOOSE_KEYS.includes(e.key)) {
+        e.preventDefault();
+        tile.click();
+        return;
+      }
+      const to = nextIndex(e.key, i, tiles.length, perRow);
+      // -1 means the key isn't ours. Leave it alone — swallowing unknown keys is how a widget
+      // eats Tab and locks somebody inside it.
+      if (to < 0) return;
+      e.preventDefault();
+      tile.tabIndex = -1;
+      tiles[to].tabIndex = 0;
+      tiles[to].focus();
+    });
+  });
+}
+
+/** Puts focus back where it was before the rebuild, if the tile is still there. */
+function restoreFocusAfterRender() {
+  if (!focusAfterRender) return;
+  const { key, choice } = focusAfterRender;
+  focusAfterRender = null;
+  const tile = document.querySelector(`[data-grid="${key}"][data-choice="${choice}"]`);
+  if (!tile) return;
+  tile.tabIndex = 0;
+  tile.focus();
 }
 
 function onChange() {
@@ -341,6 +440,7 @@ function renderClassStep(panel) {
   for (const cls of classes) {
     const tile = document.createElement("div");
     tile.className = "class-tile" + (character.classId === cls.id ? " selected" : "");
+    tile.dataset.choice = cls.id;
     tile.innerHTML = `<strong>${escapeHtml(titleCase(cls.name))}</strong><span>${escapeHtml(cls.domains.map(titleCase).join(" · "))}</span>`;
     tile.addEventListener("click", () => {
       character.classId = cls.id;
@@ -367,6 +467,7 @@ function renderClassStep(panel) {
     classGrid.appendChild(tile);
   }
   panel.appendChild(classGrid);
+  makeGridChoosable(classGrid, { key: "class", label: "Class" });
 
   const cls = selectedClass();
   if (cls) {
@@ -389,6 +490,7 @@ function renderClassStep(panel) {
       subGrid.appendChild(tile);
     }
     panel.appendChild(subGrid);
+    makeGridChoosable(subGrid, { key: "subclass", label: "Subclass" });
   }
 }
 
@@ -448,6 +550,8 @@ function renderHeritageStep(panel) {
     ancGrid.appendChild(tile);
   }
   panel.appendChild(ancGrid);
+  // Mixed heritage picks two, so those are checkboxes; pure ancestry picks one.
+  makeGridChoosable(ancGrid, { key: "ancestry", label: "Ancestry", multi: h.ancestryMode === "mixed" });
 
   if (h.ancestryMode === "mixed" && h.ancestryIds.length > 0) {
     const featH = document.createElement("h3");
@@ -499,6 +603,7 @@ function renderHeritageStep(panel) {
     comGrid.appendChild(tile);
   }
   panel.appendChild(comGrid);
+  makeGridChoosable(comGrid, { key: "community", label: "Community" });
 }
 
 // --- Optional step: Transformation ---
@@ -956,6 +1061,7 @@ function renderDomainCardsStep(panel) {
     grid.appendChild(tile);
   }
   panel.appendChild(grid);
+  makeGridChoosable(grid, { key: "domain-cards", label: "Domain cards", multi: true });
 }
 
 // Usually 2. The School of Knowledge's Foundation card — "Take an additional domain card of

@@ -18,6 +18,7 @@
   --c-blade: #c0392b;
   --c-bone: #8a7f6a;
   --c-codex: #3b6ea5;
+  --c-dread: #5b6b7a;
   --c-grace: #d472a6;
   --c-midnight: #4a3f80;
   --c-sage: #4f9d5c;
@@ -195,6 +196,7 @@ h1, h2, h3, .btn-primary, .btn-ghost, .btn-small, .top-nav a {
 .card-art.domain-blade.art-missing { border-color: var(--c-blade); }
 .card-art.domain-bone.art-missing { border-color: var(--c-bone); }
 .card-art.domain-codex.art-missing { border-color: var(--c-codex); }
+.card-art.domain-dread.art-missing { border-color: var(--c-dread); }
 .card-art.domain-grace.art-missing { border-color: var(--c-grace); }
 .card-art.domain-midnight.art-missing { border-color: var(--c-midnight); }
 .card-art.domain-sage.art-missing { border-color: var(--c-sage); }
@@ -569,6 +571,21 @@ h1, h2, h3, .btn-primary, .btn-ghost, .btn-small, .top-nav a {
 .import-clash-main { display: flex; flex-direction: column; gap: 0.15rem; }
 .import-clash-actions { display: flex; gap: 0.35rem; }
 .import-clash-actions .is-chosen { border-color: var(--accent); color: var(--accent); }
+/* Upstream's banner, kept because the portrait errors report through it. Its .transfer-bar went
+   with the JSON buttons it belonged to; .characters-toolbar above is this fork's equivalent. */
+.import-banner {
+  max-width: 700px;
+  margin: 0 0 1rem;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--panel);
+  font-size: 0.9rem;
+}
+.import-banner.error { border-color: #c0392b; }
+.import-banner p { margin: 0; }
+.import-banner .import-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.5rem; }
+.import-banner .import-actions .btn-small { width: auto; flex: none; }
 .characters-list { display: flex; flex-direction: column; gap: 0.6rem; max-width: 700px; }
 
 .character-row {
@@ -854,6 +871,16 @@ h1, h2, h3, .btn-primary, .btn-ghost, .btn-small, .top-nav a {
   cursor: pointer;
 }
 .popover-close:hover { color: var(--accent); }
+
+/* The portrait in the character detail: the same circle the play page shows. */
+.detail-portrait {
+  float: left;
+  width: 3.5rem;
+  height: 3.5rem;
+  margin: 0 0.75rem 0.25rem 0;
+  border-radius: 50%;
+  object-fit: cover;
+}
 
 /* ---------- Scheda di dettaglio di una classe ---------- */
 

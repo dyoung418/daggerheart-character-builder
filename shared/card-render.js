@@ -8,15 +8,40 @@
 
 import { openLightbox } from "./lightbox.js";
 import { escapeHtml } from "./escape.js";
+import { CARD_ART_EXT } from "./card-art-config.js";
 
 /**
  * @param {{ art: string, domainClass?: string, level?: number|string, recallCost?: number,
  *   type?: string, name: string, features?: Array<{name: {"en-US": string}, description: Array<{paragraph: {"en-US": string}}>}> }} card
  * @returns {HTMLDivElement}
  */
+// Rendered art is kept and reused instead of rebuilt.
+//
+// The wizard rebuilds its whole step on every pick (create.js: `panel.innerHTML = ""`), so
+// picking an ancestry threw away 39 <img> elements and made 39 new ones. Measured right after
+// such a rebuild: 2 of 39 images had pixels. The other 37 were blank until they decoded again
+// — from cache, but a decode is still a frame or two, and 37 of them at once is a flash across
+// the whole grid. That is the flicker you see when you choose anything.
+//
+// Moving an element that is already loaded costs nothing: no request, no decode, no blank
+// frame. So each card's node is built once and handed back on later calls.
+//
+// `isConnected` is the guard that makes this safe: a node still in the document is in use, so
+// that call gets a fresh one rather than having its node stolen. During a wizard rebuild every
+// old node has just been detached, which is exactly when reuse is both safe and wanted.
+//
+// The map grows to the number of distinct cards ever rendered — a few hundred at most, and
+// keeping them decoded is the point, not a leak.
+const renderedArt = new Map();
+
 export function renderCardArt(card) {
+  const key = card.art || card.name;
+  const kept = renderedArt.get(key);
+  if (kept && !kept.isConnected) return kept;
+
   const wrap = document.createElement("div");
   wrap.className = "card-art" + (card.domainClass ? ` domain-${card.domainClass}` : "");
+  if (!kept) renderedArt.set(key, wrap);
 
   const img = document.createElement("img");
   img.loading = "lazy";
@@ -97,7 +122,9 @@ export function descriptionHtml(description) {
 }
 
 // Art lives with the content it belongs to: data/<source>/card-art/. These take the RECORD rather
-// than its id, because the id alone can't say which folder to look in.
+// than its id, because the id alone can't say which folder to look in. (Upstream keeps one flat
+// data/card-art/ and passes ids; the extension comes from its card-art-config.js either way, so a
+// deployment shipping WebP still changes one line and not five.)
 //
 // There is deliberately no fallback to the SRD's art when a source ships none. These files are
 // whole card faces lifted from the PDF, rules text included — so showing the SRD image for a
@@ -109,18 +136,18 @@ function artRoot(record) {
 }
 
 export function domainCardArtPath(card) {
-  return `${artRoot(card)}/domain/${card?.id}.png`;
+  return `${artRoot(card)}/domain/${card?.id}.${CARD_ART_EXT}`;
 }
 export function subclassCardArtPath(subclass, tier) {
-  return `${artRoot(subclass)}/subclass/${subclass?.id}-${tier}.png`;
+  return `${artRoot(subclass)}/subclass/${subclass?.id}-${tier}.${CARD_ART_EXT}`;
 }
 export function communityCardArtPath(community) {
-  return `${artRoot(community)}/community/${community?.id}.png`;
+  return `${artRoot(community)}/community/${community?.id}.${CARD_ART_EXT}`;
 }
 export function ancestryCardArtPath(ancestry) {
-  return `${artRoot(ancestry)}/ancestry/${ancestry?.id}.png`;
+  return `${artRoot(ancestry)}/ancestry/${ancestry?.id}.${CARD_ART_EXT}`;
 }
 // No srd/ equivalent to fall back to even in principle: the SRD has no transformations at all.
 export function transformationCardArtPath(transformation) {
-  return `${artRoot(transformation)}/transformation/${transformation?.id}.png`;
+  return `${artRoot(transformation)}/transformation/${transformation?.id}.${CARD_ART_EXT}`;
 }

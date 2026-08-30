@@ -1,0 +1,12 @@
+{
+  "name": "daggerheart-character-builder",
+  "version": "0.0.0",
+  "private": true,
+  "description": "A local-first Daggerheart character builder: static pages, no backend, no build step.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "test": "node tests/node-runner.mjs",
+    "serve": "python3 serve.py"
+  }
+}
