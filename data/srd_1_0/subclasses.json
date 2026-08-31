@@ -19,7 +19,7 @@
      "description": [
       {
        "paragraph": {
-        "en-US": "You have an animal companion of your choice (at the GM's discretion). They stay by your side unless you tell them otherwise."
+        "en-US": "You have an animal companion of your choice (at the GM’s discretion). They stay by your side unless you tell them otherwise."
        }
       },
       {
@@ -52,7 +52,7 @@
      "description": [
       {
        "paragraph": {
-        "en-US": "When an adversary attacks you while they're within your companion's Melee range, you gain a +2 bonus to your Evasion against the attack."
+        "en-US": "When an adversary attacks you while they’re within your companion’s Melee range, you gain a +2 bonus to your Evasion against the attack."
        }
       }
      ]
@@ -80,7 +80,7 @@
      "description": [
       {
        "paragraph": {
-        "en-US": "Once per long rest, when the damage from an attack would mark your companion's last Stress or your last Hit Point and you're within Close range of each other, you or your companion can rush to the other's side and take that damage instead."
+        "en-US": "Once per long rest, when the damage from an attack would mark your companion’s last Stress or your last Hit Point and you’re within Close range of each other, you or your companion can rush to the other’s side and take that damage instead."
        }
       }
      ]
@@ -210,7 +210,7 @@
      "description": [
       {
        "paragraph": {
-        "en-US": "You're an inspirational warrior to all who travel with you. Your party gains access to the Martial Preparation downtime move. To use this move during a rest, describe how you instruct and train with your party. You and each ally who chooses this downtime move gain a d6 Slayer Die. A PC with a Slayer Die can spend it to roll the die and add the result to an attack or damage roll of their choice."
+        "en-US": "You’re an inspirational warrior to all who travel with you. Your party gains access to the Martial Preparation downtime move. To use this move during a rest, describe how you instruct and train with your party. You and each ally who chooses this downtime move gain a d6 Slayer Die. A PC with a Slayer Die can spend it to roll the die and add the result to an attack or damage roll of their choice."
        }
       }
      ]
@@ -310,7 +310,7 @@
      "description": [
       {
        "paragraph": {
-        "en-US": "Choose one of the following elements at character creation: Air, Earth, Fire, Lightning, Water. You can shape this element into harmless effects. Additionally, spend a Hope and describe how your control over this element helps an action roll you're about to make, then either gain a +2 bonus to the roll or a +3 bonus to the roll's damage."
+        "en-US": "Choose one of the following elements at character creation: Air, Earth, Fire, Lightning, Water. You can shape this element into harmless effects. Additionally, spend a Hope and describe how your control over this element helps an action roll you’re about to make, then either gain a +2 bonus to the roll or a +3 bonus to the roll’s damage."
        }
       }
      ]
@@ -402,7 +402,7 @@
      "description": [
       {
        "paragraph": {
-        "en-US": "Make a Spellcast Roll (15). On a success, create a temporary dark cloud that covers any area within Close range. Anyone in this cloud can't see outside of it, and anyone outside of it can't see in. You're considered Cloaked from any adversary for whom the cloud blocks line of sight."
+        "en-US": "Make a Spellcast Roll (15). On a success, create a temporary dark cloud that covers any area within Close range. Anyone in this cloud can’t see outside of it, and anyone outside of it can’t see in. You’re considered Cloaked from any adversary for whom the cloud blocks line of sight."
        }
       }
      ]
@@ -476,10 +476,10 @@
       {
        "list": [
         {
-         "en-US": "Extend the spell or attack's reach by one range"
+         "en-US": "Extend the spell or attack’s reach by one range"
         },
         {
-         "en-US": "Gain a +2 bonus to the action roll's result"
+         "en-US": "Gain a +2 bonus to the action roll’s result"
         },
         {
          "en-US": "Double a damage die of your choice"
@@ -642,7 +642,7 @@
      "description": [
       {
        "paragraph": {
-        "en-US": "You've focused your studies on becoming an unconquerable force on the battlefield. Gain an additional Hit Point slot."
+        "en-US": "You’ve focused your studies on becoming an unconquerable force on the battlefield. Gain an additional Hit Point slot."
        }
       }
      ]
@@ -839,19 +839,19 @@
       {
        "list": [
         {
-         "en-US": "They owe me a favor, but they'll be hard to find."
+         "en-US": "They owe me a favor, but they’ll be hard to find."
         },
         {
-         "en-US": "They're going to ask for something in exchange."
+         "en-US": "They’re going to ask for something in exchange."
         },
         {
-         "en-US": "They're always in a great deal of trouble."
+         "en-US": "They’re always in a great deal of trouble."
         },
         {
-         "en-US": "We used to be together. It's a long story."
+         "en-US": "We used to be together. It’s a long story."
         },
         {
-         "en-US": "We didn't part on great terms."
+         "en-US": "We didn’t part on great terms."
         }
        ]
       }
@@ -980,7 +980,7 @@
      "description": [
       {
        "paragraph": {
-        "en-US": "You are among the greatest of your craft and your skill is boundless. You can perform each of your “Gifted Performer” feature's songs twice per long rest."
+        "en-US": "You are among the greatest of your craft and your skill is boundless. You can perform each of your “Gifted Performer” feature’s songs twice per long rest."
        }
       }
      ]
@@ -1114,7 +1114,7 @@
     },
     {
      "name": {
-      "en-US": "Warden's Protection"
+      "en-US": "Warden’s Protection"
      },
      "description": [
       {
@@ -1135,7 +1135,7 @@
      "description": [
       {
        "paragraph": {
-        "en-US": "Your animal transformation embodies a healing guardian spirit. When you're in Beastform and an ally within Close range marks 2 or more Hit Points, you can mark a Stress to reduce the number of Hit Points they mark by 1."
+        "en-US": "Your animal transformation embodies a healing guardian spirit. When you’re in Beastform and an ally within Close range marks 2 or more Hit Points, you can mark a Stress to reduce the number of Hit Points they mark by 1."
        }
       }
      ]
@@ -1283,7 +1283,7 @@
      "description": [
       {
        "paragraph": {
-        "en-US": "When you're traveling to a place you've previously visited or you carry an object that has been at the location before, you can identify the shortest, most direct path to your destination."
+        "en-US": "When you’re traveling to a place you’ve previously visited or you carry an object that has been at the location before, you can identify the shortest, most direct path to your destination."
        }
       }
      ]
@@ -1315,7 +1315,7 @@
      "description": [
       {
        "paragraph": {
-        "en-US": "Before you make an attack roll against your Focus, you can spend a Hope. On a successful attack, you remove a Fear from the GM's Fear pool."
+        "en-US": "Before you make an attack roll against your Focus, you can spend a Hope. On a successful attack, you remove a Fear from the GM’s Fear pool."
        }
       }
      ]
@@ -1369,7 +1369,7 @@
      "description": [
       {
        "paragraph": {
-        "en-US": "Your supernatural visage strikes awe and fear. While flying, you have advantage on Presence Rolls. When you succeed with Hope on a Presence Roll, you can remove a Fear from the GM's Fear pool instead of gaining Hope."
+        "en-US": "Your supernatural visage strikes awe and fear. While flying, you have advantage on Presence Rolls. When you succeed with Hope on a Presence Roll, you can remove a Fear from the GM’s Fear pool instead of gaining Hope."
        }
       }
      ]
