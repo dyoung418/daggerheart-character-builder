@@ -105,7 +105,7 @@ const BARE_BONES_THRESHOLDS = {
 
 export const EFFECTS = {
   // ===================== Class dice =====================
-  // Two classes own a value with a ladder, stated in the middle of a feature's prose and printed
+  // Four classes own a value with a ladder, stated in the middle of a feature's prose and printed
   // nowhere until these existed: a player reading their own sheet couldn't find out what they
   // rolled without reading the whole feature again.
   //
@@ -140,6 +140,45 @@ export const EFFECTS = {
     },
   },
 
+
+  // Brawler, Combo Strike — "Your Combo Die starts as a d4. Once per tier, you can increase your
+  // Combo Die by one step as a level advancement option."
+  //
+  // A ladder the player climbs rather than one level hands them, which is why it's `steps` plus an
+  // advancementOption instead of `byLevel`: the die only moves if a slot is spent on it.
+  "class_brawler:Combo Strike": {
+    track: { id: "combo_die", label: "Combo Die", steps: ["d4", "d6", "d8", "d10", "d12"] },
+    advancementOption: {
+      label: "Increase your Combo Die by one step",
+      slots: { 2: 1, 3: 1, 4: 1 },
+      advances: "combo_die",
+    },
+  },
+  // Warlock, Patron's Pact — "Your Patron Die starts at a d6 and increases to a d8 at level 5."
+  "class_warlock:Patron\u2019s Pact": {
+    track: { id: "patron_die", label: "Patron Die", byLevel: { 1: "d6", 5: "d8" } },
+  },
+
+  // ===================== Unarmed profiles =====================
+  // A class feature can replace the fists the SRD gives everyone. The replacement stands only
+  // while both hands are empty, and so does everything else the same entry grants — that gate is
+  // the entry's shape, not a `when`, so a content source can declare one in plain JSON.
+
+  // Brawler, I Am the Weapon — "You have a primary weapon called Brawler's Strike equipped while
+  // you have no other Active Weapons. It uses a trait of your choice, has Melee range, and deals
+  // d8+d6 physical damage using your Proficiency… While this weapon is active, you gain a +1
+  // bonus to your Evasion."
+  "class_brawler:I Am the Weapon": {
+    unarmedProfile: {
+      name: { "en-US": "Brawler's Strike" },
+      traits: ["AGILITY", "STRENGTH", "FINESSE", "INSTINCT", "PRESENCE", "KNOWLEDGE"],
+      range: "MELEE",
+      damage: { dice: ["D8", "D6"], type: "PHYSICAL" },
+      note: "Brawler's Strike uses a trait of your choice.",
+    },
+    evasion: 1,
+  },
+
   // ===================== Ancestries =====================
   // Keyed by feature name, not ancestry id alone: with a mixed ancestry the player picks ONE
   // feature per ancestry, and it isn't always the first one. A mixed-ancestry Giant who took
@@ -169,6 +208,16 @@ export const EFFECTS = {
       kind: "experience",
       options: [{ id: "one", label: "+1 to one Experience", pick: 1, bonus: 1 }],
     },
+  },
+
+
+  // Earthkin, Stoneskin — "Gain a permanent +1 bonus to your Armor Score and damage thresholds at
+  // character creation."
+  "ancestry_earthkin:Stoneskin": { armorScore: 1, majorThreshold: 1, severeThreshold: 1 },
+  // Skykin, Eye of the Storm — the +1 Evasion costs 2 Hope and ends when you take Severe damage,
+  // so nothing is counted; the entry exists to say why the sheet shows no change.
+  "ancestry_skykin:Eye of the Storm": {
+    excluded: [`Eye of the Storm's +1 Evasion costs 2 Hope and ends when you take Severe damage, so it isn't counted here`],
   },
 
   // ===================== Subclasses =====================
@@ -201,6 +250,23 @@ export const EFFECTS = {
   "subclass_school_of_knowledge:specialization": { feature: "Accomplished", extraDomainCards: 1 },
   "subclass_school_of_knowledge:mastery": { feature: "Brilliant", extraDomainCards: 1 },
 
+
+  // Juggernaut, Foundation — Rugged, "Gain a permanent +3 bonus to your Severe damage threshold."
+  "subclass_juggernaut:foundation": { feature: "Rugged", severeThreshold: 3 },
+  // Executioners Guild, Specialization — Scorpion's Poise, "+2 bonus to your Evasion against
+  // attacks made by a creature you've Marked for Death". Against one creature, so not a standing
+  // Evasion bonus.
+  "subclass_executioners_guild:specialization": {
+    feature: "Scorpion\u2019s Poise",
+    excluded: [`Scorpion's Poise's +2 Evasion applies only against a creature you've Marked for Death, so it isn't counted here`],
+  },
+  // Martial Artist, Specialization — Keen Defenses, an Evasion bonus that costs a Focus and lasts
+  // one attack.
+  "subclass_martial_artist:specialization": {
+    feature: "Keen Defenses",
+    excluded: [`Keen Defenses' Evasion bonus costs a Focus and applies to one attack, so it isn't counted here`],
+  },
+
   // ===================== Armor features =====================
 
   // "+1 to Evasion"
@@ -218,6 +284,34 @@ export const EFFECTS = {
   "armor:Difficult": {
     evasion: -1,
     traits: { agility: -1, strength: -1, finesse: -1, instinct: -1, presence: -1, knowledge: -1 },
+  },
+
+
+  // "-1 to Evasion; when you take Severe damage, you must mark a Stress."
+  "armor:Bulky": {
+    evasion: -1,
+    excluded: [`Bulky's Stress on Severe damage happens in play, so it isn't counted here`],
+  },
+  // "+1 Evasion; you can walk on walls as easily as on the ground."
+  "armor:Wall-Crawling": { evasion: 1 },
+  // "+2 to Evasion"
+  "armor:Vigilant": { evasion: 2 },
+  // "Gain a bonus to your damage thresholds equal to your Spellcast trait."
+  "armor:Enchanted": {
+    majorThreshold: { equalTo: "spellcast" },
+    severeThreshold: { equalTo: "spellcast" },
+  },
+  // "-1 to Finesse"
+  "armor:Cumbersome": { traits: { finesse: -1 } },
+  // Granminster's Finery, Magnificent — "Gain a bonus to your Armor Score equal to your Presence."
+  // Keyed by item id rather than `armor:Magnificent` because the number is this armor's own.
+  "armor_granminsters_finery:Magnificent": { armorScore: { equalTo: "presence" } },
+  // Rune-Forged Exosuit, Attuned — "The maximum number of domain cards in your loadout is reduced
+  // by one, but you gain a bonus to your damage thresholds equal to your tier."
+  "armor_rune_forged_exosuit:Attuned": {
+    majorThreshold: { equalTo: "tier" },
+    severeThreshold: { equalTo: "tier" },
+    excluded: [`Damage threshold bonus applies, but the loadout maximum it costs isn't a stat this sheet tracks`],
   },
 
   // ===================== Weapon features =====================
@@ -252,6 +346,25 @@ export const EFFECTS = {
   "weapon_improved_round_shield:Protective": { armorScore: 2 },
   "weapon_advanced_round_shield:Protective": { armorScore: 3 },
   "weapon_legendary_round_shield:Protective": { armorScore: 4 },
+
+
+  // Protective and Padded mean the same thing everywhere they appear, but the NUMBER is the
+  // item's, so these are keyed by id — the same reason the tower shields above are.
+  // "+1 to your Armor Score"
+  "weapon_enchanted_shillelagh:Protective": { armorScore: 1 },
+  // "+1 to Armor Score" … rising by tier through the Rune Shield line.
+  "weapon_rune_shield:Protective": { armorScore: 1 },
+  "weapon_improved_rune_shield:Protective": { armorScore: 2 },
+  "weapon_advanced_rune_shield:Protective": { armorScore: 3 },
+  "weapon_legendary_rune_shield:Protective": { armorScore: 4 },
+  // "+2 to damage thresholds" … rising by tier through the Fighting Cloak line.
+  "weapon_fighting_cloak:Padded": { majorThreshold: 2, severeThreshold: 2 },
+  "weapon_improved_fighting_cloak:Padded": { majorThreshold: 3, severeThreshold: 3 },
+  "weapon_advanced_fighting_cloak:Padded": { majorThreshold: 4, severeThreshold: 4 },
+  "weapon_legendary_fighting_cloak:Padded": { majorThreshold: 5, severeThreshold: 5 },
+  // Tinker's Hammer, Trusty — "+1 to attack rolls made with your primary weapon". Scoped, because
+  // the hammer is a secondary and the bonus is not for its own attacks.
+  "weapon_tinkers_hammer:Trusty": { attack: 1, scope: "primary" },
 
   // ===================== Domain cards =====================
 
@@ -377,6 +490,22 @@ export const EFFECTS = {
         { id: "one", label: "+3 to one Experience", pick: 1, bonus: 3 },
       ],
     },
+  },
+
+  // Eldritch Flesh — "+1 bonus to your damage thresholds for each Stress you have marked."
+  "domain_card_eldritch_flesh": {
+    excluded: [`Eldritch Flesh's threshold bonus scales with the Stress you currently have marked, which changes during play, so it isn't counted here`],
+  },
+
+  // ===================== Transformations =====================
+  // A transformation is a permanent change to what a character IS, so what it grants is permanent
+  // in exactly the way an ancestry feature is. Keyed by feature name for the same reason.
+
+  // Demigod, Gifted — "You gain a +1 bonus to action, reaction, and damage rolls."
+  "transformation_demigod:Gifted": {
+    attack: 1,
+    spellcast: 1,
+    excluded: [`Gifted also adds +1 to reaction rolls and to damage rolls, neither of which this sheet totals`],
   },
 };
 

@@ -2218,8 +2218,8 @@ group("Every id in effects.js still exists in data/srd_2_0/");
   // The one group that reads data/ for real. An upstream refresh that renames an id would
   // otherwise drop an effect silently: no error, just a number that quietly stops being right.
   const load = async (name) => (await fetch(`../data/srd_2_0/${name}.json${RUN}`)).json();
-  const [ancestries, subclasses, armors, weapons, cards, classes] = await Promise.all(
-    ["ancestries", "subclasses", "armors", "weapons", "domain-cards", "classes"].map(load));
+  const [ancestries, subclasses, armors, weapons, cards, classes, transformations] = await Promise.all(
+    ["ancestries", "subclasses", "armors", "weapons", "domain-cards", "classes", "transformations"].map(load));
 
   // ignoresBurden() matches a class feature by name rather than by an EFFECTS key, so the check
   // below can't cover it. Renamed upstream, the Warrior would silently start getting a burden
@@ -2246,6 +2246,8 @@ group("Every id in effects.js still exists in data/srd_2_0/");
   featureKeys(ancestries, "ancestry");
   featureKeys(armors, "armor");
   featureKeys(weapons, "weapon");
+  // SRD 2.0 ships six of these; before it did, no transformation could have an entry to check.
+  featureKeys(transformations, "transformation");
   for (const s of subclasses) for (const tier of ["foundation", "specialization", "mastery"]) {
     if (s[tier]) { addKey(`${s.id}:${tier}`); addKey(`${bare(s.id)}:${tier}`); }
   }
