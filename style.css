@@ -588,11 +588,12 @@ h1, h2, h3, .btn-primary, .btn-ghost, .btn-small, .top-nav a {
 .import-banner .import-actions .btn-small { width: auto; flex: none; }
 .characters-list { display: flex; flex-direction: column; gap: 0.6rem; max-width: 700px; }
 
-/* Wrapping is not decoration here. The row holds six buttons — Sheet, Play, Print sheet, Edit,
-   Export, Delete — and at 390px they are 385px of content in a 338px box. Without wrap a flex
-   row does not wrap, it OVERFLOWS: Delete sits half outside the rounded border, clipped and
-   unreachable, on the one screen size this app is most likely to be read on. Wrapping drops the
-   buttons onto their own line and gives the name the full width it was squeezing out of. */
+/* Wrapping is not decoration here. The row carries six buttons — Sheet, Play, Print sheet,
+   Edit, Export, Delete — which is 385px of content, and a flex row with no flex-wrap does not
+   wrap when it runs out of room, it OVERFLOWS. At 390px that is a 338px box, and Delete sits
+   half outside the rounded border, clipped and unclickable; at 320px, Edit, Export and Delete
+   all are. Those are phone widths, and Play is a button you press on a phone.
+   Wrapping also gives the name line back the width the buttons were squeezing it out of. */
 .character-row {
   display: flex;
   flex-wrap: wrap;
