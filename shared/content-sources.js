@@ -1,8 +1,9 @@
 // Merging several bodies of content into the one `db` the pages read.
 //
 // `data/` used to hold exactly one body of content: the SRD re-export. It now holds a folder per
-// SOURCE — `data/srd/` plus whatever else exists — and the folder's name IS its category. Nothing
-// here knows the name of any source but the SRD's; a category exists because a folder does.
+// SOURCE — `data/srd_1_0/` and `data/srd_2_0/` plus whatever else exists — and the folder's name IS
+// its category. Nothing here knows the name of any source but the SRD's; a category exists because
+// a folder does.
 //
 // Everything found on disk is always loaded and always looked up, so an id never dangles. The
 // enabled/disabled toggles filter the PICKER LISTS only (visibleRecords below). That split is the
@@ -18,9 +19,14 @@ import { EFFECT_STAT_KEYS } from "./effects.js";
 // Filename under a source folder -> the key it lands on in `db`. The single statement of that
 // mapping; pages that want fewer files pass a subset of these keys.
 //
-// items.json is deliberately absent. It ships in the SRD folder and is fetched by nothing — a
-// loader that enumerated filenames would silently start pulling 23 KB with no consumer, so the
+// items.json is deliberately absent: it ships in the SRD folders, is fetched by nothing, and the
 // SRD's own source.json doesn't list it either.
+//
+// transformations.json is absent for a different reason. SRD 2.0 publishes six transformations and
+// data/srd_2_0/ carries them, so its source.json names the file — but a name this map doesn't know
+// is ignored (parseSourceInfo), and no screen reads one yet, so they sit unread rather than
+// half-wired. A file becomes readable by gaining an entry here, at the same time as the code that
+// knows what to do with it.
 export const CONTENT_FILES = {
   classes: "classes",
   subclasses: "subclasses",
@@ -32,9 +38,9 @@ export const CONTENT_FILES = {
   consumables: "consumables",
 };
 
-// The source loaded when the manifest can't be read at all, so a broken manifest still leaves a
-// playable app rather than an empty one.
-export const SRD_SOURCE = "srd";
+// The edition loaded when the manifest can't be read at all. The newest SRD, so a broken manifest
+// leaves the app on current rules rather than a superseded printing.
+export const SRD_SOURCE = "srd_2_0";
 
 // Each folder name is interpolated straight into a fetch URL, so anything that could climb out of
 // data/ is dropped rather than escaped.
@@ -263,15 +269,25 @@ export function validateEffectEntry(entry) {
 // What makes two records from different sources the SAME record.
 //
 // A source that comes later in the manifest revises what an earlier one said, and it does that by
-// id when it reprints a record verbatim. A class also collides by NAME, because a class's real key
-// is its uppercase name rather than its id: create.js joins subclasses to classes with
-// `s.class === cls.name.toUpperCase()`, the one relational join in this app that isn't by id. Two
-// classes sharing a name are therefore indistinguishable to that join whatever their ids say, so a
-// revised Bard under a fresh id would put two identical-looking tiles in the picker with every
-// Bard subclass appearing under both.
+// id when it reprints a record verbatim and by NAME when it doesn't share the earlier one's ids.
 //
-// Every other kind collides by id alone: two records that merely share a name are two cards.
-const nameKeyFor = (kind, record) => (kind === "classes" ? String(record.name).toUpperCase() : null);
+// Name mattered only for classes while the sources sharing content shared their ids too — a class's
+// real key is its uppercase name rather than its id, because create.js joins subclasses to classes
+// with `s.class === cls.name.toUpperCase()`, the one relational join in this app that isn't by id.
+// It matters for every kind now that the SRD ships one folder per edition: an id names the document
+// it came from, so SRD 2.0's Vitality is a different STRING from SRD 1.0's Vitality and only the
+// name says they are one card. Without this, selecting both editions lists every shared card,
+// weapon, armor and potion twice — 420 domain cards where there are 231.
+//
+// A subclass is qualified by its class: subclass names are only unique within a class, and a
+// homebrew Bard subclass called "Wayfinder" must not silently replace the Ranger's.
+const nameKeyFor = (kind, record) => {
+  if (kind === "classes") return String(record.name).toUpperCase();
+  const name = record?.name?.["en-US"];
+  if (typeof name !== "string" || !name) return null;
+  const key = name.trim().toLowerCase();
+  return kind === "subclasses" ? `${String(record.class || "").toUpperCase()}\u0000${key}` : key;
+};
 
 /**
  * @param {Array<{name, label, records, effects}>} sources in precedence order — srd first, then
@@ -347,6 +363,13 @@ export function mergeSources(sources) {
       effects[key] = value;
     }
   }
+
+  // Every record's id begins with the name of the document that published it
+  // (srd_1_0_domain_card_vitality). An effect belongs to the CARD, not to the edition that printed
+  // it, so effects.js is keyed without that prefix and a card found in either edition reaches the
+  // same entry. Collected here because this is the only place that knows every source name;
+  // shared/content-ids.js does the stripping.
+  db.sourceNames = sources.map((s) => s.name);
 
   return { db, effects, report };
 }

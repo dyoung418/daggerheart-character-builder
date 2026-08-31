@@ -1,5 +1,6 @@
 import { renderCardArt, domainCardArtPath, subclassCardArtPath } from "./shared/card-render.js";
 import { loadContent } from "./shared/content-load.js";
+import { remapCharacterIds } from "./shared/content-ids.js";
 import { mountContentSettings } from "./shared/content-settings.js";
 import { visibleRecords } from "./shared/content-sources.js";
 import {
@@ -862,7 +863,9 @@ async function init() {
   mountContentSettings(content);
   const params = new URLSearchParams(location.search);
   const id = params.get("id");
-  const found = loadAllCharacters().find((c) => c.id === id);
+  // These pages can be opened straight from a URL, so they can't rely on the roster having
+  // been through this already. Returns the character untouched when nothing needed moving.
+  const found = remapCharacterIds(loadAllCharacters().find((c) => c.id === id), db);
   character = found ? ensureLevelFields(found) : null;
 
   const requested = Number(params.get("level"));

@@ -11,6 +11,7 @@ import { derivedStats } from "./shared/derived-stats.js";
 import { statLine } from "./shared/stat-line.js";
 import { blankAnswer, collectEffects, effectFor, ignoresBurden } from "./shared/effects.js";
 import { loadContent } from "./shared/content-load.js";
+import { remapCharacterIds, resolveRecordId } from "./shared/content-ids.js";
 import { mountContentSettings } from "./shared/content-settings.js";
 import { visibleRecords } from "./shared/content-sources.js";
 import { renderEffectChoice } from "./shared/effect-choice.js";
@@ -34,8 +35,11 @@ const TRAIT_KEYS = ["agility", "strength", "finesse", "instinct", "presence", "k
 const TRAIT_LABELS = { agility: "Agility", strength: "Strength", finesse: "Finesse", instinct: "Instinct", presence: "Presence", knowledge: "Knowledge" };
 
 const TRAIT_ARRAY = [2, 1, 1, 0, 0, -1];
-const MINOR_HEALTH_POTION_ID = "core_consumable_minor_health_potion";
-const MINOR_STAMINA_POTION_ID = "core_consumable_minor_stamina_potion";
+// The two potions the SRD hands every new character. Named here rather than read from a record,
+// because the choice between them is a rule, not data — but the id has to be the one the loaded
+// edition actually published, so these are the BARE forms and resolveRecordId() finds the rest.
+const MINOR_HEALTH_POTION = "consumable_minor_health_potion";
+const MINOR_STAMINA_POTION = "consumable_minor_stamina_potion";
 
 const STEPS = [
   { key: "class", label: "Class" },
@@ -142,7 +146,9 @@ function initCharacter() {
   const step = STEPS.findIndex((s) => s.key === params.get("step"));
   if (step >= 0) currentStep = step;
   if (id) {
-    const found = loadAllCharacters().find((c) => c.id === id);
+    // These pages can be opened straight from a URL, so they can't rely on the roster having
+    // been through this already. Returns the character untouched when nothing needed moving.
+    const found = remapCharacterIds(loadAllCharacters().find((c) => c.id === id), db);
     if (found) {
       character = ensureLevelFields(found);
       // Coming back to change one thing isn't creating a character, and the page shouldn't
@@ -692,6 +698,10 @@ function renderEquipmentStep(panel) {
   const e = character.equipment;
   const spellcastTrait = selectedSubclass()?.spellcastTrait ?? null;
   const tier = tierForLevel(character.level);
+  // Whichever loaded edition published each potion. Falling back to the bare form keeps the radio
+  // working even if no edition has one, rather than rendering two buttons with empty values.
+  const healthPotionId = resolveRecordId(MINOR_HEALTH_POTION, db) || MINOR_HEALTH_POTION;
+  const staminaPotionId = resolveRecordId(MINOR_STAMINA_POTION, db) || MINOR_STAMINA_POTION;
 
   const h3a = document.createElement("h3");
   h3a.textContent = "Primary weapon";
@@ -779,8 +789,8 @@ function renderEquipmentStep(panel) {
   const potionRow = document.createElement("div");
   potionRow.className = "field-row";
   potionRow.innerHTML = `
-    <label><input type="radio" name="potion" value="${MINOR_HEALTH_POTION_ID}" ${e.potionChoice === MINOR_HEALTH_POTION_ID ? "checked" : ""}/> Minor Health Potion</label>
-    <label><input type="radio" name="potion" value="${MINOR_STAMINA_POTION_ID}" ${e.potionChoice === MINOR_STAMINA_POTION_ID ? "checked" : ""}/> Minor Stamina Potion</label>
+    <label><input type="radio" name="potion" value="${healthPotionId}" ${e.potionChoice === healthPotionId ? "checked" : ""}/> Minor Health Potion</label>
+    <label><input type="radio" name="potion" value="${staminaPotionId}" ${e.potionChoice === staminaPotionId ? "checked" : ""}/> Minor Stamina Potion</label>
   `;
   potionRow.querySelectorAll('input[name="potion"]').forEach((r) => {
     r.addEventListener("change", (ev) => { e.potionChoice = ev.target.value; onChange(); });

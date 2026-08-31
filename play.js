@@ -9,6 +9,7 @@
 
 import { ensureLevelFields, tierForLevel } from "./shared/advancement.js";
 import { loadContent } from "./shared/content-load.js";
+import { remapCharacterIds } from "./shared/content-ids.js";
 import { deriveSheet } from "./shared/sheet-data.js";
 import {
   CONDITIONS,
@@ -631,7 +632,9 @@ async function init() {
   const db = await loadAllData();
 
   const id = new URLSearchParams(location.search).get("id");
-  const character = loadCharacters().find((c) => c.id === id);
+  // A record's id names the edition that published it, so switching which SRD is loaded moves
+  // every id a character stores. Re-point them at what IS loaded before anything reads them.
+  const character = remapCharacterIds(loadCharacters().find((c) => c.id === id), db);
   if (!character) {
     renderNotFound(root);
     return;

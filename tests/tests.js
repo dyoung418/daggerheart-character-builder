@@ -132,6 +132,14 @@ const {
   tabStopIndex,
 } = await import(`../shared/choice-keys.js${RUN}`);
 
+const {
+  bareForms,
+  bareId,
+  indexRecordIds,
+  remapCharacterIds,
+  resolveRecordId,
+} = await import(`../shared/content-ids.js${RUN}`);
+
 // ---------- tiny runner ----------
 
 const groups = [];
@@ -1276,12 +1284,12 @@ group("A subclass upgrade that grants a domain card actually hands one over");
 
 group("Answers are only complete when they pick everything asked for");
 {
-  const vitality = EFFECTS["core_domain_card_vitality"].choice;
+  const vitality = EFFECTS["domain_card_vitality"].choice;
   eq("a blank answer isn't an answer", isAnswered(vitality, blankAnswer()), false);
   eq("one of two isn't either", isAnswered(vitality, { optionIds: ["stress"] }), false);
   eq("two of two is", isAnswered(vitality, { optionIds: ["stress", "hitPoint"] }), true);
 
-  const motc = EFFECTS["core_domain_card_master_of_the_craft"].choice;
+  const motc = EFFECTS["domain_card_master_of_the_craft"].choice;
   eq("+3 to one needs one Experience named",
     isAnswered(motc, { optionId: "one", experienceIds: ["e1"] }), true);
   eq("+2 to two needs two", isAnswered(motc, { optionId: "two", experienceIds: ["e1"] }), false);
@@ -1291,32 +1299,45 @@ group("Every id in effects.js still exists in data/");
 {
   // The one group that reads data/ for real. An upstream refresh that renames an id would
   // otherwise drop an effect silently: no error, just a number that quietly stops being right.
-  const load = async (name) => (await fetch(`../data/srd/${name}.json${RUN}`)).json();
-  const [ancestries, subclasses, armors, weapons, cards, classes] = await Promise.all(
-    ["ancestries", "subclasses", "armors", "weapons", "domain-cards", "classes"].map(load));
+  // Both editions, because an entry here is keyed WITHOUT a document prefix precisely so that one
+  // entry serves whichever edition printed the card. A key only has to resolve in one of them —
+  // SRD 2.0 dropped records SRD 1.0 has, and vice versa.
+  const EDITIONS = ["srd_1_0", "srd_2_0"];
+  const load = async (edition, name) => (await fetch(`../data/${edition}/${name}.json${RUN}`)).json();
+  const files = ["ancestries", "subclasses", "armors", "weapons", "domain-cards", "classes"];
+  const loaded = await Promise.all(EDITIONS.map(async (e) =>
+    Object.fromEntries(await Promise.all(files.map(async (f) => [f, await load(e, f)])))));
+  const all = (f) => loaded.flatMap((d) => d[f]);
+  const classes = all("classes");
 
   // ignoresBurden() matches a class feature by name rather than by an EFFECTS key, so the check
   // below can't cover it. Renamed upstream, the Warrior would silently start getting a burden
   // warning the book says they're exempt from.
+  const warrior = classes.find((c) => c.name === "WARRIOR");
   check("the Warrior still has Combat Training to ignore burden with",
-    ignoresBurden({ classId: "core_class_warrior" }, { classes }));
+    ignoresBurden({ classId: warrior?.id }, { classes }));
 
+  // The same stripping lookup() does, so this group asks the question the app asks.
   const known = new Set();
+  const add = (key) => {
+    known.add(key);
+    for (const form of bareForms(key, EDITIONS)) known.add(form);
+  };
   const featureKeys = (list, prefix) => {
     for (const item of list) {
       for (const f of item.features || []) {
-        known.add(`${item.id}:${f.name["en-US"]}`);
-        known.add(`${prefix}:${f.name["en-US"]}`);
+        add(`${item.id}:${f.name["en-US"]}`);
+        add(`${prefix}:${f.name["en-US"]}`);
       }
     }
   };
-  featureKeys(ancestries, "ancestry");
-  featureKeys(armors, "armor");
-  featureKeys(weapons, "weapon");
-  for (const s of subclasses) for (const tier of ["foundation", "specialization", "mastery"]) {
-    if (s[tier]) known.add(`${s.id}:${tier}`);
+  featureKeys(all("ancestries"), "ancestry");
+  featureKeys(all("armors"), "armor");
+  featureKeys(all("weapons"), "weapon");
+  for (const sub of all("subclasses")) for (const tier of ["foundation", "specialization", "mastery"]) {
+    if (sub[tier]) add(`${sub.id}:${tier}`);
   }
-  for (const c of cards) known.add(c.id);
+  for (const c of all("domain-cards")) add(c.id);
 
   const missing = Object.keys(EFFECTS).filter((k) => !known.has(k));
   check(`all ${Object.keys(EFFECTS).length} effect keys resolve`, missing.length === 0,
@@ -1820,20 +1841,49 @@ group("JSON transfer: merging an import into the saved list, by id");
   eq("the whole list is named by date, like the CSV", exportFileName([a, b], stamp), `daggerheart-characters-${stamp}.json`);
 }
 
-group("Hope & Fear (the_void release of daggerheart-data) is in data/");
+group("The Hope & Fear content is the published SRD 2.0, not the playtest it was tested as");
 {
-  const load = async (name) => (await fetch(`../data/srd/${name}.json${RUN}`)).json();
+  // The Void is Darrington Press's PLAYTEST imprint, and playtest text is revised before it
+  // reaches a book. The four classes below were shipped from that release, so their features were
+  // the pre-publication ones. These checks are what stops that happening again: each names a
+  // string that exists in SRD 2.0 and does NOT exist in the playtest.
+  const load = async (edition, name) => (await fetch(`../data/${edition}/${name}.json${RUN}`)).json();
   const [classes, subclasses, ancestries, communities, cards] = await Promise.all(
-    ["classes", "subclasses", "ancestries", "communities", "domain-cards"].map(load));
-  const voidClasses = classes.filter((c) => c.id.startsWith("the_void_class_"));
-  eq("the four classes", voidClasses.map((c) => c.name).sort(), ["ASSASSIN", "BRAWLER", "WARLOCK", "WITCH"]);
-  check("each of them has two subclasses keyed by class name, the way the wizard looks them up",
-    voidClasses.every((c) => subclasses.filter((s) => s.class === c.name).length === 2));
-  check("the 21 Dread domain cards, levels 1 to 10", cards.filter((c) => c.domain === "DREAD").length === 21);
-  check("the six ancestries and six communities",
-    ancestries.filter((a) => a.id.startsWith("the_void_")).length === 6 && communities.filter((a) => a.id.startsWith("the_void_")).length === 6);
-  check("no id collides with the core set", new Set(classes.map((c) => c.id)).size === classes.length && new Set(cards.map((c) => c.id)).size === cards.length);
-  check("the core set is still complete (9 classes, 189 cards)", classes.filter((c) => c.id.startsWith("core_")).length === 9 && cards.filter((c) => c.id.startsWith("core_")).length === 189);
+    ["classes", "subclasses", "ancestries", "communities", "domain-cards"].map((f) => load("srd_2_0", f)));
+  const byName = (n) => classes.find((c) => c.name === n);
+  const hope = (n) => byName(n)?.hopeFeature?.name?.["en-US"];
+  const features = (n) => (byName(n)?.classFeatures || []).map((f) => f.name["en-US"]);
+
+  eq("the four classes are here", ["ASSASSIN", "BRAWLER", "WARLOCK", "WITCH"].filter(byName).length, 4);
+  // The Brawler's is a mechanical change, not a rename: the playtest spent 3 Hope on a successful
+  // attack to Stagger; SRD 2.0 spends it to intimidate at Close range and make a target Vulnerable.
+  eq("the Brawler's Hope feature is Square Up, not the playtest's Staggering Strike",
+    hope("BRAWLER"), "Square Up");
+  eq("the Assassin's is Deadly Determination, not Grim Resolve",
+    hope("ASSASSIN"), "Deadly Determination");
+  check("the Warlock's class feature is Patron\u2019s Pact, not Warlock Patron",
+    features("WARLOCK").some((f) => f.includes("Pact")) && !features("WARLOCK").includes("Warlock Patron"));
+
+  check("each of the four has two subclasses keyed by class name, the way the wizard looks them up",
+    ["ASSASSIN", "BRAWLER", "WARLOCK", "WITCH"].every((n) => subclasses.filter((s) => s.class === n).length === 2));
+  check("the 21 Dread domain cards", cards.filter((c) => c.domain === "DREAD").length === 21);
+  eq("SRD 2.0 is one document: 13 classes, 210 cards", [classes.length, cards.length], [13, 210]);
+  check("and every id in it names the document it came from",
+    classes.every((c) => c.id.startsWith("srd_2_0_")) && cards.every((c) => c.id.startsWith("srd_2_0_")));
+  check("six more ancestries and six more communities than SRD 1.0",
+    ancestries.length === 24 && communities.length === 15);
+
+  // SRD 1.0 stays exactly what it was published as. Its value is that it doesn't move.
+  const [c1, d1, w1] = await Promise.all(["classes", "domain-cards", "weapons"].map((f) => load("srd_1_0", f)));
+  eq("SRD 1.0 is complete and unmixed: 9 classes, 189 cards", [c1.length, d1.length], [9, 189]);
+  check("with no Dread cards, because that domain wasn't published yet",
+    d1.every((c) => c.domain !== "DREAD"));
+  // The reason both editions are worth keeping on: 2.0 dropped weapons 1.0 has.
+  const bare = (id) => id.replace(/^srd_[12]_0_/, "");
+  const w2 = await load("srd_2_0", "weapons");
+  const onlyIn1 = w1.filter((w) => !new Set(w2.map((x) => bare(x.id))).has(bare(w.id)));
+  check(`SRD 2.0 dropped ${onlyIn1.length} weapons SRD 1.0 has, which is why both stay selectable`,
+    onlyIn1.length > 0);
 }
 
 group("Play page labels: English by default, Italian when the page says lang=\"it\"");
@@ -2062,7 +2112,7 @@ group("Every class carries what the detail card shows");
   // The card is page code this suite can't render, but it reads eight fields straight out of
   // classes.json — most of which nothing else in the app has ever touched. Renamed or dropped
   // upstream, they'd surface as a blank section rather than as an error.
-  const classes = await (await fetch(`../data/srd/classes.json${RUN}`)).json();
+  const classes = await (await fetch(`../data/srd_2_0/classes.json${RUN}`)).json();
   const text = (loc) => typeof loc?.["en-US"] === "string" && loc["en-US"] !== "";
   const body = (desc) => Array.isArray(desc) && desc.length > 0 &&
     desc.every((d) => text(d.paragraph) || (Array.isArray(d.list) && d.list.every(text)));
@@ -2158,12 +2208,13 @@ group("card art paths use the configured extension");
 {
   eq("CARD_ART_EXT", CARD_ART_EXT, "png");
   // Art lives with its source, so these take a record. An UNTAGGED record — every fixture in this
-  // file, and any db built by something that never saw a source — falls back to the SRD folder.
-  eq("domainCardArtPath", domainCardArtPath({ id: "core_x" }), `data/srd/card-art/domain/core_x.${CARD_ART_EXT}`);
+  // file, and any db built by something that never saw a source — falls back to the newest SRD
+  // edition, which is the same folder SRD_SOURCE names when a manifest can't be read.
+  eq("domainCardArtPath", domainCardArtPath({ id: "core_x" }), `data/srd_2_0/card-art/domain/core_x.${CARD_ART_EXT}`);
   eq("subclassCardArtPath", subclassCardArtPath({ id: "core_y" }, "foundation"),
-    `data/srd/card-art/subclass/core_y-foundation.${CARD_ART_EXT}`);
-  eq("ancestryCardArtPath", ancestryCardArtPath({ id: "core_z" }), `data/srd/card-art/ancestry/core_z.${CARD_ART_EXT}`);
-  eq("communityCardArtPath", communityCardArtPath({ id: "core_w" }), `data/srd/card-art/community/core_w.${CARD_ART_EXT}`);
+    `data/srd_2_0/card-art/subclass/core_y-foundation.${CARD_ART_EXT}`);
+  eq("ancestryCardArtPath", ancestryCardArtPath({ id: "core_z" }), `data/srd_2_0/card-art/ancestry/core_z.${CARD_ART_EXT}`);
+  eq("communityCardArtPath", communityCardArtPath({ id: "core_w" }), `data/srd_2_0/card-art/community/core_w.${CARD_ART_EXT}`);
   eq("a record from another source keeps its own art",
     domainCardArtPath({ id: "hb_x", contentSource: "my-homebrew" }),
     `data/my-homebrew/card-art/domain/hb_x.${CARD_ART_EXT}`);
@@ -2452,6 +2503,63 @@ group("A character says so when it refers to content this browser hasn't got");
   // missing content would put a warning on the sheet of every barehanded character.
   eq("a sentinel is not missing content",
     unresolvedReferences({ equipment: { primaryWeaponId: "UNARMED" } }, db, { sentinels: ["UNARMED"] }), []);
+}
+
+group("A character's ids follow the editions that are loaded");
+{
+  // Two editions of one document print the same card under different ids. A character stores bare
+  // ids with no record of which edition it was built against, so changing what's loaded has to
+  // move them or the character loses its class and its gear.
+  const ed = (name, records) => source(name, records);
+  const both = mergeSources([
+    ed("srd_1_0", { classes: [srcClass("srd_1_0_class_bard", "BARD")],
+      weapons: [srcCard("srd_1_0_weapon_broadsword", "Broadsword"), srcCard("srd_1_0_weapon_gone", "Retired Blade")] }),
+    ed("srd_2_0", { classes: [srcClass("srd_2_0_class_bard", "BARD")],
+      weapons: [srcCard("srd_2_0_weapon_broadsword", "Broadsword")] }),
+  ]).db;
+  both.sourceNames = ["srd_1_0", "srd_2_0"];
+
+  eq("a bare form names the record, whichever edition printed it",
+    bareId("srd_2_0_weapon_broadsword", both.sourceNames), "weapon_broadsword");
+
+  // THE REGRESSION THIS GUARDS. Both editions claim `weapon_broadsword`, so treating every shared
+  // bare form as ambiguous refused to move ANY id — which is every id a character saved before the
+  // rename has. A superseded record is not a rival claimant: the merge already picked the winner.
+  const idx = indexRecordIds(both);
+  eq("a shared bare form resolves to the edition that won the merge",
+    idx.byBare.get("weapon_broadsword"), "srd_2_0_weapon_broadsword");
+  eq("nothing is left ambiguous just because two editions print it",
+    [...idx.byBare.values()].filter((v) => v === null).length, 0);
+
+  const old = { classId: "core_class_bard", equipment: { primaryWeaponId: "core_weapon_broadsword" } };
+  const moved = remapCharacterIds(old, both);
+  eq("an id saved under a spelling no source uses any more is re-pointed",
+    [moved.classId, moved.equipment.primaryWeaponId], ["srd_2_0_class_bard", "srd_2_0_weapon_broadsword"]);
+
+  // The other half: an id that still resolves is a deliberate choice and is never touched. Picking
+  // the SRD 1.0 weapon that SRD 2.0 dropped is the whole reason to have both editions on.
+  const kept = remapCharacterIds({ equipment: { primaryWeaponId: "srd_1_0_weapon_gone" } }, both);
+  eq("an id that still resolves is left exactly as it is",
+    kept.equipment.primaryWeaponId, "srd_1_0_weapon_gone");
+  const none = { classId: "srd_2_0_class_bard" };
+  check("and a character needing no changes comes back as the same object",
+    remapCharacterIds(none, both) === none);
+
+  // Two UNRELATED sources claiming one bare form is still a genuine ambiguity, and still refused.
+  const rival = mergeSources([
+    ed("alpha", { weapons: [srcCard("alpha_weapon_x", "Alpha Blade")] }),
+    ed("beta", { weapons: [srcCard("beta_weapon_x", "Beta Blade")] }),
+  ]).db;
+  rival.sourceNames = ["alpha", "beta"];
+  eq("two unrelated sources claiming one bare form is left alone rather than guessed at",
+    remapCharacterIds({ equipment: { armorId: "old_weapon_x" } }, rival).equipment.armorId, "old_weapon_x");
+
+  // A player's answers are stored keyed BY id, so the keys have to move with the values.
+  const answered = remapCharacterIds({ effectChoices: { "core_class_bard": { optionId: "a" } } }, both);
+  eq("an id used as a field name moves too", Object.keys(answered.effectChoices), ["srd_2_0_class_bard"]);
+
+  eq("and a bare form can be looked up directly, for the records the app names itself",
+    resolveRecordId("weapon_broadsword", both), "srd_2_0_weapon_broadsword");
 }
 
 // ---------- report ----------

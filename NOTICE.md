@@ -6,7 +6,7 @@ MIT (see `LICENSE`).
 
 ## Game data
 
-The JSON files in `data/srd/` carry SRD content, used under the Darrington Press Community
+The JSON files in `data/srd_1_0/` and `data/srd_2_0/` carry SRD content, used under the Darrington Press Community
 Gaming License:
 
 > This product includes materials from the Daggerheart System Reference Document 1.0,

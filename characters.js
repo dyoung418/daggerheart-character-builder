@@ -31,6 +31,7 @@ import { statLine } from "./shared/stat-line.js";
 import { ignoresBurden, unresolvedChoices } from "./shared/effects.js";
 import { UNARMED, UNARMORED, armorStats, burdenWarning, featureLine, weaponStats } from "./shared/gear.js";
 import { loadContent } from "./shared/content-load.js";
+import { remapCharacterListIds } from "./shared/content-ids.js";
 import { mountContentSettings } from "./shared/content-settings.js";
 import { unresolvedReferences } from "./shared/content-sources.js";
 import { escapeHtml } from "./shared/escape.js";
@@ -73,6 +74,10 @@ function loadCharacters() {
   } catch {
     characters = [];
   }
+  // A record's id names the edition that published it, so switching which SRD is loaded moves
+  // every id a character stores. Re-point them at what's loaded now; the roster is written back
+  // on the next save, so this runs once rather than on every open.
+  characters = remapCharacterListIds(characters, db);
 }
 
 function saveCharacters() {

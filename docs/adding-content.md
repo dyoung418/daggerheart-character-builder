@@ -1,8 +1,9 @@
 # Adding a content source
 
-`data/` holds one folder per **source**. The SRD is `data/srd/`, and anything you put beside it —
-playtest material, homebrew, a single revised card you want to try at your table — is loaded and
-merged the same way, with no code change anywhere.
+`data/` holds one folder per **source**. The SRD ships as two of them — `data/srd_1_0/` and
+`data/srd_2_0/`, one per edition — and anything you put beside them (playtest material, homebrew, a
+single revised card you want to try at your table) is loaded and merged the same way, with no code
+change anywhere.
 
 The folder's name is its identity. Nothing in the app knows the name of any source but the SRD's;
 a source exists because a folder does.
@@ -30,7 +31,7 @@ Only `source.json` is required. Ship as few or as many of the record files as yo
 `data/sources.json` is the tracked list, in precedence order:
 
 ```json
-["srd", "my-homebrew"]
+["srd_1_0", "srd_2_0", "my-homebrew"]
 ```
 
 Later wins. A source further down the list revises what an earlier one said.
@@ -39,7 +40,7 @@ If you'd rather not edit a tracked file — so `git status` stays clean and a `g
 conflicts — opt in to a local list instead:
 
 ```json
-{ "sources": ["srd"], "local": true }
+{ "sources": ["srd_1_0", "srd_2_0"], "local": true }
 ```
 
 With `"local": true`, the app also reads `data/sources.local.json`, which is gitignored and yours:
@@ -73,8 +74,8 @@ The eight record files are `classes`, `subclasses`, `ancestries`, `communities`,
 
 ## 4. The record shapes
 
-Each file is a JSON array. The SRD's own files under `data/srd/` are the reference — copy the
-shape of the nearest record and you'll be right.
+Each file is a JSON array. The SRD's own files under `data/srd_2_0/` are the reference — copy
+the shape of the nearest record and you'll be right.
 
 Every record needs an **`id`** that is unique across every source you load (see §5).
 
@@ -116,18 +117,29 @@ definition of the data format to keep in step with the real one.
 
 ## 5. Ids, and what replaces what
 
-Ids are global across sources, and that is the mechanism:
+A record's id begins with the name of the document that published it — `srd_2_0_weapon_broadsword`
+— and ids are global across sources. That is the mechanism:
 
 - **A new id adds a record.**
 - **A repeated id replaces it**, in the position the original held, and the original is kept behind
   it — switch your source off and the earlier version comes back.
-- **A class also collides by name**, because subclasses join to classes by name rather than id. Two
-  Bards under different ids would otherwise put two identical tiles in the picker with every Bard
-  subclass appearing under both.
+- **A repeated NAME also replaces it**, even under a different id. That is what makes the two SRD
+  editions usable together: an id names the document it came from, so SRD 2.0's Vitality is a
+  different string from SRD 1.0's, and only the name says they are one card. Without it, loading
+  both editions would list every shared card, weapon, armor and potion twice.
+
+A subclass is qualified by its class, since subclass names are only unique within one — a homebrew
+Bard subclass called "Wayfinder" won't silently replace the Ranger's. Classes have always collided
+by name, because subclasses join to classes by name rather than id.
 
 Prefix your own ids (`hb_`, or your folder's name) unless you specifically mean to override
 something. The Content panel lists what took over what, so an accidental collision is visible
 rather than silent.
+
+**Your ids survive an edition change.** A character stores bare ids, so when the loaded editions
+move, `shared/content-ids.js` re-points any id that no longer resolves at the record that does —
+matching on the part after the document prefix. An id that still resolves is never touched, which is
+what lets someone deliberately keep the SRD 1.0 weapon that SRD 2.0 dropped.
 
 ## 6. `effects.json` — making a bonus actually count
 
@@ -139,12 +151,16 @@ your entry wins for the keys it names, and everything else is untouched.
 ```json
 {
   "hb_card_ironhide": { "armorScore": 1, "permanent": true },
-  "core_domain_card_untouchable": { "evasion": 2 }
+  "domain_card_untouchable": { "evasion": 2 }
 }
 ```
 
 Keys are the same ones `shared/effects.js` uses — read it for the full list; the common cases are a
-domain card's bare id, `<subclassId>:foundation`, and `armor:<Feature Name>`.
+domain card's id, `<subclassId>:foundation`, and `armor:<Feature Name>`.
+
+Write the id **without its document prefix**: `domain_card_vitality`, not
+`srd_2_0_domain_card_vitality`. An effect belongs to the card, not to the edition that printed it, so
+one entry serves every edition that prints it.
 
 ### The whole vocabulary
 
