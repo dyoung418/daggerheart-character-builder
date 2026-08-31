@@ -31,8 +31,8 @@
 // SHAPE
 // -----
 // Keys are `<entityId>:<discriminator>` — the tier for subclasses, the feature name for
-// ancestries, armor and weapons. Domain cards have a single feature block, so they're keyed by
-// id alone. Armor and weapon features that mean the same thing everywhere they appear are
+// ancestries, transformations, armor and weapons. Domain cards have a single feature block, so
+// they're keyed by id alone. Armor and weapon features that mean the same thing everywhere they appear are
 // keyed `armor:<feature>` / `weapon:<feature>`; the handful whose numbers differ per item
 // (Barrier, Protective) are keyed by item id, which takes precedence.
 //
@@ -128,6 +128,32 @@ export const EFFECTS = {
       kind: "experience",
       options: [{ id: "one", label: "+1 to one Experience", pick: 1, bonus: 1 }],
     },
+  },
+
+  // ===================== Transformations =====================
+  // Keyed per feature, like an ancestry. A transformation is always in effect once a character
+  // has one — there is no vault to take it out of and nothing to choose between its two features
+  // — so anything catalogued here simply applies.
+  //
+  // Only ONE of SRD 2.0's twelve transformation features moves a number this app computes. The
+  // other eleven are read and deliberately left out: they are in-play actions (Wolf Form and
+  // Howling Rampage cost Stress to enter; Fangs is an attack you make; Feed spends tokens),
+  // rest-and-fiction rules (Unfinished Business, Corpse, Change Shape), a death move (Won't Stay
+  // Dead), or a mechanic this app has no stat for (Ephemeral's damage resistance). That is the
+  // same line every other entry in this file is drawn on — see WHAT GETS AN ENTRY above.
+
+  // Demigod, Gifted — "You gain a +1 bonus to action, reaction, and damage rolls."
+  // An attack roll and a Spellcast roll are both action rolls, and those are the two the sheet
+  // prints a number for. The damage bonus is excluded because damage isn't a stat here, and the
+  // paired drawback (Weight of Divinity) costs a Stress on a failure, which is play, not a total.
+  "transformation_demigod:Gifted": {
+    feature: "Gifted",
+    attack: 1,
+    spellcast: 1,
+    excluded: [
+      "+1 to damage rolls — damage isn't a stat this sheet totals",
+      "+1 to reaction rolls and other action rolls — no single number stands for them",
+    ],
   },
 
   // ===================== Subclasses =====================
@@ -394,7 +420,8 @@ function tiersUpTo(tier) {
  * Each entry is { key, label, effect, source, scope }:
  *  - `label` is what the "?" breakdown shows, so it names the thing the player chose rather
  *    than the rule id.
- *  - `source` is where it came from: "ancestry", "subclass", "armor", "weapon" or "domainCard".
+ *  - `source` is where it came from: "ancestry", "transformation", "subclass", "armor", "weapon"
+ *    or "domainCard".
  *    Pages use it to decide WHERE a choice gets asked, so that a new card with a choice lands
  *    on the level up screen and a new ancestry feature with one lands in the wizard, both
  *    without either page learning its name.
@@ -415,6 +442,18 @@ export function collectEffects(ch, db) {
     const anc = (db?.ancestries || []).find((a) => a.id === chosen.ancestryId);
     add(lookup(db, `${chosen.ancestryId}:${chosen.featureName}`), "ancestry",
       `${displayName(anc, "Ancestry")} — ${chosen.featureName}`);
+  }
+
+  // A transformation reads next, because the rules place it with the heritage: "add the card to
+  // your loadout as if it were part of your character's heritage". Keyed per FEATURE, like an
+  // ancestry rather than like a domain card — a transformation's features are a benefit and a
+  // drawback, and each may want its own entry or its own `excluded` note. Both always apply;
+  // unlike a mixed ancestry there is nothing to choose between them, and unlike a domain card
+  // there is no vault to take one out of.
+  const transformation = (db?.transformations || []).find((t) => t.id === ch.transformationId);
+  for (const name of featureNames(transformation)) {
+    add(lookup(db, `${transformation.id}:${name}`), "transformation",
+      `${displayName(transformation, "Transformation")} — ${name}`);
   }
 
   const sub = (db?.subclasses || []).find((s) => s.id === ch.subclassId);

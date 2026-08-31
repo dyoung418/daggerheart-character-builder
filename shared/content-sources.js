@@ -22,16 +22,15 @@ import { EFFECT_STAT_KEYS } from "./effects.js";
 // items.json is deliberately absent: it ships in the SRD folders, is fetched by nothing, and the
 // SRD's own source.json doesn't list it either.
 //
-// transformations.json is absent for a different reason. SRD 2.0 publishes six transformations and
-// data/srd_2_0/ carries them, so its source.json names the file — but a name this map doesn't know
-// is ignored (parseSourceInfo), and no screen reads one yet, so they sit unread rather than
-// half-wired. A file becomes readable by gaining an entry here, at the same time as the code that
-// knows what to do with it.
+// transformations are the newest kind: SRD 2.0 publishes six, data/srd_2_0/ carries them, and this
+// entry is what makes the loader read the file. A transformation is an optional, permanent change
+// to what a character IS, so it sits with the heritage rather than in the loadout.
 export const CONTENT_FILES = {
   classes: "classes",
   subclasses: "subclasses",
   ancestries: "ancestries",
   communities: "communities",
+  transformations: "transformations",
   "domain-cards": "domainCards",
   weapons: "weapons",
   armors: "armors",
@@ -430,6 +429,9 @@ export function unresolvedReferences(ch, db, { sentinels = [] } = {}) {
   check("subclass", ch?.subclassId, db?.subclasses);
   for (const id of ch?.heritage?.ancestryIds || []) check("ancestry", id, db?.ancestries);
   check("community", ch?.heritage?.communityId, db?.communities);
+  // Stored beside the heritage rather than inside it: heritage's shape is ancestry-specific (a
+  // mode, a pair of ids, a feature pick each), and a transformation is one id or none.
+  check("transformation", ch?.transformationId, db?.transformations);
   check("weapon", ch?.equipment?.primaryWeaponId, db?.weapons);
   check("weapon", ch?.equipment?.secondaryWeaponId, db?.weapons);
   check("armor", ch?.equipment?.armorId, db?.armors);

@@ -28,8 +28,8 @@
 // still left alone.
 //
 // The walk is by value rather than by field name: a character carries ids in a dozen places
-// (equipment, loadout, vault, level-up picks) and an allowlist would go stale the first time a
-// field was added. The guard is what makes that safe — a string is only
+// (equipment, loadout, vault, transformation, level-up picks) and an allowlist would go stale the
+// first time a field was added. The guard is what makes that safe — a string is only
 // rewritten when it fails to resolve AND exactly one loaded record claims its bare form, which no
 // experience name or free-text field is going to do by accident.
 
@@ -59,7 +59,7 @@ export function* bareForms(id, sourceNames) {
   }
 }
 
-const COLLECTIONS = ["classes", "subclasses", "ancestries", "communities",
+const COLLECTIONS = ["classes", "subclasses", "ancestries", "communities", "transformations",
   "domainCards", "weapons", "armors", "consumables"];
 
 /**

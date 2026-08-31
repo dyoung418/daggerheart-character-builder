@@ -69,8 +69,8 @@ A folder name goes straight into a fetch URL, so anything that could climb out o
 - **`files`** lists what to fetch. Naming only what you have means a folder with one card file
   costs one fetch and no 404s. A name the app doesn't recognise is ignored.
 
-The eight record files are `classes`, `subclasses`, `ancestries`, `communities`, `domain-cards`,
-`weapons`, `armors`, `consumables`, plus `effects` (see §6).
+The nine record files are `classes`, `subclasses`, `ancestries`, `communities`,
+`transformations`, `domain-cards`, `weapons`, `armors`, `consumables`, plus `effects` (see §6).
 
 ## 4. The record shapes
 
@@ -84,6 +84,12 @@ Most names are localized objects:
 ```json
 { "id": "hb_card_ironhide", "name": { "en-US": "Ironhide" }, "domain": "BLADE", "level": 1 }
 ```
+
+**`transformations.json` is shaped like an ancestry** — a name, a description, and features.
+A transformation is an optional, permanent change to what a character IS: it sits with the
+heritage rather than in the loadout, a character can hold one or none, and the wizard grows a
+Transformation step whenever any loaded source provides them. Both of its features always apply;
+there is nothing to choose between them and no vault to take one out of.
 
 **`classes.json` is the exception.** Its top-level `name` is a bare uppercase string:
 
@@ -106,6 +112,7 @@ without checking, so a missing one is a dead page rather than a missing card:
 | `classes` | `id`, `name`, `domains` |
 | `subclasses` | `id`, `name`, `class` |
 | `domain-cards` | `id`, `name`, `domain` |
+| `transformations` | `id`, `name` |
 | everything else | `id`, `name` |
 
 A record that fails is skipped, and the Content panel names it and says why. The rest of the file
@@ -187,7 +194,8 @@ already get.
 
 ## 8. Card art
 
-Art lives with the content it belongs to:
+Art lives with the content it belongs to, under `domain/`, `subclass/`, `community/`,
+`ancestry/` and `transformation/`:
 
 ```
 data/my-homebrew/card-art/domain/hb_card_ironhide.png

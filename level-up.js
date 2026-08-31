@@ -72,7 +72,12 @@ async function loadAllData() {
   // Ancestries are here for the Hit Point and Stress slots a Giant or a Human is born with:
   // those count towards the cap of 12, so the slot gating can't be right without them. Naming the
   // four keeps this screen's fetches to the files it actually reads.
-  content = await loadContent({ files: ["classes", "subclasses", "domain-cards", "ancestries"] });
+  // Transformations are here for exactly the same reason as ancestries, and for no other: one is
+  // never an option on this screen, but a transformation that moves a slot has to be counted
+  // before this screen decides how many are left.
+  content = await loadContent({
+    files: ["classes", "subclasses", "domain-cards", "ancestries", "transformations"],
+  });
   Object.assign(db, content.db);
 }
 

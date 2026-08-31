@@ -133,3 +133,6 @@ export function communityCardArtPath(community) {
 export function ancestryCardArtPath(ancestry) {
   return `${artRoot(ancestry)}/ancestry/${ancestry?.id}.${CARD_ART_EXT}`;
 }
+export function transformationCardArtPath(transformation) {
+  return `${artRoot(transformation)}/transformation/${transformation?.id}.${CARD_ART_EXT}`;
+}

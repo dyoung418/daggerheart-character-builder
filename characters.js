@@ -4,6 +4,7 @@ import {
   subclassCardArtPath,
   communityCardArtPath,
   ancestryCardArtPath,
+  transformationCardArtPath,
 } from "./shared/card-render.js";
 import {
   ADVANCEMENT_LABELS,
@@ -110,6 +111,7 @@ function findClass(id) { return db.classes.find((c) => c.id === id); }
 function findSubclass(id) { return db.subclasses.find((s) => s.id === id); }
 function findAncestry(id) { return db.ancestries.find((a) => a.id === id); }
 function findCommunity(id) { return db.communities.find((c) => c.id === id); }
+function findTransformation(id) { return db.transformations.find((t) => t.id === id); }
 function findDomainCard(id) { return db.domainCards.find((c) => c.id === id); }
 function findWeapon(id) { return db.weapons.find((w) => w.id === id); }
 function findArmor(id) { return db.armors.find((a) => a.id === id); }
@@ -603,6 +605,16 @@ function renderDetail() {
   }
   const com = findCommunity(ch.heritage.communityId);
   if (com) cardsRow.appendChild(cardBlock({ id: com.id, name: com.name["en-US"], art: communityCardArtPath(com), type: "Community", features: com.features }, `Community: ${com.name["en-US"]}`));
+  // With the heritage cards, which is where the rules put it: a transformation card joins the
+  // loadout "as if it were part of your character's heritage".
+  const transformation = findTransformation(ch.transformationId);
+  if (transformation) {
+    cardsRow.appendChild(cardBlock({
+      id: transformation.id, name: transformation.name["en-US"],
+      art: transformationCardArtPath(transformation),
+      type: "Transformation", features: transformation.features,
+    }, `Transformation: ${transformation.name["en-US"]}`));
+  }
   for (const ancId of ch.heritage.ancestryIds) {
     const anc = findAncestry(ancId);
     if (anc) cardsRow.appendChild(cardBlock({ id: anc.id, name: anc.name["en-US"], art: ancestryCardArtPath(anc), type: "Ancestry", features: anc.features }, `Ancestry: ${anc.name["en-US"]}`));
@@ -745,6 +757,18 @@ function renderDetail() {
   eqBox.appendChild(changeBtn);
   container.appendChild(eqBox);
 
+  // A transformation is usually handed out mid-campaign rather than chosen at creation, so the
+  // wizard step for it needs a way in from here — the same deep link equipment gets. Only when
+  // there's something to pick or something to clear: with no transformations loaded the wizard
+  // has no such step to link to.
+  if (db.transformations.length > 0 || ch.transformationId) {
+    container.appendChild(button(
+      transformation ? "Change transformation" : "Add a transformation",
+      "btn-small",
+      () => { location.href = `create.html?id=${ch.id}&step=transformation`; },
+    ));
+  }
+
   const expBox = document.createElement("div");
   expBox.className = "detail-summary";
   const expHeading = document.createElement("p");
@@ -834,7 +858,9 @@ function renderAll() {
 const CSV_COLUMNS = [
   "Name", "Pronouns", "Level", "Proficiency",
   "Class", "Subclass", "Subclass tier",
-  "Ancestry", "Community",
+  // Blank, not absent, for the characters who have none — a GM sorting the sheet wants one
+  // column shape for the whole party.
+  "Ancestry", "Community", "Transformation",
   "Agility", "Strength", "Finesse", "Instinct", "Presence", "Knowledge",
   "Evasion", "Hit Points", "Stress", "Hope",
   "Major Threshold", "Severe Threshold", "Armor Score",
@@ -869,6 +895,7 @@ function csvRowForCharacter(ch) {
   const cls = findClass(ch.classId);
   const sub = findSubclass(ch.subclassId);
   const com = findCommunity(ch.heritage.communityId);
+  const trans = findTransformation(ch.transformationId);
   const ancestries = ch.heritage.ancestryIds.map((id) => findAncestry(id)?.name["en-US"]).filter(Boolean).join(" + ");
   const stats = derivedStats(ch, db);
   const activeIds = activeDomainCardIds(ch);
@@ -882,7 +909,7 @@ function csvRowForCharacter(ch) {
   const row = [
     ch.name, ch.pronouns, ch.level, ch.proficiency,
     cls ? titleCase(cls.name) : "", sub ? sub.name["en-US"] : "", SUBCLASS_TIER_LABELS[ch.subclassTier] ?? ch.subclassTier,
-    ancestries, com ? com.name["en-US"] : "",
+    ancestries, com ? com.name["en-US"] : "", trans ? trans.name["en-US"] : "",
     t.agility.total, t.strength.total, t.finesse.total, t.instinct.total, t.presence.total, t.knowledge.total,
     stats.evasion ? stats.evasion.total : "", stats.hitPoints ? stats.hitPoints.total : "", stats.stress.total, "2/6",
     stats.majorThreshold ? stats.majorThreshold.total : "", stats.severeThreshold ? stats.severeThreshold.total : "",

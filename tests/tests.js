@@ -132,6 +132,8 @@ const {
   tabStopIndex,
 } = await import(`../shared/choice-keys.js${RUN}`);
 
+const { collectEffects } = await import(`../shared/effects.js${RUN}`);
+
 const {
   bareForms,
   bareId,
@@ -1305,6 +1307,8 @@ group("Every id in effects.js still exists in data/");
   const EDITIONS = ["srd_1_0", "srd_2_0"];
   const load = async (edition, name) => (await fetch(`../data/${edition}/${name}.json${RUN}`)).json();
   const files = ["ancestries", "subclasses", "armors", "weapons", "domain-cards", "classes"];
+  // Only SRD 2.0 publishes transformations, so this one is loaded on its own rather than per
+  // edition — asking SRD 1.0 for a file it doesn't have would 404.
   const loaded = await Promise.all(EDITIONS.map(async (e) =>
     Object.fromEntries(await Promise.all(files.map(async (f) => [f, await load(e, f)])))));
   const all = (f) => loaded.flatMap((d) => d[f]);
@@ -1331,6 +1335,7 @@ group("Every id in effects.js still exists in data/");
       }
     }
   };
+  featureKeys(await load("srd_2_0", "transformations"), "transformation");
   featureKeys(all("ancestries"), "ancestry");
   featureKeys(all("armors"), "armor");
   featureKeys(all("weapons"), "weapon");
@@ -1358,6 +1363,13 @@ group("Every id in effects.js still exists in data/");
 // fields, feature arrays with both `paragraph` and `list` description blocks, weapons with and
 // without a damage modifier.
 const SHEET_DB = {
+  transformations: [{
+    id: "tf", name: { "en-US": "Werewolf" },
+    features: [
+      { name: { "en-US": "Wolf Form" }, description: [{ paragraph: { "en-US": "A 1d10 bonus to attack and damage." } }] },
+      { name: { "en-US": "Howling Rampage" }, description: [{ paragraph: { "en-US": "Roll d20s equal to your tier." } }] },
+    ],
+  }],
   classes: [{
     id: "cls", name: "GUARDIAN", domains: ["VALOR", "BLADE"], startingHitPoints: 7, startingEvasion: 9,
     hopeFeature: { name: { "en-US": "Unstoppable" }, description: [{ paragraph: { "en-US": "Reduce incoming damage by one threshold." } }] },
@@ -2560,6 +2572,60 @@ group("A character's ids follow the editions that are loaded");
 
   eq("and a bare form can be looked up directly, for the records the app names itself",
     resolveRecordId("weapon_broadsword", both), "srd_2_0_weapon_broadsword");
+}
+
+group("A transformation sits with the heritage, and both its halves print");
+{
+  // The SRD publishes six, and one is optional per character: the field is a single id or null,
+  // not a list, and a character without one has nothing missing rather than something blank.
+  const plain = deriveSheet(sheetChar(), SHEET_DB);
+  eq("a character without one says nothing about it", plain.transformationName, null);
+  eq("and contributes no features", plain.transformationFeatures, []);
+
+  const changed = deriveSheet(sheetChar({ transformationId: "tf" }), SHEET_DB);
+  eq("one with a transformation names it", changed.transformationName, "Werewolf");
+  // Both, always: the drawback is not optional, and one the player forgets never happens at the
+  // table. Unlike a mixed ancestry there is nothing to choose between them.
+  eq("and prints BOTH features, benefit and drawback",
+    changed.transformationFeatures.map((f) => f.name), ["Wolf Form", "Howling Rampage"]);
+  eq("each attributed to the transformation that brought it",
+    [...new Set(changed.transformationFeatures.map((f) => f.source))], ["Werewolf"]);
+  eq("an id naming nothing loaded is simply absent, not a crash",
+    deriveSheet(sheetChar({ transformationId: "gone" }), SHEET_DB).transformationName, null);
+}
+
+group("What a transformation does to the numbers, and what it deliberately doesn't");
+{
+  // Eleven of SRD 2.0's twelve transformation features are in-play actions, rest-and-fiction
+  // rules, a death move, or a mechanic with no stat here — so they are read and left out, on the
+  // same line every other entry in effects.js is drawn on. Demigod's Gifted is the exception.
+  const TF_DB = {
+    transformations: [
+      { id: "srd_2_0_transformation_demigod", name: { "en-US": "Demigod" },
+        features: [{ name: { "en-US": "Gifted" } }, { name: { "en-US": "Weight of Divinity" } }] },
+      { id: "srd_2_0_transformation_werewolf", name: { "en-US": "Werewolf" },
+        features: [{ name: { "en-US": "Wolf Form" } }, { name: { "en-US": "Howling Rampage" } }] },
+    ],
+    sourceNames: ["srd_2_0"],
+  };
+  const collect = (id) => collectEffects({ ...newCharacter(), transformationId: id }, TF_DB);
+
+  const demigod = collect("srd_2_0_transformation_demigod");
+  eq("Gifted is catalogued once, tagged as a transformation",
+    demigod.map((e) => e.source), ["transformation"]);
+  eq("a +1 to action rolls is the attack and Spellcast numbers the sheet prints",
+    [demigod[0].effect.attack, demigod[0].effect.spellcast], [1, 1]);
+  has("and the breakdown names the transformation it came from", [demigod[0].label], "Demigod");
+  check("the damage half is excluded out loud rather than silently dropped",
+    demigod[0].effect.excluded.some((x) => /damage/.test(x)));
+  // Weight of Divinity costs a Stress when you fail a roll. That's play, not a total.
+  eq("its drawback moves no number, so it gets no entry", demigod.length, 1);
+
+  // Wolf Form's 1d10 is real, but you spend a Stress to enter it — the catalogue's line is
+  // exactly "in effect right now given only what we store".
+  eq("a transformation whose features are all in-play actions contributes nothing",
+    collect("srd_2_0_transformation_werewolf"), []);
+  eq("and no transformation at all contributes nothing", collect(null), []);
 }
 
 // ---------- report ----------
