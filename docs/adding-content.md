@@ -96,6 +96,22 @@ That isn't an inconsistency to fix — a class name is a *relational key*. `subc
 the most natural mistake there is, the loader accepts both and coerces it, but the uppercase string
 is the real shape.
 
+### `set` and `roll`, on items and consumables
+
+The SRD prints its loot as four numbered d12 tables — Core Set Items, Additional Items, Core Set
+Consumables, Additional Consumables — and where a record sits in one is not recoverable from
+anything else it carries. Two optional fields keep it: **`roll`**, the number printed beside the
+entry (1–60), and **`set`**, which table it came from, `"core"` or `"hopeandfear"`. The pair is
+unique within a file.
+
+`set` names a **printed product**; `contentSource` (§5) names the folder a record was read from.
+An SRD 2.0 consumable from the Hope & Fear table is `contentSource: "srd_2_0"`, `set:
+"hopeandfear"` — both true, about different things. That collision is why the field isn't called
+`source`.
+
+Nothing in the app reads either one. They're catalogue metadata, and the loader ignores unknown
+fields, so they cost nothing until something wants them.
+
 ### What validation does and doesn't do
 
 A record is checked only for the fields whose absence would kill a screen — a renderer reads them

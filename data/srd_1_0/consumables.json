@@ -4,6 +4,8 @@
   "name": {
    "en-US": "Stride Potion"
   },
+  "set": "core",
+  "roll": 1,
   "features": [
    {
     "description": [
@@ -21,6 +23,8 @@
   "name": {
    "en-US": "Bolster Potion"
   },
+  "set": "core",
+  "roll": 2,
   "features": [
    {
     "description": [
@@ -38,6 +42,8 @@
   "name": {
    "en-US": "Control Potion"
   },
+  "set": "core",
+  "roll": 3,
   "features": [
    {
     "description": [
@@ -55,6 +61,8 @@
   "name": {
    "en-US": "Attune Potion"
   },
+  "set": "core",
+  "roll": 4,
   "features": [
    {
     "description": [
@@ -72,6 +80,8 @@
   "name": {
    "en-US": "Charm Potion"
   },
+  "set": "core",
+  "roll": 5,
   "features": [
    {
     "description": [
@@ -89,6 +99,8 @@
   "name": {
    "en-US": "Enlighten Potion"
   },
+  "set": "core",
+  "roll": 6,
   "features": [
    {
     "description": [
@@ -106,6 +118,8 @@
   "name": {
    "en-US": "Minor Health Potion"
   },
+  "set": "core",
+  "roll": 7,
   "features": [
    {
     "description": [
@@ -123,6 +137,8 @@
   "name": {
    "en-US": "Minor Stamina Potion"
   },
+  "set": "core",
+  "roll": 8,
   "features": [
    {
     "description": [
@@ -140,6 +156,8 @@
   "name": {
    "en-US": "Grindletooth Venom"
   },
+  "set": "core",
+  "roll": 9,
   "features": [
    {
     "description": [
@@ -157,6 +175,8 @@
   "name": {
    "en-US": "Varik Leaves"
   },
+  "set": "core",
+  "roll": 10,
   "features": [
    {
     "description": [
@@ -174,6 +194,8 @@
   "name": {
    "en-US": "Vial of Moondrip"
   },
+  "set": "core",
+  "roll": 11,
   "features": [
    {
     "description": [
@@ -191,6 +213,8 @@
   "name": {
    "en-US": "Unstable Arcane Shard"
   },
+  "set": "core",
+  "roll": 12,
   "features": [
    {
     "description": [
@@ -208,6 +232,8 @@
   "name": {
    "en-US": "Potion of Stability"
   },
+  "set": "core",
+  "roll": 13,
   "features": [
    {
     "description": [
@@ -225,6 +251,8 @@
   "name": {
    "en-US": "Improved Grindletooth Venom"
   },
+  "set": "core",
+  "roll": 14,
   "features": [
    {
     "description": [
@@ -242,6 +270,8 @@
   "name": {
    "en-US": "Morphing Clay"
   },
+  "set": "core",
+  "roll": 15,
   "features": [
    {
     "description": [
@@ -259,6 +289,8 @@
   "name": {
    "en-US": "Vial of Darksmoke"
   },
+  "set": "core",
+  "roll": 16,
   "features": [
    {
     "description": [
@@ -276,6 +308,8 @@
   "name": {
    "en-US": "Jumping Root"
   },
+  "set": "core",
+  "roll": 17,
   "features": [
    {
     "description": [
@@ -293,6 +327,8 @@
   "name": {
    "en-US": "Snap Powder"
   },
+  "set": "core",
+  "roll": 18,
   "features": [
    {
     "description": [
@@ -310,6 +346,8 @@
   "name": {
    "en-US": "Health Potion"
   },
+  "set": "core",
+  "roll": 19,
   "features": [
    {
     "description": [
@@ -327,6 +365,8 @@
   "name": {
    "en-US": "Stamina Potion"
   },
+  "set": "core",
+  "roll": 20,
   "features": [
    {
     "description": [
@@ -344,6 +384,8 @@
   "name": {
    "en-US": "Armor Stitcher"
   },
+  "set": "core",
+  "roll": 21,
   "features": [
    {
     "description": [
@@ -361,6 +403,8 @@
   "name": {
    "en-US": "Gill Salve"
   },
+  "set": "core",
+  "roll": 22,
   "features": [
    {
     "description": [
@@ -378,6 +422,8 @@
   "name": {
    "en-US": "Replication Parchment"
   },
+  "set": "core",
+  "roll": 23,
   "features": [
    {
     "description": [
@@ -395,6 +441,8 @@
   "name": {
    "en-US": "Improved Arcane Shard"
   },
+  "set": "core",
+  "roll": 24,
   "features": [
    {
     "description": [
@@ -412,6 +460,8 @@
   "name": {
    "en-US": "Major Stride Potion"
   },
+  "set": "core",
+  "roll": 25,
   "features": [
    {
     "description": [
@@ -429,6 +479,8 @@
   "name": {
    "en-US": "Major Bolster Potion"
   },
+  "set": "core",
+  "roll": 26,
   "features": [
    {
     "description": [
@@ -446,6 +498,8 @@
   "name": {
    "en-US": "Major Control Potion"
   },
+  "set": "core",
+  "roll": 27,
   "features": [
    {
     "description": [
@@ -463,6 +517,8 @@
   "name": {
    "en-US": "Major Attune Potion"
   },
+  "set": "core",
+  "roll": 28,
   "features": [
    {
     "description": [
@@ -480,6 +536,8 @@
   "name": {
    "en-US": "Major Charm Potion"
   },
+  "set": "core",
+  "roll": 29,
   "features": [
    {
     "description": [
@@ -497,6 +555,8 @@
   "name": {
    "en-US": "Major Enlighten Potion"
   },
+  "set": "core",
+  "roll": 30,
   "features": [
    {
     "description": [
@@ -514,6 +574,8 @@
   "name": {
    "en-US": "Blood of the Yorgi"
   },
+  "set": "core",
+  "roll": 31,
   "features": [
    {
     "description": [
@@ -531,6 +593,8 @@
   "name": {
    "en-US": "Homet's Secret Potion"
   },
+  "set": "core",
+  "roll": 32,
   "features": [
    {
     "description": [
@@ -548,6 +612,8 @@
   "name": {
    "en-US": "Redthorn Saliva"
   },
+  "set": "core",
+  "roll": 33,
   "features": [
    {
     "description": [
@@ -565,6 +631,8 @@
   "name": {
    "en-US": "Channelstone"
   },
+  "set": "core",
+  "roll": 34,
   "features": [
    {
     "description": [
@@ -582,6 +650,8 @@
   "name": {
    "en-US": "Mythic Dust"
   },
+  "set": "core",
+  "roll": 35,
   "features": [
    {
     "description": [
@@ -599,6 +669,8 @@
   "name": {
    "en-US": "Acidpaste"
   },
+  "set": "core",
+  "roll": 36,
   "features": [
    {
     "description": [
@@ -616,6 +688,8 @@
   "name": {
    "en-US": "Hopehold Flare"
   },
+  "set": "core",
+  "roll": 37,
   "features": [
    {
     "description": [
@@ -633,6 +707,8 @@
   "name": {
    "en-US": "Major Arcane Shard"
   },
+  "set": "core",
+  "roll": 38,
   "features": [
    {
     "description": [
@@ -650,6 +726,8 @@
   "name": {
    "en-US": "Featherbone"
   },
+  "set": "core",
+  "roll": 39,
   "features": [
    {
     "description": [
@@ -667,6 +745,8 @@
   "name": {
    "en-US": "Circle of the Void"
   },
+  "set": "core",
+  "roll": 40,
   "features": [
    {
     "description": [
@@ -684,6 +764,8 @@
   "name": {
    "en-US": "Sun Tree Sap"
   },
+  "set": "core",
+  "roll": 41,
   "features": [
    {
     "description": [
@@ -701,6 +783,8 @@
   "name": {
    "en-US": "Dripfang Poison"
   },
+  "set": "core",
+  "roll": 42,
   "features": [
    {
     "description": [
@@ -718,6 +802,8 @@
   "name": {
    "en-US": "Major Health Potion"
   },
+  "set": "core",
+  "roll": 43,
   "features": [
    {
     "description": [
@@ -735,6 +821,8 @@
   "name": {
    "en-US": "Major Stamina Potion"
   },
+  "set": "core",
+  "roll": 44,
   "features": [
    {
     "description": [
@@ -752,6 +840,8 @@
   "name": {
    "en-US": "Ogre Musk"
   },
+  "set": "core",
+  "roll": 45,
   "features": [
    {
     "description": [
@@ -769,6 +859,8 @@
   "name": {
    "en-US": "Wingsprout"
   },
+  "set": "core",
+  "roll": 46,
   "features": [
    {
     "description": [
@@ -786,6 +878,8 @@
   "name": {
    "en-US": "Jar of Lost Voices"
   },
+  "set": "core",
+  "roll": 47,
   "features": [
    {
     "description": [
@@ -803,6 +897,8 @@
   "name": {
    "en-US": "Dragonbloom Tea"
   },
+  "set": "core",
+  "roll": 48,
   "features": [
    {
     "description": [
@@ -820,6 +916,8 @@
   "name": {
    "en-US": "Bridge Seed"
   },
+  "set": "core",
+  "roll": 49,
   "features": [
    {
     "description": [
@@ -837,6 +935,8 @@
   "name": {
    "en-US": "Sleeping Sap"
   },
+  "set": "core",
+  "roll": 50,
   "features": [
    {
     "description": [
@@ -854,6 +954,8 @@
   "name": {
    "en-US": "Feast of Xuria"
   },
+  "set": "core",
+  "roll": 51,
   "features": [
    {
     "description": [
@@ -871,6 +973,8 @@
   "name": {
    "en-US": "Bonding Honey"
   },
+  "set": "core",
+  "roll": 52,
   "features": [
    {
     "description": [
@@ -888,6 +992,8 @@
   "name": {
    "en-US": "Shrinking Potion"
   },
+  "set": "core",
+  "roll": 53,
   "features": [
    {
     "description": [
@@ -905,6 +1011,8 @@
   "name": {
    "en-US": "Growing Potion"
   },
+  "set": "core",
+  "roll": 54,
   "features": [
    {
     "description": [
@@ -922,6 +1030,8 @@
   "name": {
    "en-US": "Knowledge Stone"
   },
+  "set": "core",
+  "roll": 55,
   "features": [
    {
     "description": [
@@ -939,6 +1049,8 @@
   "name": {
    "en-US": "Sweet Moss"
   },
+  "set": "core",
+  "roll": 56,
   "features": [
    {
     "description": [
@@ -956,6 +1068,8 @@
   "name": {
    "en-US": "Blinding Orb"
   },
+  "set": "core",
+  "roll": 57,
   "features": [
    {
     "description": [
@@ -973,6 +1087,8 @@
   "name": {
    "en-US": "Death Tea"
   },
+  "set": "core",
+  "roll": 58,
   "features": [
    {
     "description": [
@@ -990,6 +1106,8 @@
   "name": {
    "en-US": "Mirror of Marigold"
   },
+  "set": "core",
+  "roll": 59,
   "features": [
    {
     "description": [
@@ -1007,6 +1125,8 @@
   "name": {
    "en-US": "Stardrop"
   },
+  "set": "core",
+  "roll": 60,
   "features": [
    {
     "description": [
