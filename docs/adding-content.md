@@ -150,7 +150,27 @@ have a colour of its own, which affects only the border of a card with no art.
   "features": [{ "name": { "en-US": "Purposeful Design" }, "description": [ … ] }] }
 ```
 
-Communities add `"personalities": [{ "en-US": "Meticulous" }, …]`. **Required: `id`, `name`.**
+Communities add `"personalities": [{ "en-US": "Meticulous" }, …]`. #### `set` and `roll`, on items and consumables
+
+The SRD prints its loot as four numbered d12 tables — Core Set Items, Additional Items, Core Set
+Consumables, Additional Consumables — and a record's place in one of them is not recoverable from
+anything else it carries. Two optional fields keep it:
+
+- **`roll`** — the number printed beside the entry, 1 to 60. It's what you'd roll to get this.
+- **`set`** — which of the two tables it came from: `"core"` or `"hopeandfear"`. The SRD's own
+  words are "the Daggerheart Core Set" and "the Hope & Fear Expansion Set".
+
+`set` names a **printed product**, and is a different thing from `contentSource`, which the loader
+stamps on every record with the name of the folder it was read from (§5). An SRD 2.0 consumable
+from the Hope & Fear table is `contentSource: "srd_2_0"`, `set: "hopeandfear"` — both true, about
+different things. `set` is fixed by the book; `contentSource` changes if you rename a folder.
+
+The pair is unique within a file: exactly one record per `set` per `roll`.
+
+Nothing in the app reads either field today — they are catalogue metadata, like `items.json`
+itself, and they're here so the dataset can answer a question the app doesn't yet ask.
+
+**Required: `id`, `name`.**
 
 ### transformations.json
 
@@ -198,7 +218,8 @@ What the app does with it:
 { "id": "core_armor_gambeson_armor", "name": { "en-US": "Gambeson Armor" }, "tier": 1,
   "baseMajorThreshold": 5, "baseSevereThreshold": 11, "baseScore": 3, "features": [ … ] }
 
-{ "id": "core_consumable_stride_potion", "name": { "en-US": "Stride Potion" }, "features": [ … ] }
+{ "id": "core_consumable_stride_potion", "name": { "en-US": "Stride Potion" },
+  "set": "core", "roll": 1, "features": [ … ] }
 ```
 
 Enums are SCREAMING_SNAKE and are turned into words for the player.
@@ -228,8 +249,9 @@ weapon says; a character with two traits has nothing else it could name.
 ### What validation does and doesn't do
 
 Only fields whose absence would break a screen are checked; a record that fails is **skipped and
-named in the Content panel**, and the rest of the file still loads. Unknown fields are ignored — but
-they're also useless, so don't invent any. Nothing checks that a domain, trait or tier is one the
+named in the Content panel**, and the rest of the file still loads. Unknown fields are ignored, so a
+record may carry more than the app reads — `set` and `roll` above do. Don't invent one
+speculatively, though: an unread field is a claim nothing checks. Nothing checks that a domain, trait or tier is one the
 SRD uses; unknown ones are exactly what a new source is for.
 
 ## 5. Ids, and what replaces what
