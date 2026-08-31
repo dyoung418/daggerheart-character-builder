@@ -16,9 +16,16 @@
 // names the SRD 1.0 weapon that SRD 2.0 dropped, that is a deliberate, valid choice and the
 // whole reason a player would select both. Only a MISS is rewritten.
 //
-// A bare form claimed by more than one loaded record is left alone rather than guessed at. That
-// can't happen between editions of the SRD, but a homebrew folder is free to name a record
-// anything, and picking one at random would silently change a character's gear.
+// A bare form claimed by more than one loaded record is left alone rather than guessed at, because
+// picking one at random would silently change a character's gear.
+//
+// A record another source SUPERSEDED doesn't count as a rival claimant. Two editions of one
+// document share a bare form for every record they both print — 532 of them — and treating those
+// as ambiguous refused to move a single id, which is exactly the case this file exists for: a
+// character saved under an older spelling (`core_weapon_broadsword`) when both editions are loaded.
+// The merge has already decided which of the two a picker offers; this follows that decision rather
+// than inventing a second one. Two UNRELATED sources claiming one bare form still collide, and are
+// still left alone.
 //
 // The walk is by value rather than by field name: a character carries ids in a dozen places
 // (equipment, loadout, vault, multiclass, transformation, level-up picks) and an allowlist would
@@ -68,6 +75,8 @@ export function indexRecordIds(db) {
       const id = record?.id;
       if (typeof id !== "string" || !id) continue;
       ids.add(id);
+      // Every id is resolvable; only the winners get to claim a bare form.
+      if (record.supersededBy) continue;
       const bare = bareId(id, names);
       byBare.set(bare, byBare.has(bare) && byBare.get(bare) !== id ? null : id);
     }

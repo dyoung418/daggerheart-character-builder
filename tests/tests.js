@@ -117,6 +117,12 @@ const {
   visibleRecords,
 } = await import(`../shared/content-sources.js${RUN}`);
 const {
+  bareId,
+  indexRecordIds,
+  remapCharacterIds,
+  resolveRecordId,
+} = await import(`../shared/content-ids.js${RUN}`);
+const {
   TRANSFER_FORMAT,
   TRANSFER_VERSION,
   applyImport,
@@ -3610,6 +3616,64 @@ group("A later source revises what an earlier one said");
   eq("and the shadowed one comes back if the homebrew is switched off",
     visibleRecords(byName.db.classes, new Set(["homebrew"])).map((c) => c.id), ["core_class_bard"]);
   eq("and it's reported as the name clash it is", byName.report.collisions[0].byName, true);
+}
+
+group("A character's ids follow the editions that are loaded");
+{
+  // Two editions of one document print the same card under different ids. A character stores bare
+  // ids with no record of which edition it was built against, so changing what's loaded has to
+  // move them or the character loses its class and its gear.
+  const both = mergeSources([
+    source("srd_1_0", { classes: [srcClass("srd_1_0_class_bard", "BARD")],
+      weapons: [srcCard("srd_1_0_weapon_broadsword", "Broadsword"), srcCard("srd_1_0_weapon_gone", "Retired Blade")] }),
+    source("srd_2_0", { classes: [srcClass("srd_2_0_class_bard", "BARD")],
+      weapons: [srcCard("srd_2_0_weapon_broadsword", "Broadsword")] }),
+  ]).db;
+  both.sourceNames = ["srd_1_0", "srd_2_0"];
+
+  eq("a bare form names the record, whichever edition printed it",
+    bareId("srd_2_0_weapon_broadsword", both.sourceNames), "weapon_broadsword");
+
+  // THE REGRESSION THIS GUARDS. Both editions claim `weapon_broadsword`, so treating every shared
+  // bare form as ambiguous refused to move ANY id — which is every id in every character saved
+  // before the folders were split. A superseded record is not a rival claimant: the merge already
+  // picked the winner, and this follows that decision rather than inventing a second one.
+  const idx = indexRecordIds(both);
+  eq("a shared bare form resolves to the edition that won the merge",
+    idx.byBare.get("weapon_broadsword"), "srd_2_0_weapon_broadsword");
+  eq("nothing is left ambiguous just because two editions print it",
+    [...idx.byBare.values()].filter((v) => v === null).length, 0);
+
+  const old = { classId: "core_class_bard", equipment: { primaryWeaponId: "core_weapon_broadsword" } };
+  const moved = remapCharacterIds(old, both);
+  eq("an id saved under a spelling no source uses any more is re-pointed",
+    [moved.classId, moved.equipment.primaryWeaponId], ["srd_2_0_class_bard", "srd_2_0_weapon_broadsword"]);
+
+  // The other half: an id that still resolves is a deliberate choice and is never touched. Picking
+  // the SRD 1.0 weapon that SRD 2.0 dropped is the whole reason to have both editions on.
+  eq("an id that still resolves is left exactly as it is",
+    remapCharacterIds({ equipment: { primaryWeaponId: "srd_1_0_weapon_gone" } }, both)
+      .equipment.primaryWeaponId, "srd_1_0_weapon_gone");
+  const none = { classId: "srd_2_0_class_bard" };
+  check("and a character needing no changes comes back as the same object",
+    remapCharacterIds(none, both) === none);
+
+  // Two UNRELATED sources claiming one bare form is still a genuine ambiguity, and still refused.
+  const rival = mergeSources([
+    source("alpha", { weapons: [srcCard("alpha_weapon_x", "Alpha Blade")] }),
+    source("beta", { weapons: [srcCard("beta_weapon_x", "Beta Blade")] }),
+  ]).db;
+  rival.sourceNames = ["alpha", "beta"];
+  eq("two unrelated sources claiming one bare form is left alone rather than guessed at",
+    remapCharacterIds({ equipment: { armorId: "old_weapon_x" } }, rival).equipment.armorId, "old_weapon_x");
+
+  // A player's answers are stored keyed BY id, so the keys have to move with the values.
+  eq("an id used as a field name moves too",
+    Object.keys(remapCharacterIds({ effectChoices: { "core_class_bard": { optionId: "a" } } }, both).effectChoices),
+    ["srd_2_0_class_bard"]);
+
+  eq("and a bare form can be looked up directly, for the records the app names itself",
+    resolveRecordId("weapon_broadsword", both), "srd_2_0_weapon_broadsword");
 }
 
 group("What the panel says about records one source took over from another");
