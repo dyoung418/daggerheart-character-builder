@@ -488,8 +488,16 @@ export function mergeSources(sources) {
               file, id: tagged.id, from: source.name, over: over.contentSource,
               byName: !byId.has(tagged.id),
             });
+            // KEEP the record that was taken over, marked with what took it. Dropping it was
+            // fine while sources overlapped by a record or two; with one folder per SRD edition
+            // it meant switching the later edition off left the pickers empty, because the
+            // earlier record wasn't in `db` any more to fall back to. It also keeps a character
+            // built on either id resolving. visibleRecords() decides which one a picker offers.
+            byId.set(over.id, list.length);
+            list.push({ ...over, supersededBy: tagged.id });
           }
           list[at] = tagged;
+          byId.set(tagged.id, at);
         } else {
           byId.set(tagged.id, list.length);
           if (nameKey !== null) byName.set(nameKey, list.length);
@@ -544,8 +552,25 @@ export function mergeSources(sources) {
  * every db assembled by something that doesn't know about sources keeps working unchanged.
  */
 export function visibleRecords(list, disabled) {
-  if (!disabled || disabled.size === 0) return list || [];
-  return (list || []).filter((r) => !r.contentSource || !disabled.has(r.contentSource));
+  const kept = !disabled || disabled.size === 0
+    ? (list || [])
+    : (list || []).filter((r) => !r.contentSource || !disabled.has(r.contentSource));
+  // A record that another source took over is in the list so it can come BACK: with the source
+  // that superseded it switched off, it is once again the only version there is. So it's hidden
+  // only while the record that beat it is itself visible — which is also why this runs even when
+  // nothing is switched off.
+  //
+  // "Another record with that id", not "that id is present": a source that reprints a record
+  // under the SAME id leaves two entries sharing one id, and asking only whether the id is there
+  // would have every superseded record answer yes about itself and vanish. Identity is the test.
+  if (!kept.some((r) => r.supersededBy)) return kept;
+  const byId = new Map();
+  for (const r of kept) {
+    const bucket = byId.get(r.id);
+    if (bucket) bucket.push(r); else byId.set(r.id, [r]);
+  }
+  return kept.filter((r) =>
+    !r.supersededBy || !(byId.get(r.supersededBy) || []).some((other) => other !== r));
 }
 
 // ---------- content a character refers to but this browser doesn't have ----------

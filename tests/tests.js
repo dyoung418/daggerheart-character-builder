@@ -3579,11 +3579,23 @@ group("A later source revises what an earlier one said");
     source("srd", { "domain-cards": [srcCard("core_a", "Untouchable"), srcCard("core_b", "Whirlwind")] }),
     source("homebrew", { "domain-cards": [srcCard("core_a", "Untouchable (revised)")] }),
   ]);
-  eq("the revision wins", db.domainCards.map((c) => c.name["en-US"]), ["Untouchable (revised)", "Whirlwind"]);
+  const visible = (dis) => visibleRecords(db.domainCards, dis).map((c) => c.name["en-US"]);
+  eq("the revision wins", visible(new Set()), ["Untouchable (revised)", "Whirlwind"]);
   eq("in the position the original held", db.domainCards[0].id, "core_a");
-  eq("and every record knows where it came from", db.domainCards.map((c) => c.contentSource), ["homebrew", "srd"]);
+  eq("and every visible record knows where it came from",
+    visibleRecords(db.domainCards, new Set()).map((c) => c.contentSource), ["homebrew", "srd"]);
   eq("the panel reports it, so an accidental duplicate is visible",
     report.collisions, [{ file: "domain-cards", id: "core_a", from: "homebrew", over: "srd", byName: false }]);
+
+  // The record that lost is KEPT, not dropped — switching the source that beat it off has to give
+  // it back. Dropping it is what made one SRD edition's folder empty the pickers when the other
+  // was switched off, with every shared record gone and nothing to fall back to.
+  eq("the superseded record is still in the db, marked with what took it",
+    db.domainCards.filter((c) => c.supersededBy).map((c) => [c.id, c.contentSource, c.supersededBy]),
+    [["core_a", "srd", "core_a"]]);
+  eq("switch the reviser off and the original is offered again",
+    visible(new Set(["homebrew"])), ["Whirlwind", "Untouchable"]);
+  eq("switch both off and nothing is offered", visible(new Set(["homebrew", "srd"])), []);
 
   // A class's real key is its uppercase name, not its id: create.js joins subclasses on it. Two
   // Bards under different ids would put two identical tiles in the picker with every Bard
@@ -3592,9 +3604,54 @@ group("A later source revises what an earlier one said");
     source("srd", { classes: [srcClass("core_class_bard", "BARD")] }),
     source("homebrew", { classes: [srcClass("homebrew_class_bard", "BARD")] }),
   ]);
-  eq("a class with the same name collapses even under a new id", byName.db.classes.length, 1);
+  eq("a class with the same name collapses even under a new id",
+    visibleRecords(byName.db.classes, new Set()).length, 1);
   eq("the later one being the survivor", byName.db.classes[0].id, "homebrew_class_bard");
+  eq("and the shadowed one comes back if the homebrew is switched off",
+    visibleRecords(byName.db.classes, new Set(["homebrew"])).map((c) => c.id), ["core_class_bard"]);
   eq("and it's reported as the name clash it is", byName.report.collisions[0].byName, true);
+}
+
+group("What the panel says about records one source took over from another");
+{
+  const { takeoverSummary } = await import(`../shared/content-settings.js${RUN}`);
+  const src = (name, label, counts) => ({ name, label, counts, skipped: [] });
+  const hit = (from, over, id, file = "domain-cards") => ({ file, id, from, over, byName: false });
+
+  // A pair that collides a little is worth reading record by record: that is a homebrew folder
+  // quietly sitting on top of something, which is the whole reason this list exists.
+  const small = {
+    sources: [src("srd_2_0", "SRD 2.0", { domainCards: 210 }), src("mine", "My homebrew", { domainCards: 3 })],
+    collisions: [hit("mine", "srd_2_0", "a"), hit("mine", "srd_2_0", "b")],
+  };
+  eq("a small takeover is listed record by record", takeoverSummary(small, new Set()).lines.length, 2);
+  check("and it lights the nav badge", takeoverSummary(small, new Set()).unexpected === 2);
+
+  // A pair that collides wholesale is one fact repeated. Two editions of the SRD do this to each
+  // other for every record they share, which buried the homebrew line above it.
+  const big = {
+    sources: [src("srd_1_0", "SRD 1.0", { domainCards: 189 }), src("srd_2_0", "SRD 2.0", { domainCards: 210 })],
+    collisions: Array.from({ length: 189 }, (_, i) => hit("srd_2_0", "srd_1_0", `c${i}`)),
+  };
+  eq("a wholesale takeover collapses to one line", takeoverSummary(big, new Set()).lines,
+    ["SRD 2.0 supersedes every record SRD 1.0 has (189)"]);
+  check("and it does NOT light the nav badge, because it is what anyone would expect",
+    takeoverSummary(big, new Set()).unexpected === 0);
+
+  // The one that was actually wrong: with the later source switched off it never happened, so
+  // saying it did sends a player looking for a change that isn't in front of them.
+  eq("nothing is claimed when the source that would take over is switched off",
+    takeoverSummary(big, new Set(["srd_2_0"])).lines, []);
+  eq("nor when the source being taken over from is switched off",
+    takeoverSummary(big, new Set(["srd_1_0"])).lines, []);
+
+  // Partial, because SRD 2.0 dropped nine weapons SRD 1.0 has — so the count says something.
+  const partial = {
+    sources: [src("srd_1_0", "SRD 1.0", { weapons: 20 }), src("srd_2_0", "SRD 2.0", { weapons: 15 })],
+    collisions: Array.from({ length: 15 }, (_, i) => hit("srd_2_0", "srd_1_0", `w${i}`, "weapons")),
+  };
+  eq("a partial takeover says how many, so the survivors are implied",
+    takeoverSummary(partial, new Set()).lines, ["SRD 2.0 supersedes 15 of SRD 1.0's records"]);
 }
 
 group("What a source may say its content does");

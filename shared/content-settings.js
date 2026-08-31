@@ -38,6 +38,63 @@ function warnList(title, lines) {
     lines.map((line) => `<div>└ ${escapeHtml(line)}</div>`).join("") + `</div>`;
 }
 
+// How many records a source contributed, for "every record" vs "17 records" below.
+function contributed(report, name) {
+  const entry = report.sources.find((s) => s.name === name);
+  return entry ? Object.values(entry.counts).reduce((n, c) => n + c, 0) : 0;
+}
+
+/**
+ * What to say about records one source took over from another.
+ *
+ * Two things this is careful about, both learned from shipping the SRD as one folder per edition:
+ *
+ * A takeover only HAPPENS if both sources are switched on. With the later one off, the earlier
+ * record is what the pickers offer and nothing was superseded — so listing it then is not just
+ * noise, it's wrong.
+ *
+ * And two editions of one document supersede each other wholesale. Several hundred lines saying
+ * so is the same fact repeated, and it buries the thing this list exists for: the one homebrew
+ * record quietly sitting on top of something. So a pair of sources that collide a lot is
+ * summarised in a line, and only a pair that collides a little is worth reading record by record.
+ */
+const ENUMERATE_UP_TO = 5;
+
+export function takeoverSummary(report, disabled) {
+  const off = disabled || new Set();
+  const live = (report.collisions || []).filter((c) => !off.has(c.from) && !off.has(c.over));
+  const label = (name) => report.sources.find((s) => s.name === name)?.label || name;
+
+  const groups = new Map();
+  for (const c of live) {
+    const key = `${c.from}\u0000${c.over}`;
+    const group = groups.get(key);
+    if (group) group.push(c); else groups.set(key, [c]);
+  }
+
+  const lines = [];
+  // Counted separately for the nav badge: a whole edition superseding an older one is expected
+  // and shouldn't sit a "⚠" in the top bar forever. A handful of records quietly taken over is
+  // exactly what the badge is for.
+  let unexpected = 0;
+  for (const [key, hits] of groups) {
+    const [from, over] = key.split("\u0000");
+    if (hits.length <= ENUMERATE_UP_TO) {
+      for (const c of hits) {
+        lines.push(`${label(from)} replaces ${label(over)}'s "${c.id}" in ${c.file}.json` +
+          (c.byName ? " (same name, different id)" : ""));
+        unexpected += 1;
+      }
+    } else {
+      const total = contributed(report, over);
+      lines.push(hits.length >= total && total > 0
+        ? `${label(from)} supersedes every record ${label(over)} has (${hits.length})`
+        : `${label(from)} supersedes ${hits.length} of ${label(over)}'s records`);
+    }
+  }
+  return { lines, unexpected };
+}
+
 function panelBody(report, disabled, onToggle) {
   const body = document.createElement("div");
   body.className = "content-panel";
@@ -69,8 +126,7 @@ function panelBody(report, disabled, onToggle) {
 
   const extras = document.createElement("div");
   extras.innerHTML =
-    warnList("Records taken over by a later source", report.collisions.map((c) =>
-      `${c.from} replaces ${c.over}'s "${c.id}" in ${c.file}.json${c.byName ? " (same name, different id)" : ""}`)) +
+    warnList("Records taken over by a later source", takeoverSummary(report, disabled).lines) +
     warnList("Effects that couldn't be used", report.effectIssues.map((e) =>
       `${e.source}: "${e.key}" — ${e.reason}`)) +
     warnList("Content that couldn't be read", report.warnings || []);
@@ -95,7 +151,7 @@ export function mountContentSettings({ report, disabled }) {
   const button = document.createElement("button");
   button.type = "button";
   button.className = "top-nav-button";
-  const problems = report.collisions.length + report.effectIssues.length +
+  const problems = takeoverSummary(report, disabled).unexpected + report.effectIssues.length +
     (report.warnings || []).length + report.sources.reduce((n, s) => n + s.skipped.length, 0);
   button.textContent = problems > 0 ? `Content ⚠` : "Content";
 
