@@ -9,6 +9,7 @@
 import { openLightbox } from "./lightbox.js";
 import { escapeHtml } from "./escape.js";
 import { CARD_ART_EXT } from "./card-art-config.js";
+import { SRD_SOURCE } from "./content-sources.js";
 
 /**
  * @param {{ art: string, domainClass?: string, level?: number|string, recallCost?: number,
@@ -131,11 +132,17 @@ export function descriptionHtml(description) {
 // revised card would print superseded text as an unselectable picture while the app applied the
 // new record. The CSS fallback card below prints the revised text instead, which is plainer and
 // correct. When you do want the old art on a reprint, copy the file into the source's folder.
-// The fallback is a LITERAL rather than SRD_SOURCE from content-sources.js on purpose: the card-art
-// extractor reads this template out of this file and turns it into a format string, so an
-// identifier it can't evaluate stops the whole run. Keep it a string a regex can read.
+// The fallback is SRD_SOURCE, the same constant content-load.js falls back to when a manifest
+// can't be read, so the edition an untagged record is assumed to come from is stated once.
+//
+// This used to be the literal "srd_2_0", with a comment claiming the card-art extractor couldn't
+// evaluate an identifier here. That was never true and is now checked: the extractor's regex for
+// this template is `\$\{\s*\w+\??\.contentSource[^}]*\}`, and `[^}]*` swallows the fallback
+// whichever form it takes — literal, constant, or absent. Both spellings produce a byte-identical
+// `data/{source}/card-art`. What WOULD break it is artRoot() not varying by source at all, which
+// it refuses rather than guessing at, and which no constant here can cause.
 function artRoot(record) {
-  return `data/${record?.contentSource || "srd_2_0"}/card-art`;
+  return `data/${record?.contentSource || SRD_SOURCE}/card-art`;
 }
 
 export function domainCardArtPath(card) {
