@@ -1978,7 +1978,7 @@ group("Fighting with nothing in your hands");
   check("and still gets its own attack", withShield.secondaryAttack !== null);
 }
 
-// A class feature can hand you a better pair of fists than the SRD's. Nothing in data/srd/ does,
+// A class feature can hand you a better pair of fists than the SRD's. Nothing the SRD ships does,
 // so every fixture here is invented — the point is that the app can carry one at all.
 const PROFILE_DB = {
   ...FX_DB,
@@ -2202,22 +2202,22 @@ group("A subclass upgrade that grants a domain card actually hands one over");
 
 group("Answers are only complete when they pick everything asked for");
 {
-  const vitality = EFFECTS["core_domain_card_vitality"].choice;
+  const vitality = EFFECTS["domain_card_vitality"].choice;
   eq("a blank answer isn't an answer", isAnswered(vitality, blankAnswer()), false);
   eq("one of two isn't either", isAnswered(vitality, { optionIds: ["stress"] }), false);
   eq("two of two is", isAnswered(vitality, { optionIds: ["stress", "hitPoint"] }), true);
 
-  const motc = EFFECTS["core_domain_card_master_of_the_craft"].choice;
+  const motc = EFFECTS["domain_card_master_of_the_craft"].choice;
   eq("+3 to one needs one Experience named",
     isAnswered(motc, { optionId: "one", experienceIds: ["e1"] }), true);
   eq("+2 to two needs two", isAnswered(motc, { optionId: "two", experienceIds: ["e1"] }), false);
 }
 
-group("Every id in effects.js still exists in data/srd/");
+group("Every id in effects.js still exists in data/srd_2_0/");
 {
   // The one group that reads data/ for real. An upstream refresh that renames an id would
   // otherwise drop an effect silently: no error, just a number that quietly stops being right.
-  const load = async (name) => (await fetch(`../data/srd/${name}.json${RUN}`)).json();
+  const load = async (name) => (await fetch(`../data/srd_2_0/${name}.json${RUN}`)).json();
   const [ancestries, subclasses, armors, weapons, cards, classes] = await Promise.all(
     ["ancestries", "subclasses", "armors", "weapons", "domain-cards", "classes"].map(load));
 
@@ -2225,14 +2225,21 @@ group("Every id in effects.js still exists in data/srd/");
   // below can't cover it. Renamed upstream, the Warrior would silently start getting a burden
   // warning the book says they're exempt from.
   check("the Warrior still has Combat Training to ignore burden with",
-    ignoresBurden({ classId: "core_class_warrior" }, { classes }));
+    ignoresBurden({ classId: "srd_2_0_class_warrior" }, { classes }));
 
   const known = new Set();
+  // A record's id names the edition that published it; effects.js is keyed without that prefix
+  // so one entry serves every edition. Both forms go in, so this group keeps catching a RENAME
+  // (which is what it exists for) without failing on the prefix itself.
+  const SOURCE = "srd_2_0";
+  const bare = (id) => (id.startsWith(`${SOURCE}_`) ? id.slice(SOURCE.length + 1) : id);
+  const addKey = (k) => known.add(k);
   const featureKeys = (list, prefix) => {
     for (const item of list) {
       for (const f of item.features || []) {
-        known.add(`${item.id}:${f.name["en-US"]}`);
-        known.add(`${prefix}:${f.name["en-US"]}`);
+        addKey(`${item.id}:${f.name["en-US"]}`);
+        addKey(`${bare(item.id)}:${f.name["en-US"]}`);
+        addKey(`${prefix}:${f.name["en-US"]}`);
       }
     }
   };
@@ -2240,17 +2247,17 @@ group("Every id in effects.js still exists in data/srd/");
   featureKeys(armors, "armor");
   featureKeys(weapons, "weapon");
   for (const s of subclasses) for (const tier of ["foundation", "specialization", "mastery"]) {
-    if (s[tier]) known.add(`${s.id}:${tier}`);
+    if (s[tier]) { addKey(`${s.id}:${tier}`); addKey(`${bare(s.id)}:${tier}`); }
   }
   // Class features, keyed the way collectEffects keys them. Only reachable since a class started
   // declaring something (the dice), and it's the same guarantee: rename "Rally" upstream and the
   // Bard's die would quietly stop printing rather than fail.
   for (const c of classes) {
     for (const f of [...(c.classFeatures || []), c.hopeFeature].filter(Boolean)) {
-      if (f.name?.["en-US"]) known.add(`${c.id}:${f.name["en-US"]}`);
+      if (f.name?.["en-US"]) { addKey(`${c.id}:${f.name["en-US"]}`); addKey(`${bare(c.id)}:${f.name["en-US"]}`); }
     }
   }
-  for (const c of cards) known.add(c.id);
+  for (const c of cards) { addKey(c.id); addKey(bare(c.id)); }
 
   const missing = Object.keys(EFFECTS).filter((k) => !known.has(k));
   check(`all ${Object.keys(EFFECTS).length} effect keys resolve`, missing.length === 0,
@@ -2596,7 +2603,7 @@ group("Every class carries what the detail card shows");
   // The card is page code this suite can't render, but it reads eight fields straight out of
   // classes.json — most of which nothing else in the app has ever touched. Renamed or dropped
   // upstream, they'd surface as a blank section rather than as an error.
-  const classes = await (await fetch(`../data/srd/classes.json${RUN}`)).json();
+  const classes = await (await fetch(`../data/srd_2_0/classes.json${RUN}`)).json();
   const text = (loc) => typeof loc?.["en-US"] === "string" && loc["en-US"] !== "";
   const body = (desc) => Array.isArray(desc) && desc.length > 0 &&
     desc.every((d) => text(d.paragraph) || (Array.isArray(d.list) && d.list.every(text)));
@@ -3505,7 +3512,8 @@ group("The saved file names itself after the day it was written");
 
 // ---------- several bodies of content in data/ ----------
 //
-// data/ holds a folder per source now — data/srd/ plus whatever else exists — and the merge that
+// data/ holds a folder per source now — data/srd_1_0/ and data/srd_2_0/ plus whatever else exists —
+// and the merge that
 // turns them into one `db` is a pure function over already-fetched objects, so it's tested the
 // same way everything else here is: hand-written payloads, no fetching.
 
@@ -3746,7 +3754,8 @@ group("A character says so when it refers to content this browser hasn't got");
 
 // ---------- transformations ----------
 //
-// The one record kind with nothing in data/srd/ behind it: the SRD has no transformations, so
+// Once the one record kind with no SRD record behind it. SRD 2.0 has six and data/srd_2_0/ ships
+// them; this fixture stays synthetic so the shape is tested rather than the content, so
 // every one of these fixtures is invented. A transformation is an optional, permanent change to
 // what a character IS — a benefit and a drawback together, at most one per character, sitting
 // with the heritage rather than in the loadout.
@@ -4418,7 +4427,7 @@ group("A transformation prints on the sheet and exports to the GM");
     [{ kind: "weapon", id: "myhomebrew_weapon_gone" }]);
 
   // Art lives with the content it belongs to, so the path builders take the RECORD: a bare id
-  // would emit data/srd/… for homebrew content and 404 on every card of it.
+  // would emit the SRD's folder for homebrew content and 404 on every card of it.
   const hbSub = { ...TROUBADOUR, id: "hb_subclass_hex", name: { "en-US": "Hexweaver" }, contentSource: "homebrew" };
   const hbCard = { ...WHIRLWIND, id: "hb_card_hex", name: { "en-US": "Hex" }, contentSource: "homebrew" };
   const hbAnc = { ...ELF, id: "hb_ancestry_tide", name: { "en-US": "Tideborn" }, contentSource: "homebrew" };
@@ -4435,7 +4444,7 @@ group("A transformation prints on the sheet and exports to the GM");
   eq("homebrew art is looked for in the folder its own source shipped",
     homebrew.cards.map((c) => c.art),
     ["data/homebrew/card-art/subclass/hb_subclass_hex-foundation.png",
-      "data/srd/card-art/community/core_community_highborne.png",
+      "data/srd_2_0/card-art/community/core_community_highborne.png",
       "data/homebrew/card-art/ancestry/hb_ancestry_tide.png",
       "data/homebrew/card-art/domain/hb_card_hex.png"]);
 
@@ -6171,7 +6180,7 @@ group("The attack line, one clause of the rule at a time");
 // Groups that came in with upstream's 2026-08-27 merge. Two of its groups are deliberately
 // absent: the JSON transfer pair tested upstream's shared/transfer.js, and this fork keeps its
 // own — the transfer groups above cover it. "Every id in effects.js still exists in data/" is
-// also upstream's; the data/srd/ version of it above is the same check on this fork's layout.
+// also upstream's; the per-edition version of it above is the same check on this fork's layout.
 // ===========================================================================================
 
 group("Table state: boxes marked at the table (HP, Stress, Hope, Armor)");
@@ -6585,30 +6594,43 @@ group("Card art paths use the configured extension, under the source the record 
   // RECORD, because the id alone can't say which source folder to look in — so the checks are
   // upstream's, rewritten for that signature. The extension is still one shared constant.
   eq("CARD_ART_EXT", CARD_ART_EXT, "png");
-  eq("domainCardArtPath", domainCardArtPath({ id: "core_x" }), `data/srd/card-art/domain/core_x.${CARD_ART_EXT}`);
+  eq("domainCardArtPath", domainCardArtPath({ id: "core_x" }), `data/srd_2_0/card-art/domain/core_x.${CARD_ART_EXT}`);
   eq("subclassCardArtPath", subclassCardArtPath({ id: "core_y" }, "foundation"),
-    `data/srd/card-art/subclass/core_y-foundation.${CARD_ART_EXT}`);
-  eq("ancestryCardArtPath", ancestryCardArtPath({ id: "core_z" }), `data/srd/card-art/ancestry/core_z.${CARD_ART_EXT}`);
-  eq("communityCardArtPath", communityCardArtPath({ id: "core_w" }), `data/srd/card-art/community/core_w.${CARD_ART_EXT}`);
+    `data/srd_2_0/card-art/subclass/core_y-foundation.${CARD_ART_EXT}`);
+  eq("ancestryCardArtPath", ancestryCardArtPath({ id: "core_z" }), `data/srd_2_0/card-art/ancestry/core_z.${CARD_ART_EXT}`);
+  eq("communityCardArtPath", communityCardArtPath({ id: "core_w" }), `data/srd_2_0/card-art/community/core_w.${CARD_ART_EXT}`);
   eq("a record from another source resolves under that source's folder",
     domainCardArtPath({ id: "hf_x", contentSource: "hopeandfear" }),
     `data/hopeandfear/card-art/domain/hf_x.${CARD_ART_EXT}`);
 }
 
-group("Hope & Fear (the_void release of daggerheart-data) is in data/srd/");
+group("Hope & Fear is in data/srd_2_0/, in the edition the SRD published");
 {
-  const load = async (name) => (await fetch(`../data/srd/${name}.json${RUN}`)).json();
-  const [classes, subclasses, ancestries, communities, cards] = await Promise.all(
-    ["classes", "subclasses", "ancestries", "communities", "domain-cards"].map(load));
-  const voidClasses = classes.filter((c) => c.id.startsWith("the_void_class_"));
-  eq("the four classes", voidClasses.map((c) => c.name).sort(), ["ASSASSIN", "BRAWLER", "WARLOCK", "WITCH"]);
+  // This group used to assert the same content under `the_void_*` ids, because upstream imported
+  // daggersearch's `the_void` release and NOTICE.md called it "the Hope & Fear expansion's SRD
+  // portion". It isn't: The Void is Darrington Press's PLAYTEST imprint, and every one of those
+  // 45 records was revised before it reached the book — the Brawler's Hope feature is Square Up
+  // in SRD 2.0 and Staggering Strike in the playtest, which is a different move, not a rename.
+  // So the records here are transcribed from SRD 2.0 and the playtest edition is kept out.
+  const load = async (name) => (await fetch(`../data/srd_2_0/${name}.json${RUN}`)).json();
+  const [classes, subclasses, ancestries, communities, cards, transformations] = await Promise.all(
+    ["classes", "subclasses", "ancestries", "communities", "domain-cards", "transformations"].map(load));
+
+  const added = classes.filter((c) => ["ASSASSIN", "BRAWLER", "WARLOCK", "WITCH"].includes(c.name));
+  eq("the four classes", added.map((c) => c.name).sort(), ["ASSASSIN", "BRAWLER", "WARLOCK", "WITCH"]);
   check("each of them has two subclasses keyed by class name, the way the wizard looks them up",
-    voidClasses.every((c) => subclasses.filter((s) => s.class === c.name).length === 2));
+    added.every((c) => subclasses.filter((s) => s.class === c.name).length === 2));
   check("the 21 Dread domain cards, levels 1 to 10", cards.filter((c) => c.domain === "DREAD").length === 21);
-  check("the six ancestries and six communities",
-    ancestries.filter((a) => a.id.startsWith("the_void_")).length === 6 && communities.filter((a) => a.id.startsWith("the_void_")).length === 6);
-  check("no id collides with the core set", new Set(classes.map((c) => c.id)).size === classes.length && new Set(cards.map((c) => c.id)).size === cards.length);
-  check("the core set is still complete (9 classes, 189 cards)", classes.filter((c) => c.id.startsWith("core_")).length === 9 && cards.filter((c) => c.id.startsWith("core_")).length === 189);
+  check("the six transformations", transformations.length === 6);
+  check("the Brawler's Hope feature is the published one, not the playtest's",
+    added.find((c) => c.name === "BRAWLER")?.hopeFeature?.name?.["en-US"] === "Square Up");
+
+  const ids = [...classes, ...subclasses, ...ancestries, ...communities, ...cards, ...transformations].map((r) => r.id);
+  check("every id names the document it came from", ids.every((id) => id.startsWith("srd_2_0_")));
+  check("no playtest record survives the import", !ids.some((id) => id.includes("the_void")));
+  check("ids are unique", new Set(ids).size === ids.length);
+  check("the whole of SRD 2.0 is here: 24 ancestries, 15 communities, 13 classes, 210 cards",
+    ancestries.length === 24 && communities.length === 15 && classes.length === 13 && cards.length === 210);
 }
 
 // ---------- report ----------

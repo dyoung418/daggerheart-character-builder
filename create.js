@@ -14,6 +14,7 @@ import { titleCase } from "./shared/text.js";
 import { blankAnswer, collectEffects, effectFor, ignoresBurden } from "./shared/effects.js";
 import { renderEffectChoice } from "./shared/effect-choice.js";
 import { loadContent } from "./shared/content-load.js";
+import { resolveRecordId } from "./shared/content-ids.js";
 import { mountContentSettings } from "./shared/content-settings.js";
 import { visibleRecords } from "./shared/content-sources.js";
 import { openClassDetail } from "./shared/class-detail.js";
@@ -37,8 +38,11 @@ const TRAIT_KEYS = ["agility", "strength", "finesse", "instinct", "presence", "k
 const TRAIT_LABELS = { agility: "Agility", strength: "Strength", finesse: "Finesse", instinct: "Instinct", presence: "Presence", knowledge: "Knowledge" };
 
 const TRAIT_ARRAY = [2, 1, 1, 0, 0, -1];
-const MINOR_HEALTH_POTION_ID = "core_consumable_minor_health_potion";
-const MINOR_STAMINA_POTION_ID = "core_consumable_minor_stamina_potion";
+// Named without an edition prefix and resolved against whatever is loaded: the same potion is
+// srd_1_0_consumable_minor_health_potion in one edition and srd_2_0_... in the next, and the
+// stored choice has to be an id the rest of the app can look up.
+const MINOR_HEALTH_POTION = "consumable_minor_health_potion";
+const MINOR_STAMINA_POTION = "consumable_minor_stamina_potion";
 
 // The steps every character has. The optional one is spliced in by buildSteps() below, which is
 // also why the "Step N" comments further down number this list rather than what's on screen.
@@ -892,9 +896,11 @@ function renderEquipmentStep(panel) {
   panel.appendChild(h3d);
   const potionRow = document.createElement("div");
   potionRow.className = "field-row";
+  const healthPotionId = resolveRecordId(MINOR_HEALTH_POTION, db) || MINOR_HEALTH_POTION;
+  const staminaPotionId = resolveRecordId(MINOR_STAMINA_POTION, db) || MINOR_STAMINA_POTION;
   potionRow.innerHTML = `
-    <label><input type="radio" name="potion" value="${MINOR_HEALTH_POTION_ID}" ${e.potionChoice === MINOR_HEALTH_POTION_ID ? "checked" : ""}/> Minor Health Potion</label>
-    <label><input type="radio" name="potion" value="${MINOR_STAMINA_POTION_ID}" ${e.potionChoice === MINOR_STAMINA_POTION_ID ? "checked" : ""}/> Minor Stamina Potion</label>
+    <label><input type="radio" name="potion" value="${healthPotionId}" ${e.potionChoice === healthPotionId ? "checked" : ""}/> Minor Health Potion</label>
+    <label><input type="radio" name="potion" value="${staminaPotionId}" ${e.potionChoice === staminaPotionId ? "checked" : ""}/> Minor Stamina Potion</label>
   `;
   potionRow.querySelectorAll('input[name="potion"]').forEach((r) => {
     r.addEventListener("change", (ev) => { e.potionChoice = ev.target.value; onChange(); });

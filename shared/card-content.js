@@ -318,7 +318,7 @@ function classCard(cls, subtitle, sections) {
 
 /**
  * The text card drawn when a card's art file isn't there — a clean checkout has none of it
- * (.gitignore excludes data/srd/card-art/), and homebrew may never have had any. Not a blank and
+ * (.gitignore excludes each source's card-art/), and homebrew may never have had any. Not a blank and
  * not a skip: a player who owns the card owns it whether or not this browser can draw its face.
  */
 export function fallbackCardContent(descriptor) {

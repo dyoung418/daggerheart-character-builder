@@ -131,8 +131,11 @@ export function descriptionHtml(description) {
 // revised card would print superseded text as an unselectable picture while the app applied the
 // new record. The CSS fallback card below prints the revised text instead, which is plainer and
 // correct. When you do want the old art on a reprint, copy the file into the source's folder.
+// The fallback is a LITERAL rather than SRD_SOURCE from content-sources.js on purpose: the card-art
+// extractor reads this template out of this file and turns it into a format string, so an
+// identifier it can't evaluate stops the whole run. Keep it a string a regex can read.
 function artRoot(record) {
-  return `data/${record?.contentSource || "srd"}/card-art`;
+  return `data/${record?.contentSource || "srd_2_0"}/card-art`;
 }
 
 export function domainCardArtPath(card) {

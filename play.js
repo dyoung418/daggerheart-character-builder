@@ -10,6 +10,7 @@
 import { ensureLevelFields, tierForLevel } from "./shared/advancement.js";
 import { deriveSheet } from "./shared/sheet-data.js";
 import { loadContent } from "./shared/content-load.js";
+import { remapCharacterIds } from "./shared/content-ids.js";
 import {
   CONDITIONS,
   DOWNTIME_MOVES_PER_REST,
@@ -126,7 +127,7 @@ function armorShield() {
   return svg("0 0 24 26", [["M12 1 L22 4.5 V12 C22 18 17.5 22.5 12 25 C6.5 22.5 2 18 2 12 V4.5 Z"]]);
 }
 
-// Upstream fetched data/<name>.json directly here. This fork keeps the SRD in data/srd/ and can
+// Upstream fetched data/<name>.json directly here. This fork keeps the SRD in per-edition folders and can
 // load further sources beside it, so the content loader is the only thing that knows where the
 // files are — the same call sheet.js makes, and for the same reason: a character built with a
 // source switched on must still derive correctly when the page opens it.
@@ -632,7 +633,7 @@ async function init() {
   const db = await loadAllData();
 
   const id = new URLSearchParams(location.search).get("id");
-  const character = loadCharacters().find((c) => c.id === id);
+  const character = remapCharacterIds(loadCharacters().find((c) => c.id === id), db);
   if (!character) {
     renderNotFound(root);
     return;

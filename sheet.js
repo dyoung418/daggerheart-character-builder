@@ -5,6 +5,7 @@
 import { ensureLevelFields } from "./shared/advancement.js";
 import { deriveSheet } from "./shared/sheet-data.js";
 import { loadContent } from "./shared/content-load.js";
+import { remapCharacterIds } from "./shared/content-ids.js";
 
 const CHAR_STORAGE_KEY = "dh-characters-v1";
 
@@ -397,7 +398,9 @@ async function init() {
   const db = await loadAllData();
 
   const id = new URLSearchParams(location.search).get("id");
-  const character = loadCharacters().find((c) => c.id === id);
+  // Re-point ids at the editions actually loaded before anything reads them: a character built
+  // under one SRD edition prints from another without losing its class or its gear.
+  const character = remapCharacterIds(loadCharacters().find((c) => c.id === id), db);
   if (!character) {
     renderNotFound(root);
     return;

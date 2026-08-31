@@ -1,7 +1,8 @@
 // Merging several bodies of content into the one `db` the pages read.
 //
 // `data/` used to hold exactly one body of content: the SRD re-export. It now holds a folder per
-// SOURCE — `data/srd/` plus whatever else exists — and the folder's name IS its category. Nothing
+// SOURCE — `data/srd_1_0/` and `data/srd_2_0/` plus whatever else exists — and the folder's name IS
+// its category. Nothing
 // here knows the name of any source but the SRD's; a category exists because a folder does.
 //
 // Everything found on disk is always loaded and always looked up, so an id never dangles. The
@@ -19,14 +20,14 @@ import { EFFECT_SCALE_KEYS, EFFECT_STAT_KEYS, TRAIT_KEYS } from "./effects.js";
 // Filename under a source folder -> the key it lands on in `db`. The single statement of that
 // mapping; pages that want fewer files pass a subset of these keys.
 //
-// items.json is deliberately absent. It ships in data/srd/ and is fetched by nothing — a loader
+// items.json is deliberately absent. It ships in the SRD folders and is fetched by nothing — a loader
 // that enumerated filenames would silently start pulling 23 KB with no consumer, so the SRD's
 // own source.json doesn't list it either.
 //
-// transformations.json is the one kind the SRD doesn't have and can't: a transformation is an
-// optional, permanent change to what a character IS, and only a source that isn't the SRD can
-// provide one. It's listed here anyway, because a kind the loader doesn't know is a kind no
-// amount of well-formed JSON can add.
+// transformations.json was once the one kind the SRD didn't have — the comment here used to say
+// only a non-SRD source could provide one. SRD 2.0 has six, and data/srd_2_0/ ships them, so that
+// is no longer true; the entry stays because a kind the loader doesn't know is a kind no amount of
+// well-formed JSON can add.
 export const CONTENT_FILES = {
   classes: "classes",
   subclasses: "subclasses",
@@ -39,7 +40,9 @@ export const CONTENT_FILES = {
   consumables: "consumables",
 };
 
-export const SRD_SOURCE = "srd";
+// The edition loaded when the manifest can't be read at all. The newest SRD, so a broken manifest
+// leaves the app on current rules rather than a superseded printing.
+export const SRD_SOURCE = "srd_2_0";
 
 // The manifest is a plain list of folder names, and each name is interpolated straight into a
 // fetch URL — so anything that could climb out of data/ is dropped rather than escaped.
@@ -418,7 +421,25 @@ export function validateEffectEntry(entry) {
 // their ids say — so a later source's Bard replaces an earlier one by NAME as well as by id.
 // Without this, a revised Bard under a fresh id would put two identical-looking tiles in the picker
 // with every Bard subclass appearing under both.
-const nameKeyFor = (kind, record) => (kind === "classes" ? String(record.name).toUpperCase() : null);
+// What makes two records from different sources the SAME record.
+//
+// A source that comes later in the manifest revises what an earlier one said, and it does that by
+// id when it reprints a record verbatim and by NAME when it doesn't share the earlier one's ids.
+// Name mattered only for classes while the sources sharing content shared their ids too. It
+// matters for every kind now that the SRD ships one folder per edition: an id names the document
+// it came from, so SRD 2.0's Vitality is a different STRING from SRD 1.0's Vitality and only the
+// name says they are one card. Without this, selecting both editions lists every shared card,
+// weapon, armor and potion twice.
+//
+// A subclass is qualified by its class: subclass names are only unique within a class, and a
+// homebrew Bard subclass called "Wayfinder" must not silently replace the Ranger's.
+const nameKeyFor = (kind, record) => {
+  if (kind === "classes") return String(record.name).toUpperCase();
+  const name = record?.name?.["en-US"];
+  if (typeof name !== "string" || !name) return null;
+  const key = name.trim().toLowerCase();
+  return kind === "subclasses" ? `${String(record.class || "").toUpperCase()}\u0000${key}` : key;
+};
 
 /**
  * @param {Array<{name, label, records, effects}>} sources in precedence order — srd first, then
@@ -494,6 +515,13 @@ export function mergeSources(sources) {
   // validateEffectEntry because the track may be declared by another entry, or another source
   // entirely, and this is the one place holding all of them. The option still works — it marks
   // its slot — so the entry is kept and the mismatch is only reported.
+  // Every record's id begins with the name of the document that published it
+  // (srd_1_0_domain_card_vitality). An effect belongs to the CARD, not to the edition that
+  // printed it, so effects.js is keyed without that prefix and a card found in either edition
+  // reaches the same entry. Collected here because this is the only place that knows every
+  // source name; effects.js does the stripping.
+  db.sourceNames = sources.map((s) => s.name);
+
   const trackIds = new Set(Object.values(effects).map((e) => e.track?.id).filter(Boolean));
   for (const [key, value] of Object.entries(effects)) {
     const advances = value.advancementOption?.advances;

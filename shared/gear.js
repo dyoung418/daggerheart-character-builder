@@ -62,7 +62,7 @@ export function burdenLabel(weapon) {
   return BURDEN_LABELS[weapon?.burden] || "";
 }
 
-// A damage rating's dice, as written. Every weapon in data/srd/ rolls ONE kind of die, so `dice`
+// A damage rating's dice, as written. Every weapon the SRD ships rolls ONE kind of die, so `dice`
 // is normally a bare string ("D10") — but the rules don't promise that, and a profile that rolls
 // two kinds has to say so. A list is therefore accepted anywhere a string is, and joined the way
 // the books write it: "d8+d6".

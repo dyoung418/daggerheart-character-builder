@@ -1,7 +1,7 @@
 .DS_Store
 node_modules/
 
-# Content sources. Only the SRD folder is tracked: everything else under data/ is either
+# Content sources. Only the two SRD folders are tracked: everything else under data/ is either
 # generated (card art, extracted from a PDF nobody may redistribute) or content the DPCGL
 # re-use grant doesn't cover — playtest material and homebrew.
 #
@@ -10,9 +10,11 @@ node_modules/
 # would commit it. Matching everything and re-including what's tracked covers both, and names no
 # unpublished content in a public repo.
 data/*
-!data/srd/
+!data/srd_1_0/
+!data/srd_2_0/
 !data/sources.json
-data/srd/card-art/
+data/srd_1_0/card-art/
+data/srd_2_0/card-art/
 # Upstream keeps its art at data/card-art/ instead of per-source; `data/*` already covers it,
 # but the rule is kept so this file stops disagreeing with upstream's copy of it.
 data/card-art/
