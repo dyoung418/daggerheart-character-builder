@@ -86,7 +86,7 @@ fall back to the system stack) if that matters to you — and tighten `style-src
 
 ## About the card art
 
-This repository does **not** include card artwork. Under the [Darrington Press Community Gaming License](https://darringtonpress.com/license/), artwork, illustrations and imagery are explicitly listed as Prohibited Content — they cannot be redistributed, even in fan projects. Only the text/mechanics of the SRD (names, stats, rules text) may be reused, which is what `data/srd/*.json` contains.
+This repository does **not** include card artwork. Under the [Darrington Press Community Gaming License](https://darringtonpress.com/license/), artwork, illustrations and imagery are explicitly listed as Prohibited Content — they cannot be redistributed, even in fan projects. Only the text/mechanics of the SRD (names, stats, rules text) may be reused, which is what `data/srd_1_0/*.json` and `data/srd_2_0/*.json` contain.
 
 Without art, cards render with a clean CSS-only fallback (domain-colored border, name, level, and rules text) — the app is fully usable this way.
 
@@ -94,7 +94,7 @@ If you own the official Core Rulebook PDF, you could write your own script to cr
 
 ## Adding your own content
 
-`data/` holds one folder per body of content. `data/srd/` is the SRD; anything else you create is yours, and **the folder's name is the category**. Make `data/homebrew/` and you have a category called homebrew.
+`data/` holds one folder per body of content. `data/srd_1_0/` and `data/srd_2_0/` are the two SRD editions; anything else you create is yours, and **the folder's name is the category**. Make `data/homebrew/` and you have a category called homebrew.
 
 To add one:
 
@@ -113,7 +113,7 @@ To add one:
    ```
 
    `files` is required and names the files you actually wrote — it's what stops the app fetching things that aren't there. `label` is optional and defaults to the folder name.
-4. Write those files, in the same shape as the ones in `data/srd/`. Every file is optional; a folder holding one `domain-cards.json` is perfectly good.
+4. Write those files, in the same shape as the ones in `data/srd_2_0/`. Every file is optional; a folder holding one `domain-cards.json` is perfectly good.
 
 The **Content** button in the top bar lists your sources with a checkbox each, and reports anything it couldn't use. Switching a source off only changes what you can *pick* — a character already built with it keeps its content and its stats, so turning a source off between sessions never damages a character.
 
@@ -136,12 +136,20 @@ A few things worth knowing when you write content:
 
 ## Data source
 
-The JSON files in `data/srd/` are the Daggerheart System Reference Document (SRD), reused under the DPCGL. They're a re-export of the community-maintained [`daggersearch/daggerheart-data`](https://github.com/daggersearch/daggerheart-data) dataset — full credit to that project for structuring the SRD as clean JSON in the first place.
+The JSON files in `data/srd_1_0/` and `data/srd_2_0/` are the Daggerheart System Reference Document, reused under the DPCGL. They started as a re-export of the community-maintained [`daggersearch/daggerheart-data`](https://github.com/daggersearch/daggerheart-data) dataset — full credit to that project for structuring the SRD as clean JSON in the first place.
 
-The **Hope & Fear** expansion's SRD portion (the `the_void` release of the same dataset: Witch, Assassin, Warlock and Brawler with their subclasses, the Dread domain's 21 cards, six ancestries and six communities) is appended to the same files under `data/srd/`. Everything that reads the data — the wizard, level up, the sheets — picks it up on its own; the one thing that doesn't is `shared/effects.js`, the catalogue of features that change a number on the sheet: the new classes' features are printed as rules text and applied by hand, like equipment features already are. Transformations (a Hope & Fear concept) are modelled here as a content-source record kind — see "Adding your own content" — but the six the dataset carries aren't in `data/srd/` yet.
+**One folder per edition.** `data/srd_1_0/` is SRD 1.0; `data/srd_2_0/` is SRD 2.0, which adds the Hope & Fear content — the Witch, Assassin, Warlock and Brawler with their subclasses, the Dread domain's 21 cards, six ancestries, six communities and the six transformations. Both are switched on out of the box, and where they carry the same card SRD 2.0 wins. That is what the pairing is for: SRD 2.0 dropped nine Tier 3 magic weapons that SRD 1.0 has, so leaving both on keeps them available, and switching SRD 1.0 off on the Content screen gives you the current rules and nothing else.
 
-One deliberate divergence from upstream, in `data/srd/classes.json`: the Guardian's *Unstoppable* was split across two `classFeatures` entries, the second of which carried the lead-in sentence "While Unstoppable, you gain the following benefits:" in its `name` field rather than its description. Anywhere feature names are listed on their own — the printable sheet's summary strip, for one — that sentence turned up as if it were the name of a second feature. The two entries are merged here into one, with the lead-in as a paragraph before the list it introduces. It's the only feature in the whole dataset whose name is a sentence, so re-exporting from upstream means re-applying this.
+A record's id says which edition it came from — `srd_2_0_domain_card_vitality`. Characters follow the editions you have loaded: turn one off and the ids a character stored are re-pointed at whatever is still there, so nobody loses a class or a weapon by changing the setting.
+
+### What was corrected
+
+The upstream dataset labelled the Hope & Fear classes `the_void`, after Darrington Press's **playtest** imprint. Playtest material is revised before it reaches a book, and this content was: the Brawler's Hope feature is *Square Up* in SRD 2.0 and *Staggering Strike* in the playtest, which is a different move rather than a rename. `data/srd_2_0/` is transcribed from the published SRD instead, and no playtest record is included. (The Void's actual playtest content is a separate, optional source.)
+
+Thirty-six other differences from the published text were fixed while checking every record against both editions, five of which changed what happens at the table — among them the Buckler's Evasion bonus (Armor **Score**, not Armor Slots), the Primer Shard's missing "with your primary weapon", and two consumables whose digits had been mangled by a bad PDF extraction (`(d20` for `4d20`). Sixteen of the eighteen SRD 1.0 ancestry descriptions had been paraphrased rather than transcribed, and now carry the SRD's own words.
+
+One further divergence, in both `classes.json` files: the Guardian's *Unstoppable* was split across two `classFeatures` entries, the second of which carried the lead-in sentence "While Unstoppable, you gain the following benefits:" in its `name` field rather than its description. Anywhere feature names are listed on their own — the printable sheet's summary strip, for one — that sentence turned up as if it were the name of a second feature. The two entries are merged here into one, with the lead-in as a paragraph before the list it introduces.
 
 ## License
 
-The code in this repository is MIT-licensed (see `LICENSE`). The SRD content in `data/srd/` is © Critical Role, LLC., used under the Darrington Press Community Gaming License — the notice that licence asks for, along with what this project changed and what it deliberately leaves out, is in [`NOTICE.md`](NOTICE.md). This is an unofficial, fan-made tool, neither affiliated with nor endorsed by Darrington Press or Critical Role.
+The code in this repository is MIT-licensed (see `LICENSE`). The SRD content in `data/srd_1_0/` and `data/srd_2_0/` is © Critical Role, LLC., used under the Darrington Press Community Gaming License — the notice that licence asks for, along with what this project changed and what it deliberately leaves out, is in [`NOTICE.md`](NOTICE.md). This is an unofficial, fan-made tool, neither affiliated with nor endorsed by Darrington Press or Critical Role.

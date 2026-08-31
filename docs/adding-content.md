@@ -1,11 +1,12 @@
 # Adding a content source
 
-This builder ships the Daggerheart SRD in `data/srd/`. It can load any number of other bodies of
+This builder ships the Daggerheart SRD in `data/srd_1_0/` and `data/srd_2_0/`, one folder per
+edition. It can load any number of other bodies of
 content beside it — a homebrew class, a supplement you own, a single revised card — with **no code
 changes at all**. If adding content makes you want to edit a `.js` file, something has gone wrong;
 say so rather than working around it.
 
-Everything here is the format. Every example below is drawn from `data/srd/`, which is the one body
+Everything here is the format. Every example below is drawn from `data/srd_2_0/`, which is the one body
 of content this repository is allowed to carry: the DPCGL grants re-use of the SRD and nothing else.
 Whatever you add is yours, stays on your disk, and is gitignored — see §10.
 
@@ -22,7 +23,7 @@ panel, and in the path to that source's card art. It must match `^[A-Za-z0-9][A-
 names that could climb out of `data/` are dropped rather than escaped, because the name goes
 straight into a fetch URL.
 
-Everything under `data/` except `data/srd/` is gitignored, deliberately.
+Everything under `data/` except the two SRD folders is gitignored, deliberately.
 
 ## 2. Name it in a manifest
 
@@ -153,9 +154,10 @@ Communities add `"personalities": [{ "en-US": "Meticulous" }, …]`. **Required:
 
 ### transformations.json
 
-The one record kind with **nothing in `data/srd/` to copy**: the SRD has no transformations, so
-this file only ever exists in a source of your own. A transformation is a permanent change to what
-a character *is*, granting a benefit and a drawback together.
+Long the one record kind with nothing in the SRD to copy — **SRD 2.0 has six**, and
+`data/srd_2_0/transformations.json` ships them, so there is now a worked example beside this one.
+A transformation is a permanent change to what a character *is*, granting a benefit and a drawback
+together.
 
 ```json
 {
@@ -570,7 +572,7 @@ Your folder isn't in git, and no script rebuilds it. Card art is disposable — 
 book you own in a couple of minutes — but the JSON is transcription work. If you lose it you re-do
 it. Keep your own copy if that matters to you.
 
-This is also why nothing outside `data/srd/` may be committed here, and why no file in this
+This is also why nothing outside the two SRD folders may be committed here, and why no file in this
 repository — code, comment or test — should quote content that isn't the SRD's.
 
 ## 11. When your content becomes official

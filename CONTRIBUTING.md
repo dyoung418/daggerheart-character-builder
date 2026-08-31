@@ -77,7 +77,7 @@ Other things the code already does, worth keeping:
 
 ## Game data and art
 
-`data/srd/*.json` is the Daggerheart SRD under the DPCGL — see [`NOTICE.md`](NOTICE.md). (Upstream
+`data/srd_1_0/*.json` and `data/srd_2_0/*.json` are the Daggerheart SRD under the DPCGL — see [`NOTICE.md`](NOTICE.md). (Upstream
 keeps these at `data/*.json`; this fork moved them down one level so other content sources can sit
 beside them — see "Adding your own content" in the README.) It is a
 re-export of [`daggersearch/daggerheart-data`](https://github.com/daggersearch/daggerheart-data),
