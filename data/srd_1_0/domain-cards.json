@@ -2,7 +2,7 @@
  {
   "id": "srd_1_0_domain_card_a_soldiers_bond",
   "name": {
-   "en-US": "A Soldier's Bond"
+   "en-US": "A Soldier’s Bond"
   },
   "domain": "BLADE",
   "type": "ABILITY",
@@ -13,7 +13,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "Once per long rest, when you compliment someone or ask them about something they're good at, you can both gain 3 Hope."
+       "en-US": "Once per long rest, when you compliment someone or ask them about something they’re good at, you can both gain 3 Hope."
       }
      }
     ]
@@ -107,7 +107,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "While you're wearing armor, gain a +1 bonus to your Armor Score."
+       "en-US": "While you’re wearing armor, gain a +1 bonus to your Armor Score."
       }
      },
      {
@@ -133,12 +133,12 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "Once per long rest, mark a Stress to create a projected copy of yourself that can appear anywhere you've been before."
+       "en-US": "Once per long rest, mark a Stress to create a projected copy of yourself that can appear anywhere you’ve been before."
       }
      },
      {
       "paragraph": {
-       "en-US": "You can see and hear through the projection as though it were you and affect the world as though you were there. A creature investigating the projection can tell it's of magical origin. This effect lasts until your next rest or your projection takes any damage."
+       "en-US": "You can see and hear through the projection as though it were you and affect the world as though you were there. A creature investigating the projection can tell it’s of magical origin. This effect lasts until your next rest or your projection takes any damage."
       }
      }
     ]
@@ -159,7 +159,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "Make a Spellcast Roll against a target within Close range. On a success, roll a number of d20s equal to your Spellcast trait. The target must make a reaction roll with a Difficulty equal to your highest result. On a success, the target must mark a Stress but isn't banished. Once per rest on a failure, they are banished from this realm."
+       "en-US": "Make a Spellcast Roll against a target within Close range. On a success, roll a number of d20s equal to your Spellcast trait. The target must make a reaction roll with a Difficulty equal to your highest result. On a success, the target must mark a Stress but isn’t banished. Once per rest on a failure, they are banished from this realm."
       }
      },
      {
@@ -222,7 +222,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "Once per long rest, while you're charging into danger, you can muster a rousing call that inspires your allies. All allies who can hear you each clear a Stress and gain a Hope. Additionally, your allies gain advantage on attack rolls until you or an ally rolls a failure with Fear."
+       "en-US": "Once per long rest, while you’re charging into danger, you can muster a rousing call that inspires your allies. All allies who can hear you each clear a Stress and gain a Hope. Additionally, your allies gain advantage on attack rolls until you or an ally rolls a failure with Fear."
       }
      }
     ]
@@ -439,19 +439,19 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "Make a Spellcast Roll against a target within Melee range. On a success, they're knocked back to Far range and take d10+2 magic damage using your Proficiency."
+       "en-US": "Make a Spellcast Roll against a target within Melee range. On a success, they’re knocked back to Far range and take d10+2 magic damage using your Proficiency."
       }
      }
     ]
    },
    {
     "name": {
-     "en-US": "Tava's Armor"
+     "en-US": "Tava’s Armor"
     },
     "description": [
      {
       "paragraph": {
-       "en-US": "Spend a Hope to give a target you can touch a +1 bonus to their Armor Score until their next rest or you cast Tava's Armor again."
+       "en-US": "Spend a Hope to give a target you can touch a +1 bonus to their Armor Score until their next rest or you cast Tava’s Armor again."
       }
      }
     ]
@@ -463,7 +463,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "Make a Spellcast Roll (12) to summon a large ice spike within Far range. If you use it as a weapon, make the Spellcast Roll against the target's Difficulty instead. On a success, deal d6 physical damage using your Proficiency."
+       "en-US": "Make a Spellcast Roll (12) to summon a large ice spike within Far range. If you use it as a weapon, make the Spellcast Roll against the target’s Difficulty instead. On a success, deal d6 physical damage using your Proficiency."
       }
      }
     ]
@@ -583,7 +583,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "Make a Spellcast Roll (14). Once per long rest on a success, open a gateway to a location in another dimension or plane of existence you've been to before. This gateway lasts until your next rest."
+       "en-US": "Make a Spellcast Roll (14). Once per long rest on a success, open a gateway to a location in another dimension or plane of existence you’ve been to before. This gateway lasts until your next rest."
       }
      }
     ]
@@ -607,7 +607,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "Make a Spellcast Roll against a target within Very Close range. On a success, they're Asleep until they take damage or the GM spends a Fear on their turn to clear this condition."
+       "en-US": "Make a Spellcast Roll against a target within Very Close range. On a success, they’re Asleep until they take damage or the GM spends a Fear on their turn to clear this condition."
       }
      }
     ]
@@ -703,7 +703,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "Make a Spellcast Roll against a target within Far range. On a success, they're temporarily Restrained and must mark a Stress. If you target a flying creature, this spell grounds and temporarily Restrains them."
+       "en-US": "Make a Spellcast Roll against a target within Far range. On a success, they’re temporarily Restrained and must mark a Stress. If you target a flying creature, this spell grounds and temporarily Restrains them."
       }
      }
     ]
@@ -751,7 +751,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "Once per long rest, make a Spellcast Roll against a target within Close range. On a success, they become permanently Vulnerable. They can't clear this condition by any means."
+       "en-US": "Once per long rest, make a Spellcast Roll against a target within Close range. On a success, they become permanently Vulnerable. They can’t clear this condition by any means."
       }
      }
     ]
@@ -871,7 +871,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "Make a Spellcast Roll (15) on an object you're touching that can close (such as a lock, chest, or box). Once per rest on a success, you can lock the object so it can only be opened by creatures of your choice. Someone with access to magic and an hour of time to study the spell can break it."
+       "en-US": "Make a Spellcast Roll (15) on an object you’re touching that can close (such as a lock, chest, or box). Once per rest on a success, you can lock the object so it can only be opened by creatures of your choice. Someone with access to magic and an hour of time to study the spell can break it."
       }
      }
     ]
@@ -919,7 +919,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "Make a Spellcast Roll against a target within Far range. On a success, peer into the target's mind and ask the GM a question. The GM describes any memories the target has pertaining to the answer."
+       "en-US": "Make a Spellcast Roll against a target within Far range. On a success, peer into the target’s mind and ask the GM a question. The GM describes any memories the target has pertaining to the answer."
       }
      }
     ]
@@ -1061,7 +1061,7 @@
  {
   "id": "srd_1_0_domain_card_champions_edge",
   "name": {
-   "en-US": "Champion's Edge"
+   "en-US": "Champion’s Edge"
   },
   "domain": "BLADE",
   "type": "ABILITY",
@@ -1090,7 +1090,7 @@
      },
      {
       "paragraph": {
-       "en-US": "You can't choose the same option more than once."
+       "en-US": "You can’t choose the same option more than once."
       }
      }
     ]
@@ -1111,7 +1111,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "When you position yourself behind a creature who's about your size, you can mark a Stress to pull them into a chokehold, making them temporarily Vulnerable."
+       "en-US": "When you position yourself behind a creature who’s about your size, you can mark a Stress to pull them into a chokehold, making them temporarily Vulnerable."
       }
      },
      {
@@ -1163,7 +1163,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "When you make a successful Spellcast Roll to cast a different spell, you can spend a Hope to become Cloaked. While Cloaked, you remain unseen if you are stationary when an adversary moves to where they would normally see you. When you move into or within an adversary's line of sight or make an attack, you are no longer Cloaked."
+       "en-US": "When you make a successful Spellcast Roll to cast a different spell, you can spend a Hope to become Cloaked. While Cloaked, you remain unseen if you are stationary when an adversary moves to where they would normally see you. When you move into or within an adversary’s line of sight or make an attack, you are no longer Cloaked."
       }
      }
     ]
@@ -1283,7 +1283,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "Once per long rest, this card can mimic the features of another domain card of level 8 or lower in another player's loadout. Spend Hope equal to half the card's level to gain access to the feature. It lasts until your next rest or they place the card in their vault."
+       "en-US": "Once per long rest, this card can mimic the features of another domain card of level 8 or lower in another player’s loadout. Spend Hope equal to half the card’s level to gain access to the feature. It lasts until your next rest or they place the card in their vault."
       }
      }
     ]
@@ -1388,7 +1388,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "You can speak into the mind of any person with whom you've made physical contact. Once you've opened a channel with them, they can speak back into your mind. Additionally, you can mark a Stress to make a Spellcast Roll against them. On a success, you can ask the GM one of the following questions and receive an answer:"
+       "en-US": "You can speak into the mind of any person with whom you’ve made physical contact. Once you’ve opened a channel with them, they can speak back into your mind. Additionally, you can mark a Stress to make a Spellcast Roll against them. On a success, you can ask the GM one of the following questions and receive an answer:"
       }
      },
      {
@@ -1485,12 +1485,12 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "Spend 3 Hope to run a straight path through the battlefield to a point within Far range, making an attack against all adversaries within your weapon's range along that path. Choose the order in which you deal damage to the targets you succeeded against. For the first, roll your weapon damage with a +1 bonus to your Proficiency. Then remove a die from your damage roll and deal the remaining damage to the next target. Continue to remove a die for each subsequent target until you have no more damage dice or adversaries."
+       "en-US": "Spend 3 Hope to run a straight path through the battlefield to a point within Far range, making an attack against all adversaries within your weapon’s range along that path. Choose the order in which you deal damage to the targets you succeeded against. For the first, roll your weapon damage with a +1 bonus to your Proficiency. Then remove a die from your damage roll and deal the remaining damage to the next target. Continue to remove a die for each subsequent target until you have no more damage dice or adversaries."
       }
      },
      {
       "paragraph": {
-       "en-US": "You can't target the same adversary more than once per attack."
+       "en-US": "You can’t target the same adversary more than once per attack."
       }
      }
     ]
@@ -1558,7 +1558,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "Make a Spellcast Roll (18). Once per long rest on a success, the GM tells you which adversaries within Far range have a Difficulty of 18 or lower. Mark a Stress for each one you wish to hit with this spell. They are killed and can't come back to life by any means."
+       "en-US": "Make a Spellcast Roll (18). Once per long rest on a success, the GM tells you which adversaries within Far range have a Difficulty of 18 or lower. Mark a Stress for each one you wish to hit with this spell. They are killed and can’t come back to life by any means."
       }
      }
     ]
@@ -1600,7 +1600,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "Make a Spellcast Roll (16). Once per rest on a success, all targets within Very Far range who aren't flying must make a Reaction Roll (18). Targets who fail take 3d10+8 physical damage and are temporarily Vulnerable. Targets who succeed take half damage."
+       "en-US": "Make a Spellcast Roll (16). Once per rest on a success, all targets within Very Far range who aren’t flying must make a Reaction Roll (18). Targets who fail take 3d10+8 physical damage and are temporarily Vulnerable. Targets who succeed take half damage."
       }
      },
      {
@@ -1699,7 +1699,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "Make a Spellcast Roll against a target within Close range. On a success, they become temporarily Enraptured. While Enraptured, a target's attention is fixed on you, narrowing their field of view and drowning out any sound but your voice. Once per rest on a success, you can mark a Stress to force the Enraptured target to mark a Stress as well."
+       "en-US": "Make a Spellcast Roll against a target within Close range. On a success, they become temporarily Enraptured. While Enraptured, a target’s attention is fixed on you, narrowing their field of view and drowning out any sound but your voice. Once per rest on a success, you can mark a Stress to force the Enraptured target to mark a Stress as well."
       }
      }
     ]
@@ -1798,7 +1798,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "You can infuse a corpse with a moment of life to speak with it. Make a Spellcast Roll (13). On a success with Hope, the corpse answers up to three questions. On a success with Fear, the corpse answers one question. The corpse answers truthfully, but it can't impart information it didn't know in life. On a failure, or once the corpse has finished answering your questions, the body turns to dust."
+       "en-US": "You can infuse a corpse with a moment of life to speak with it. Make a Spellcast Roll (13). On a success with Hope, the corpse answers up to three questions. On a success with Fear, the corpse answers one question. The corpse answers truthfully, but it can’t impart information it didn’t know in life. On a failure, or once the corpse has finished answering your questions, the body turns to dust."
       }
      }
     ]
@@ -1840,7 +1840,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "Spend a Hope to create a single, small floating orb that you can move anywhere within Very Far range. While this spell is active, you can see through the orb as though you're looking out from its position. You can transition between using your own senses and seeing through the orb freely. If the orb takes damage or moves out of range, the spell ends."
+       "en-US": "Spend a Hope to create a single, small floating orb that you can move anywhere within Very Far range. While this spell is active, you can see through the orb as though you’re looking out from its position. You can transition between using your own senses and seeing through the orb freely. If the orb takes damage or moves out of range, the spell ends."
       }
      }
     ]
@@ -1916,13 +1916,13 @@
         "en-US": "When you deal enough damage to defeat a creature within Close range, you absorb them and clear an Armor Slot."
        },
        {
-        "en-US": "You can't be Restrained."
+        "en-US": "You can’t be Restrained."
        }
       ]
      },
      {
       "paragraph": {
-       "en-US": "Before you make an action roll, you must spend a Hope. If you can't, you revert to your normal form."
+       "en-US": "Before you make an action roll, you must spend a Hope. If you can’t, you revert to your normal form."
       }
      }
     ]
@@ -2031,7 +2031,7 @@
      },
      {
       "paragraph": {
-       "en-US": "While Frenzied, you can't use Armor Slots, and you gain a +10 bonus to your damage rolls and a +8 bonus to your Severe damage threshold."
+       "en-US": "While Frenzied, you can’t use Armor Slots, and you gain a +10 bonus to your damage rolls and a +8 bonus to your Severe damage threshold."
       }
      }
     ]
@@ -2094,7 +2094,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "When you're tracking a specific creature or group of creatures based on signs of their passage, you can spend any number of Hope and ask the GM that many questions from the following list."
+       "en-US": "When you’re tracking a specific creature or group of creatures based on signs of their passage, you can spend any number of Hope and ask the GM that many questions from the following list."
       }
      },
      {
@@ -2115,7 +2115,7 @@
      },
      {
       "paragraph": {
-       "en-US": "When you encounter creatures you've tracked in this way, gain a +1 bonus to your Evasion against them."
+       "en-US": "When you encounter creatures you’ve tracked in this way, gain a +1 bonus to your Evasion against them."
       }
      }
     ]
@@ -2157,7 +2157,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "Make a Spellcast Roll against a target within Very Close range. On a success, spend a Hope to conjure a dark glyph upon their body that exposes their weak points, temporarily reducing the target's Difficulty by a value equal to your Knowledge (minimum 1)."
+       "en-US": "Make a Spellcast Roll against a target within Very Close range. On a success, spend a Hope to conjure a dark glyph upon their body that exposes their weak points, temporarily reducing the target’s Difficulty by a value equal to your Knowledge (minimum 1)."
       }
      }
     ]
@@ -2303,7 +2303,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "Make a Spellcast Roll (13) and target a creature other than yourself within Melee range. On a success, mark a Stress to clear 2 Hit Points or 2 Stress on the target. On a failure, mark a Stress to clear a Hit Point or a Stress on the target. You can't heal the same target again until your next long rest."
+       "en-US": "Make a Spellcast Roll (13) and target a creature other than yourself within Melee range. On a success, mark a Stress to clear 2 Hit Points or 2 Stress on the target. On a failure, mark a Stress to clear a Hit Point or a Stress on the target. You can’t heal the same target again until your next long rest."
       }
      }
     ]
@@ -2345,7 +2345,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "Describe the defensive stance you take and spend a Hope. If an adversary moves within Very Close range, they're pulled into Melee range and Restrained."
+       "en-US": "Describe the defensive stance you take and spend a Hope. If an adversary moves within Very Close range, they’re pulled into Melee range and Restrained."
       }
      },
      {
@@ -2376,7 +2376,7 @@
      },
      {
       "paragraph": {
-       "en-US": "The target and anything within the area is Silenced until the GM spends a Fear on their turn to clear this condition, you cast Hush again, or you take Major damage. While Silenced, they can't make noise and can't cast spells."
+       "en-US": "The target and anything within the area is Silenced until the GM spends a Fear on their turn to clear this condition, you cast Hush again, or you take Major damage. While Silenced, they can’t make noise and can’t cast spells."
       }
      }
     ]
@@ -2397,7 +2397,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "Make a Spellcast Roll against all adversaries in front of you within Close range. Once per rest on a success, create an illusion of flashing colors and lights that temporarily Stuns targets you succeed against and forces them to mark a Stress. While Stunned, they can't use reactions and can't take any other actions until they clear this condition."
+       "en-US": "Make a Spellcast Roll against all adversaries in front of you within Close range. Once per rest on a success, create an illusion of flashing colors and lights that temporarily Stuns targets you succeed against and forces them to mark a Stress. While Stunned, they can’t use reactions and can’t take any other actions until they clear this condition."
       }
      }
     ]
@@ -2439,7 +2439,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "When you're targeted by an attack made from beyond Melee range, you can mark a Stress to roll a d4 and gain a bonus to your Evasion equal to the result against the attack."
+       "en-US": "When you’re targeted by an attack made from beyond Melee range, you can mark a Stress to roll a d4 and gain a bonus to your Evasion equal to the result against the attack."
       }
      }
     ]
@@ -2541,7 +2541,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "Make a Spellcast Roll (10). On a success, mark a Stress and choose yourself or an ally within Melee range to become Invisible. An Invisible creature can't be seen except through magical means and attack rolls against them are made with disadvantage. Place a number of tokens on this card equal to your Spellcast trait. When the Invisible creature takes an action, spend a token from this card. After the action that spends the last token is resolved, the effect ends."
+       "en-US": "Make a Spellcast Roll (10). On a success, mark a Stress and choose yourself or an ally within Melee range to become Invisible. An Invisible creature can’t be seen except through magical means and attack rolls against them are made with disadvantage. Place a number of tokens on this card equal to your Spellcast trait. When the Invisible creature takes an action, spend a token from this card. After the action that spends the last token is resolved, the effect ends."
       }
      },
      {
@@ -2588,7 +2588,7 @@
      },
      {
       "paragraph": {
-       "en-US": "Additionally on a success, you can mark a Stress to remove a Fear from the GM's Fear Pool."
+       "en-US": "Additionally on a success, you can mark a Stress to remove a Fear from the GM’s Fear Pool."
       }
      }
     ]
@@ -2698,7 +2698,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "When you have a few minutes of silence to focus, you can mark a Stress to change the appearance of all willing creatures within Close range. Their new forms must share a general body structure and size, and can be somebody or something you've seen before or entirely fabricated. A disguised creature has advantage on Presence Rolls to avoid scrutiny."
+       "en-US": "When you have a few minutes of silence to focus, you can mark a Stress to change the appearance of all willing creatures within Close range. Their new forms must share a general body structure and size, and can be somebody or something you’ve seen before or entirely fabricated. A disguised creature has advantage on Presence Rolls to avoid scrutiny."
       }
      },
      {
@@ -2724,7 +2724,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "Make a Spellcast Roll against all targets within Far range. Targets you succeed against become temporarily Enraptured. While Enraptured, a target's attention is fixed on you, narrowing their field of view and drowning out any sound but your voice. Mark a Stress to force all Enraptured targets to mark a Stress, ending this spell."
+       "en-US": "Make a Spellcast Roll against all targets within Far range. Targets you succeed against become temporarily Enraptured. While Enraptured, a target’s attention is fixed on you, narrowing their field of view and drowning out any sound but your voice. Mark a Stress to force all Enraptured targets to mark a Stress, ending this spell."
       }
      }
     ]
@@ -2766,7 +2766,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "You lay your hands upon a creature and channel healing magic to close their wounds. When you can take a few minutes to focus on the target you're helping, you can spend 2 Hope to clear a Hit Point or a Stress on them."
+       "en-US": "You lay your hands upon a creature and channel healing magic to close their wounds. When you can take a few minutes to focus on the target you’re helping, you can spend 2 Hope to clear a Hit Point or a Stress on them."
       }
      },
      {
@@ -2864,7 +2864,7 @@
  {
   "id": "srd_1_0_domain_card_natures_tongue",
   "name": {
-   "en-US": "Nature's Tongue"
+   "en-US": "Nature’s Tongue"
   },
   "domain": "SAGE",
   "type": "ABILITY",
@@ -2875,7 +2875,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "You can speak the language of the natural world. When you want to speak to the plants and animals around you, make an Instinct Roll (12). On a success, they'll give you the information they know. On a roll with Fear, their knowledge might be limited or come at a cost."
+       "en-US": "You can speak the language of the natural world. When you want to speak to the plants and animals around you, make an Instinct Roll (12). On a success, they’ll give you the information they know. On a roll with Fear, their knowledge might be limited or come at a cost."
       }
      },
      {
@@ -2922,7 +2922,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "Once per long rest, choose any targets within Very Close range to perceive you as a nightmarish horror. The targets must succeed on a Reaction Roll (16) or become temporarily Horrified. While Horrified, they're Vulnerable. Steal a number of Fear from the GM equal to the number of targets that are Horrified (up to the number of Fear in the GM's pool). Roll a number of d6s equal to the number of stolen Fear and deal the total damage to each Horrified target. Discard the stolen Fear."
+       "en-US": "Once per long rest, choose any targets within Very Close range to perceive you as a nightmarish horror. The targets must succeed on a Reaction Roll (16) or become temporarily Horrified. While Horrified, they’re Vulnerable. Steal a number of Fear from the GM equal to the number of targets that are Horrified (up to the number of Fear in the GM’s pool). Roll a number of d6s equal to the number of stolen Fear and deal the total damage to each Horrified target. Discard the stolen Fear."
       }
      }
     ]
@@ -2964,12 +2964,12 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "People know who you are and what you've done, and they treat you differently because of it. When you leverage your notoriety to get what you want, you can mark a Stress before you roll to gain a +10 bonus to the result. Your food and drinks are always free wherever you go, and everything else you buy is reduced in price by one bag of gold (to a minimum of one handful)."
+       "en-US": "People know who you are and what you’ve done, and they treat you differently because of it. When you leverage your notoriety to get what you want, you can mark a Stress before you roll to gain a +10 bonus to the result. Your food and drinks are always free wherever you go, and everything else you buy is reduced in price by one bag of gold (to a minimum of one handful)."
       }
      },
      {
       "paragraph": {
-       "en-US": "This card doesn't count against your loadout's domain card maximum of 5 and can't be placed in your vault."
+       "en-US": "This card doesn’t count against your loadout’s domain card maximum of 5 and can’t be placed in your vault."
       }
      }
     ]
@@ -2990,7 +2990,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "When you have 2 or fewer Hit Points unmarked, you don't take Minor damage."
+       "en-US": "When you have 2 or fewer Hit Points unmarked, you don’t take Minor damage."
       }
      }
     ]
@@ -3011,12 +3011,12 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "When you successfully make an attack with your weapon, you never deal damage beneath a target's Major damage threshold (the target always marks a minimum of 2 Hit Points)."
+       "en-US": "When you successfully make an attack with your weapon, you never deal damage beneath a target’s Major damage threshold (the target always marks a minimum of 2 Hit Points)."
       }
      },
      {
       "paragraph": {
-       "en-US": "Additionally, when a creature within your weapon's range deals damage to an ally with an attack that doesn't include you, you can mark a Stress to force them to make a Reaction Roll (15). On a failure, the target must mark a Hit Point."
+       "en-US": "Additionally, when a creature within your weapon’s range deals damage to an ally with an attack that doesn’t include you, you can mark a Stress to force them to make a Reaction Roll (15). On a failure, the target must mark a Hit Point."
       }
      }
     ]
@@ -3063,7 +3063,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "Spend a Hope to activate Phantom Retreat where you're currently standing. Spend another Hope at any time before your next rest to disappear from where you are and reappear where you were standing when you activated Phantom Retreat. This spell ends after you reappear."
+       "en-US": "Spend a Hope to activate Phantom Retreat where you’re currently standing. Spend another Hope at any time before your next rest to disappear from where you are and reappear where you were standing when you activated Phantom Retreat. This spell ends after you reappear."
       }
      }
     ]
@@ -3230,7 +3230,7 @@
  {
   "id": "srd_1_0_domain_card_reapers_strike",
   "name": {
-   "en-US": "Reaper's Strike"
+   "en-US": "Reaper’s Strike"
   },
   "domain": "BLADE",
   "type": "ABILITY",
@@ -3408,7 +3408,7 @@
      },
      {
       "paragraph": {
-       "en-US": "On a failure, you can't cast Resurrection again for a week."
+       "en-US": "On a failure, you can’t cast Resurrection again for a week."
       }
      }
     ]
@@ -3502,12 +3502,12 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "You have a deeply personal trinket that can be infused with protective magic and held as a ward by you or an ally. Describe what it is and why it's important to you. The ward's holder can spend a Hope to reduce incoming damage by 1d8."
+       "en-US": "You have a deeply personal trinket that can be infused with protective magic and held as a ward by you or an ally. Describe what it is and why it’s important to you. The ward’s holder can spend a Hope to reduce incoming damage by 1d8."
       }
      },
      {
       "paragraph": {
-       "en-US": "If the Ward Die result is 8, the ward's power ends after it reduces damage this turn. It can be recharged for free on your next rest."
+       "en-US": "If the Ward Die result is 8, the ward’s power ends after it reduces damage this turn. It can be recharged for free on your next rest."
       }
      }
     ]
@@ -3560,7 +3560,7 @@
      {
       "list": [
        {
-        "en-US": "While you're in a natural environment, you gain a +2 bonus to your Spellcast Rolls."
+        "en-US": "While you’re in a natural environment, you gain a +2 bonus to your Spellcast Rolls."
        },
        {
         "en-US": "Once per rest, you can double your Agility or Instinct when making a roll that uses that trait. You must choose to do this before you roll."
@@ -3585,7 +3585,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "Make a Spellcast Roll (16). On a success, mark any number of Stress to target a line of allies within Far range. You can clear Hit Points on the targets equal to the number of Stress marked, divided among them however you'd like."
+       "en-US": "Make a Spellcast Roll (16). On a success, mark any number of Stress to target a line of allies within Far range. You can clear Hit Points on the targets equal to the number of Stress marked, divided among them however you’d like."
       }
      }
     ]
@@ -3690,7 +3690,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "Your prowess is enhanced under the cover of shadow. While you're shrouded in low light or darkness, you gain a +1 bonus to your Evasion and make attack rolls with advantage."
+       "en-US": "Your prowess is enhanced under the cover of shadow. While you’re shrouded in low light or darkness, you gain a +1 bonus to your Evasion and make attack rolls with advantage."
       }
      }
     ]
@@ -3711,12 +3711,12 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "Spend a Hope to shape a section of natural material you're touching (such as stone, ice, or wood) to suit your purpose. The area of the material can be no larger than you. For example, you can form a rudimentary tool or create a door."
+       "en-US": "Spend a Hope to shape a section of natural material you’re touching (such as stone, ice, or wood) to suit your purpose. The area of the material can be no larger than you. For example, you can form a rudimentary tool or create a door."
       }
      },
      {
       "paragraph": {
-       "en-US": "You can only affect the material within Close range of where you're touching it."
+       "en-US": "You can only affect the material within Close range of where you’re touching it."
       }
      }
     ]
@@ -3826,7 +3826,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "Name and describe your signature combat move. Once per rest, when you perform this signature move as part of an action you're taking, you can roll a d20 as your Hope Die. On a success, clear a Stress."
+       "en-US": "Name and describe your signature combat move. Once per rest, when you perform this signature move as part of an action you’re taking, you can roll a d20 as your Hope Die. On a success, clear a Stress."
       }
      }
     ]
@@ -3847,7 +3847,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "Once per rest, spend 3 Hope to charge your powerful smite. When you next successfully attack with a weapon, double the result of your damage roll. This attack deals magic damage regardless of the weapon's damage type."
+       "en-US": "Once per rest, spend 3 Hope to charge your powerful smite. When you next successfully attack with a weapon, double the result of your damage roll. This attack deals magic damage regardless of the weapon’s damage type."
       }
      }
     ]
@@ -3889,7 +3889,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "Mark a Stress to become Spectral until you make an action roll targeting another creature. While Spectral, you're immune to physical damage and can float and pass through solid objects. Other creatures can still see you while you're in this form."
+       "en-US": "Mark a Stress to become Spectral until you make an action roll targeting another creature. While Spectral, you’re immune to physical damage and can float and pass through solid objects. Other creatures can still see you while you’re in this form."
       }
      }
     ]
@@ -3967,7 +3967,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "Spend a Hope and make an attack against all adversaries within your weapon's range. Once per long rest, on a success against any targets, roll your weapon's damage and distribute that damage however you wish between the targets you succeeded against. Before you deal damage to each target, roll an additional damage die and add its result to the damage you deal to them."
+       "en-US": "Spend a Hope and make an attack against all adversaries within your weapon’s range. Once per long rest, on a success against any targets, roll your weapon's damage and distribute that damage however you wish between the targets you succeeded against. Before you deal damage to each target, roll an additional damage die and add its result to the damage you deal to them."
       }
      }
     ]
@@ -4058,7 +4058,7 @@
      },
      {
       "paragraph": {
-       "en-US": "Targets who succeed take 3d20+3 magic damage. Targets who fail take 4d20+5 magic damage and are temporarily Stunned. While Stunned, they can't use reactions and can't take any other actions until they clear this condition."
+       "en-US": "Targets who succeed take 3d20+3 magic damage. Targets who fail take 4d20+5 magic damage and are temporarily Stunned. While Stunned, they can’t use reactions and can’t take any other actions until they clear this condition."
       }
      }
     ]
@@ -4100,7 +4100,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "When an attack made against you fails, clear a Stress. If you can't clear a Stress, gain a Hope."
+       "en-US": "When an attack made against you fails, clear a Stress. If you can’t clear a Stress, gain a Hope."
       }
      }
     ]
@@ -4147,7 +4147,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "Make a Spellcast Roll against a target within Far range. On a success, you can use your mind to move them anywhere within Far range of their original position. You can throw the lifted target as an attack by making an additional Spellcast Roll against the second target you're trying to attack. On a success, deal d12+4 physical damage to the second target using your Proficiency. This spell then ends."
+       "en-US": "Make a Spellcast Roll against a target within Far range. On a success, you can use your mind to move them anywhere within Far range of their original position. You can throw the lifted target as an attack by making an additional Spellcast Roll against the second target you’re trying to attack. On a success, deal d12+4 physical damage to the second target using your Proficiency. This spell then ends."
       }
      }
     ]
@@ -4168,7 +4168,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "Once per long rest, you can instantly teleport yourself and any number of willing targets within Close range to a place you've been before. Choose one of the following options, then make a Spellcast Roll (16):"
+       "en-US": "Once per long rest, you can instantly teleport yourself and any number of willing targets within Close range to a place you’ve been before. Choose one of the following options, then make a Spellcast Roll (16):"
       }
      },
      {
@@ -4177,13 +4177,13 @@
         "en-US": "If you know the place very well, gain a +3 bonus."
        },
        {
-        "en-US": "If you've visited the place frequently, gain a +1 bonus."
+        "en-US": "If you’ve visited the place frequently, gain a +1 bonus."
        },
        {
-        "en-US": "If you've visited the place infrequently, gain no modifier."
+        "en-US": "If you’ve visited the place infrequently, gain no modifier."
        },
        {
-        "en-US": "If you've only been there once, gain a -2 penalty."
+        "en-US": "If you’ve only been there once, gain a -2 penalty."
        }
       ]
      },
@@ -4210,7 +4210,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "Make a Spellcast Roll against a target within Very Close range. On a success, they can't lie to you while they remain within Close range, but they are not compelled to speak. If you ask them a question and they refuse to answer, they must mark a Stress and the effect ends. The target is typically unaware this spell has been cast on them until it causes them to utter the truth."
+       "en-US": "Make a Spellcast Roll against a target within Very Close range. On a success, they can’t lie to you while they remain within Close range, but they are not compelled to speak. If you ask them a question and they refuse to answer, they must mark a Stress and the effect ends. The target is typically unaware this spell has been cast on them until it causes them to utter the truth."
       }
      }
     ]
@@ -4240,7 +4240,7 @@
         "en-US": "Blizzard: Deal 2d20+8 magic damage and targets are temporarily Vulnerable."
        },
        {
-        "en-US": "Hurricane: Deal 3d10+10 magic damage and choose a direction the wind is blowing. Targets can't move against the wind."
+        "en-US": "Hurricane: Deal 3d10+10 magic damage and choose a direction the wind is blowing. Targets can’t move against the wind."
        },
        {
         "en-US": "Sandstorm: Deal 5d6+9 magic damage. Attacks made from beyond Melee range have disadvantage."
@@ -4265,7 +4265,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "Once per rest, spend a Hope to sprout thorns all over your body. When you do, place a number of tokens equal to your Spellcast trait on this card. When you take damage, you can spend any number of tokens to roll that number of d6s. Add the results together and reduce the incoming damage by that amount. If you're within Melee range of the attacker, deal that amount of damage back to them."
+       "en-US": "Once per rest, spend a Hope to sprout thorns all over your body. When you do, place a number of tokens equal to your Spellcast trait on this card. When you take damage, you can spend any number of tokens to roll that number of d6s. Add the results together and reduce the incoming damage by that amount. If you’re within Melee range of the attacker, deal that amount of damage back to them."
       }
      },
      {
@@ -4296,7 +4296,7 @@
      },
      {
       "paragraph": {
-       "en-US": "On a roll with Fear, the target might, at the GM's discretion, become aware that you're reading their thoughts."
+       "en-US": "On a roll with Fear, the target might, at the GM’s discretion, become aware that you’re reading their thoughts."
       }
      }
     ]
@@ -4317,7 +4317,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "Choose a target within Very Far range. You can see through their eyes and hear through their ears. You can transition between using your own senses or the target's freely until you cast another spell or until your next rest."
+       "en-US": "Choose a target within Very Far range. You can see through their eyes and hear through their ears. You can transition between using your own senses or the target’s freely until you cast another spell or until your next rest."
       }
      }
     ]
@@ -4406,7 +4406,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "Choose a target within Far range. When you succeed on an action roll against them that doesn't result in making a damage roll, place a token on this card. When you deal damage to this target, spend any number of tokens to add a d12 for each token spent to your damage roll. You can only hold Twilight Toll on one creature at a time."
+       "en-US": "Choose a target within Far range. When you succeed on an action roll against them that doesn’t result in making a damage roll, place a token on this card. When you deal damage to this target, spend any number of tokens to add a d12 for each token spent to your damage roll. You can only hold Twilight Toll on one creature at a time."
       }
      },
      {
@@ -4604,7 +4604,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "Make a Spellcast Roll (13). On a success, you can create a temporary curtain of darkness between two points within Far range. Only you can see through this darkness. You're considered Hidden to adversaries on the other side of the veil, and you have advantage on attacks you make through the darkness. The veil remains until you cast another spell."
+       "en-US": "Make a Spellcast Roll (13). On a success, you can create a temporary curtain of darkness between two points within Far range. Only you can see through this darkness. You’re considered Hidden to adversaries on the other side of the veil, and you have advantage on attacks you make through the darkness. The veil remains until you cast another spell."
       }
      }
     ]
@@ -4721,7 +4721,7 @@
      },
      {
       "paragraph": {
-       "en-US": "Additionally, you're emboldened in moments of duress. When all of your Stress slots are marked, you gain a +1 bonus to your Proficiency for damage rolls."
+       "en-US": "Additionally, you’re emboldened in moments of duress. When all of your Stress slots are marked, you gain a +1 bonus to your Proficiency for damage rolls."
       }
      }
     ]
@@ -4784,7 +4784,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "Make a Spellcast Roll (13). On a success, spend 2 Hope to grow a natural barricade in the shape of a dome that you and one ally can take cover within. While inside the dome, a creature can't be targeted by attacks and can't make attacks. Attacks made against the dome automatically succeed. The dome has a Major damage threshold of 15 and a Severe damage threshold of 30, and lasts until it marks 3 Hit Points. Place tokens on this card to represent marking Hit Points."
+       "en-US": "Make a Spellcast Roll (13). On a success, spend 2 Hope to grow a natural barricade in the shape of a dome that you and one ally can take cover within. While inside the dome, a creature can’t be targeted by attacks and can’t make attacks. Attacks made against the dome automatically succeed. The dome has a Major damage threshold of 15 and a Severe damage threshold of 30, and lasts until it marks 3 Hit Points. Place tokens on this card to represent marking Hit Points."
       }
      }
     ]
@@ -4810,7 +4810,7 @@
      },
      {
       "paragraph": {
-       "en-US": "While the Wild Surge Die is active, you add its value to every action roll you make. After you add its value to a roll, increase the Wild Surge Die's value by one. When the die's value would exceed 6 or you take a rest, this form drops and you must mark an additional Stress."
+       "en-US": "While the Wild Surge Die is active, you add its value to every action roll you make. After you add its value to a roll, increase the Wild Surge Die’s value by one. When the die’s value would exceed 6 or you take a rest, this form drops and you must mark an additional Stress."
       }
      }
     ]
@@ -4878,7 +4878,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "Make a Spellcast Roll (16). Once per long rest on a success, choose a point within Far range and create a visible zone of protection there for all allies within Very Close range of that point. When you do, place a d6 on this card with the 1 value facing up. When an ally in this zone takes damage, they reduce it by the die's value. You then increase the die's value by one. When the die's value would exceed 6, this effect ends."
+       "en-US": "Make a Spellcast Roll (16). Once per long rest on a success, choose a point within Far range and create a visible zone of protection there for all allies within Very Close range of that point. When you do, place a d6 on this card with the 1 value facing up. When an ally in this zone takes damage, they reduce it by the die’s value. You then increase the die’s value by one. When the die’s value would exceed 6, this effect ends."
       }
      }
     ]

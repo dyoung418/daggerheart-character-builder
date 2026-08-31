@@ -2662,7 +2662,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "This weapon's attack targets all adversaries in a line within range."
+       "en-US": "This weapon’s attack targets all adversaries in a line within range."
       }
      }
     ]
@@ -4753,7 +4753,7 @@
  {
   "id": "srd_1_0_weapon_ilmaris_rifle",
   "name": {
-   "en-US": "Ilmari's Rifle"
+   "en-US": "Ilmari’s Rifle"
   },
   "type": "PRIMARY_MAGIC",
   "tier": 3,

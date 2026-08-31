@@ -478,7 +478,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "You can't mark an Armor Slot to reduce magic damage."
+       "en-US": "You can’t mark an Armor Slot to reduce magic damage."
       }
      }
     ]
@@ -488,7 +488,7 @@
  {
   "id": "srd_1_0_armor_monetts_cloak",
   "name": {
-   "en-US": "Monett's Cloak"
+   "en-US": "Monett’s Cloak"
   },
   "tier": 3,
   "baseMajorThreshold": 16,
@@ -502,7 +502,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "You can't mark an Armor Slot to reduce physical damage."
+       "en-US": "You can’t mark an Armor Slot to reduce physical damage."
       }
      }
     ]

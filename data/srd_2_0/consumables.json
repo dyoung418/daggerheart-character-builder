@@ -429,7 +429,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "By touching this piece of parchment to another, you can perfectly copy the second parchment's contents. Once used, this parchment becomes mundane paper."
+       "en-US": "By touching this piece of parchment to another, you can perfectly copy the second parchment’s contents. Once used, this parchment becomes mundane paper."
       }
      }
     ]
@@ -591,7 +591,7 @@
  {
   "id": "srd_2_0_consumable_homet_s_secret_potion",
   "name": {
-   "en-US": "Homet's Secret Potion"
+   "en-US": "Homet’s Secret Potion"
   },
   "set": "core",
   "roll": 32,
@@ -942,7 +942,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "You can drink this potion to fall asleep for a full night's rest. You clear all Stress upon waking."
+       "en-US": "You can drink this potion to fall asleep for a full night’s rest. You clear all Stress upon waking."
       }
      }
     ]
@@ -1094,7 +1094,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "After you drink this tea, you instantly kill your target when you critically succeed on an attack. If you don't critically succeed on an attack before your next long rest, you die."
+       "en-US": "After you drink this tea, you instantly kill your target when you critically succeed on an attack. If you don’t critically succeed on an attack before your next long rest, you die."
       }
      }
     ]

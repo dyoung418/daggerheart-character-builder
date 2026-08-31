@@ -59,7 +59,7 @@
  {
   "id": "srd_1_0_item_alistairs_torch",
   "name": {
-   "en-US": "Alistair's Torch"
+   "en-US": "Alistair’s Torch"
   },
   "set": "core",
   "roll": 4,
@@ -68,7 +68,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "You can light this magic torch at will. The flame's light fills a much larger space than it should, enough to illuminate a cave bright as day."
+       "en-US": "You can light this magic torch at will. The flame’s light fills a much larger space than it should, enough to illuminate a cave bright as day."
       }
      }
     ]
@@ -182,7 +182,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "This flat rod is inscribed with runes. When you activate the rod, it is immediately suspended in place. Until the rod is deactivated, it can't move, doesn't abide by the rules of gravity, and remains in place."
+       "en-US": "This flat rod is inscribed with runes. When you activate the rod, it is immediately suspended in place. Until the rod is deactivated, it can’t move, doesn’t abide by the rules of gravity, and remains in place."
       }
      }
     ]
@@ -277,7 +277,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "You can attach this stone to armor that doesn't already have a feature. The armor gains the following feature. Resilient: Before you mark your last Armor Slot, roll a d6. On a result of 6, reduce the severity by one threshold without marking an Armor Slot."
+       "en-US": "You can attach this stone to armor that doesn’t already have a feature. The armor gains the following feature. Resilient: Before you mark your last Armor Slot, roll a d6. On a result of 6, reduce the severity by one threshold without marking an Armor Slot."
       }
      }
     ]
@@ -315,7 +315,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "Position this prism in a location of your choosing and activate it. All allies within Close range of it gain a +1 bonus to their Spellcast Rolls. While activated, the prism can't be moved. Once the prism is deactivated, it can't be activated again until your next long rest."
+       "en-US": "Position this prism in a location of your choosing and activate it. All allies within Close range of it gain a +1 bonus to their Spellcast Rolls. While activated, the prism can’t be moved. Once the prism is deactivated, it can’t be activated again until your next long rest."
       }
      }
     ]
@@ -467,7 +467,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "You can attach this stone to a weapon that doesn't already have a feature. The weapon gains the following feature. Brutal: When you roll the maximum value on a damage die, roll an additional damage die."
+       "en-US": "You can attach this stone to a weapon that doesn’t already have a feature. The weapon gains the following feature. Brutal: When you roll the maximum value on a damage die, roll an additional damage die."
       }
      }
     ]
@@ -486,7 +486,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "You can attach this stone to a weapon that doesn't already have a feature. The weapon gains the following feature. Powerful: On a successful attack, roll an additional damage die and discard the lowest result."
+       "en-US": "You can attach this stone to a weapon that doesn’t already have a feature. The weapon gains the following feature. Powerful: On a successful attack, roll an additional damage die and discard the lowest result."
       }
      }
     ]
@@ -543,7 +543,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "When you would mark your last Stress, roll a d6. On a result of 5 or higher, don't mark it."
+       "en-US": "When you would mark your last Stress, roll a d6. On a result of 5 or higher, don’t mark it."
       }
      }
     ]
@@ -562,7 +562,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "This flask can hold two different liquids. You can swap between them by flipping a small switch on the flask's side."
+       "en-US": "This flask can hold two different liquids. You can swap between them by flipping a small switch on the flask’s side."
       }
      }
     ]
@@ -581,7 +581,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "You can convince this small bag of sand to be much heavier or lighter with a successful Presence Roll (10). Additionally, on a successful Finesse Roll (10), you can blow a bit of sand into a target's face to make them temporarily Vulnerable."
+       "en-US": "You can convince this small bag of sand to be much heavier or lighter with a successful Presence Roll (10). Additionally, on a successful Finesse Roll (10), you can blow a bit of sand into a target’s face to make them temporarily Vulnerable."
       }
      }
     ]
@@ -638,7 +638,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "Once per long rest, you can open this small box and roll a d12. On a result of 1-6, it's empty. On a result of 7-10, it contains one random common consumable. On a result of 11-12, it contains two random common consumables."
+       "en-US": "Once per long rest, you can open this small box and roll a d12. On a result of 1-6, it’s empty. On a result of 7-10, it contains one random common consumable. On a result of 11-12, it contains two random common consumables."
       }
      }
     ]
@@ -686,7 +686,7 @@
  {
   "id": "srd_1_0_item_paragons_chain",
   "name": {
-   "en-US": "Paragon's Chain"
+   "en-US": "Paragon’s Chain"
   },
   "set": "core",
   "roll": 37,
