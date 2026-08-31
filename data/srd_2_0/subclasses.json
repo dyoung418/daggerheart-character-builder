@@ -1610,8 +1610,21 @@
        }
       },
       {
+       "list": [
+        {
+         "en-US": "Ghost Petal: The target becomes temporarily Vulnerable."
+        },
+        {
+         "en-US": "Grave Spore: The target must also mark a Stress."
+        },
+        {
+         "en-US": "Leech Weed: You deal an extra 1d6 damage on this attack."
+        }
+       ]
+      },
+      {
        "paragraph": {
-        "en-US": "• Ghost Petal: The target becomes temporarily Vulnerable. • Grave Spore: The target must also mark a Stress. • Leech Weed: You deal an extra 1d6 damage on this attack. When you take a long rest, clear all unspent tokens."
+        "en-US": "When you take a long rest, clear all unspent tokens."
        }
       }
      ]
@@ -1631,14 +1644,14 @@
        }
       },
       {
-       "paragraph": {
-        "en-US": "• Midnight Vine: The target has disadvantage on attack rolls until it marks a Stress to clear this condition."
-       }
-      },
-      {
-       "paragraph": {
-        "en-US": "• Gorgon Root: The target becomes temporarily Restrained."
-       }
+       "list": [
+        {
+         "en-US": "Midnight Vine: The target has disadvantage on attack rolls until it marks a Stress to clear this condition."
+        },
+        {
+         "en-US": "Gorgon Root: The target becomes temporarily Restrained."
+        }
+       ]
       }
      ]
     },
@@ -1669,9 +1682,17 @@
        }
       },
       {
-       "paragraph": {
-        "en-US": "• Blight Seed: The target gains a −3 penalty to their damage thresholds until the end of the scene. This effect can’t stack. • Fear Leaf: You deal extra damage equal to the result of your Fear Die on this attack. • Corpse Thorn: The target gains disadvantage on reaction rolls until the end of the scene."
-       }
+       "list": [
+        {
+         "en-US": "Blight Seed: The target gains a −3 penalty to their damage thresholds until the end of the scene. This effect can’t stack."
+        },
+        {
+         "en-US": "Fear Leaf: You deal extra damage equal to the result of your Fear Die on this attack."
+        },
+        {
+         "en-US": "Corpse Thorn: The target gains disadvantage on reaction rolls until the end of the scene."
+        }
+       ]
       }
      ]
     },
