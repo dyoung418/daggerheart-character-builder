@@ -165,6 +165,7 @@ const {
   rectOf,
 } = await import(`../shared/pdf-form.js${RUN}`);
 const {
+  SHIELD_PATH,
   SLOT_GEOMETRY,
   slotMarkOps,
 } = await import(`../shared/sheet-marks.js${RUN}`);
@@ -6378,13 +6379,17 @@ group("Byte plumbing: one stream per drawn field, and the /Length that has to be
   // per colour section counts the shapes. Written as a walk over the lines rather than a regex over
   // the whole string so that a stream with its sections in an unexpected order is counted wrong
   // LOUDLY rather than quietly.
+  // An armor shield is a whole line of its own -- `q ... cm <path> f Q` -- because it is the one
+  // shape that arrives pre-translated rather than emitted at its final coordinates. So it is
+  // counted by its transform, and the S/f tally never sees it.
   const shapes = (ops) => {
-    const out = { traced: 0, washed: 0, pips: 0 };
+    const out = { traced: 0, washed: 0, shields: 0, pips: 0 };
     let where = null;
     for (const line of ops.split("\n")) {
       if (line === `${SLOT_GEOMETRY.trace} RG`) where = "traced";
       else if (line === `${SLOT_GEOMETRY.wash} rg`) where = "washed";
       else if (line === `${SLOT_GEOMETRY.pip} rg`) where = "pips";
+      else if (line.startsWith("q 1 0 0 1 ")) out.shields += 1;
       else if (line === "S" || line === "f") out[where] += 1;
     }
     return out;
@@ -6394,15 +6399,15 @@ group("Byte plumbing: one stream per drawn field, and the /Length that has to be
   group("The slot marks say how many boxes this character has, and no more");
   {
     eq("a starting character owns exactly the boxes the artwork already draws, so nothing is traced",
-      marks({}), { traced: 0, washed: 13, pips: 0 });
+      marks({}), { traced: 0, washed: 13, shields: 0, pips: 0 });
     // 9 HP is 4 past the 5 the sheet draws solid and 9 Stress is 3 past its 6, so 7 traced; three
     // washed on each row; and Proficiency 5 is 4 pips past the one the template fills in for you.
     eq("the character on the desk: HP 9, Stress 9, Proficiency 5",
       marks({ "hp-slots": "9", "stress-slots": "9", proficiency: "5" }),
-      { traced: 7, washed: 6, pips: 4 });
+      { traced: 7, washed: 6, shields: 0, pips: 4 });
     eq("a row that is entirely owned washes nothing",
       marks({ "hp-slots": "12", "stress-slots": "12", proficiency: "6" }),
-      { traced: 13, washed: 0, pips: 5 });
+      { traced: 13, washed: 0, shields: 0, pips: 5 });
 
     // THE INVARIANT THAT TIES THESE CONSTANTS TO THE TEMPLATE. The sheet was drawn to the rules'
     // ceilings: Hit Points and Stress are both capped at 12 (advancement.js:138-139), and
@@ -6420,7 +6425,65 @@ group("Byte plumbing: one stream per drawn field, and the /Length that has to be
     // is what stops the drawing running past the last box while somebody fixes it.
     eq("a count past the end of the row draws the row, not past it",
       marks({ "hp-slots": "40", "stress-slots": "40", proficiency: "40" }),
-      { traced: 13, washed: 0, pips: 5 });
+      { traced: 13, washed: 0, shields: 0, pips: 5 });
+  }
+
+  group("The armor slots are washed and never traced, across the grid and then down");
+  {
+    // Twelve shields, three across and four down. Nothing is ever traced here: the artwork draws
+    // all twelve the same, so there is no dashed half to complete, and re-drawing a shield a
+    // character already has would be redundant at best and a quarter point out of register at
+    // worst. See sheet-marks.js's header on why that asymmetry with HP and Stress is deliberate.
+    eq("Armor Score 4 leaves four shields alone and washes the other eight",
+      marks({ "armor-score": "4" }), { traced: 0, washed: 13, shields: 8, pips: 0 });
+    eq("an unarmored character has none of them, and every shield says so",
+      marks({ "armor-score": "0" }).shields, 12);
+    eq("and a fully armored one has all twelve, so nothing is washed",
+      marks({ "armor-score": "12" }).shields, 0);
+    eq("no armor score at all draws no shields, the same as every other row",
+      marks({ "armor-score": "" }).shields, 0);
+    eq("the rules' Armor Score cap is the grid's own size, so this row cannot overflow either",
+      MAX_ARMOR_SCORE, SLOT_GEOMETRY.shields.count);
+
+    // THE ORDER, WHICH IS THE ONE THING A RENDER WOULD NOT MAKE OBVIOUS. Slots fill across the top
+    // row and then down — the order the template's own `as1`-`as12` run in. A column-major
+    // implementation draws exactly twelve shields for an Armor Score of 0 and exactly eight for a
+    // 4, so counting them proves nothing; where the eight ARE is the whole assertion.
+    const g = SLOT_GEOMETRY.shields;
+    const placed = (armor) => [...slotMarkOps({ "armor-score": armor })
+      .matchAll(/q 1 0 0 1 ([\d.]+) ([\d.]+) cm/g)]
+      .map((m) => [Number(m[1]), Number(m[2])]);
+    const at = (index) => [
+      Number((g.x + g.pitch * (index % g.columns)).toFixed(3)),
+      Number((g.y - g.rowPitch * Math.floor(index / g.columns)).toFixed(3)),
+    ];
+    eq("Armor Score 4 washes slots 5 to 12 — the last of the second row, then rows three and four",
+      placed("4").map((p) => p.map((v) => Number(v.toFixed(3)))),
+      [4, 5, 6, 7, 8, 9, 10, 11].map(at));
+    // The positive control for that: the same eight slots numbered DOWN the columns instead land
+    // somewhere else entirely, so the check above is really about order and not just about count.
+    const columnMajor = (index) => [
+      Number((g.x + g.pitch * Math.floor(index / (g.count / g.columns))).toFixed(3)),
+      Number((g.y - g.rowPitch * (index % (g.count / g.columns))).toFixed(3)),
+    ];
+    check("and filling down the columns instead would put them in different places",
+      [4, 5, 6, 7, 8, 9, 10, 11].some((i) => String(at(i)) !== String(columnMajor(i))));
+
+    // The same redundancy the rows have, in two dimensions: `lastX` and `lastY` are the far corner
+    // measured directly, so a mistyped pitch cannot agree with them.
+    eq("the two pitches walk from the first shield to the last one the artwork draws",
+      [Number((g.x + g.pitch * (g.columns - 1)).toFixed(2)),
+        Number((g.y - g.rowPitch * (g.count / g.columns - 1)).toFixed(2))],
+      [Number(g.lastX.toFixed(2)), Number(g.lastY.toFixed(2))]);
+
+    // The shield outline is lifted from the template rather than reconstructed, so what is
+    // checkable here is that it is a closed path a PDF can execute and that it fits the space the
+    // grid gives it — 10.307 x 11.531, inside a 13.068 pitch.
+    check("the outline is a closed path that starts where a path has to", /^[\d.]+ [\d.]+ m /.test(SHIELD_PATH) && SHIELD_PATH.endsWith(" h"));
+    const points = [...SHIELD_PATH.matchAll(/([\d.]+) ([\d.]+)(?= |$)/g)].map((m) => [Number(m[1]), Number(m[2])]);
+    check("drawn in its own space, from the origin out", points.every(([x, y]) => x >= 0 && y >= 0));
+    check("and small enough that a shield cannot reach into its neighbour",
+      Math.max(...points.map((p) => p[0])) < g.pitch && Math.max(...points.map((p) => p[1])) < g.rowPitch);
   }
 
   group("A number the sheet hasn't got draws nothing, rather than drawing zero");
@@ -6433,11 +6496,11 @@ group("Byte plumbing: one stream per drawn field, and the /Length that has to be
     eq("a dash, which is what an unfilled slot prints elsewhere on this sheet",
       slotMarkOps({ "hp-slots": "—" }), "");
     eq("and each row is judged on its own, so a classless character still gets its Stress",
-      marks({ "hp-slots": "", proficiency: "" }), { traced: 0, washed: 6, pips: 0 });
+      marks({ "hp-slots": "", proficiency: "" }), { traced: 0, washed: 6, shields: 0, pips: 0 });
     check("nothing but a bare integer counts", ["9.0", " 9", "9 ", "+9", "-9", "9 of 12", "nine", "0x9"]
       .every((bad) => slotMarkOps({ "hp-slots": bad, "stress-slots": "", proficiency: "" }) === ""));
     eq("and zero is a number, so it washes the whole row out",
-      marks({ "hp-slots": "0", "stress-slots": "", proficiency: "" }), { traced: 0, washed: 12, pips: 0 });
+      marks({ "hp-slots": "0", "stress-slots": "", proficiency: "" }), { traced: 0, washed: 12, shields: 0, pips: 0 });
   }
 
   group("The mark stream is bytes a PDF can carry, and the same bytes every time");
