@@ -10,6 +10,8 @@
 //   shared/sheet-fields.js  what each named field says: which number is Evasion, what
 //                           `class-subclass` reads for a multiclassed character, what an
 //                           unfilled slot prints instead of a number
+//   shared/sheet-marks.js   what gets DRAWN rather than typed: the HP and Stress boxes this
+//                           character actually has, and their Proficiency pips
 //   shared/pdf-form.js      the bytes: which fields the template actually has, and the
 //                           incremental update that fills them
 //
@@ -31,6 +33,7 @@
 
 import { fillFormWithReport } from "./shared/pdf-form.js";
 import { sheetFieldValues } from "./shared/sheet-fields.js";
+import { slotMarkOps } from "./shared/sheet-marks.js";
 
 const TEMPLATE_PATH = "data/sheet/sheet-template.pdf";
 
@@ -123,5 +126,10 @@ export async function buildSheetPdf(character, db, { loadout, appearances = true
   // The report is returned as it arrives, unread. What counts as worth telling a user is a
   // question about a modal, and characters.js answers it; this file deciding would put half the
   // answer somewhere no test can reach it.
-  return fillFormWithReport(template, sheetFieldValues(character, db, { loadout }), { appearances });
+  // ONE call to sheetFieldValues, and the marks are read back out of its result rather than
+  // derived again. shared/sheet-marks.js's header argues why at length; the short version is that
+  // the drawing and the number printed beside it have to be the same fact, and two derivations of
+  // one number is how they stop being.
+  const values = sheetFieldValues(character, db, { loadout });
+  return fillFormWithReport(template, values, { appearances, overlays: { 0: slotMarkOps(values) } });
 }

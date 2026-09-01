@@ -16,10 +16,18 @@
 // and 111 /Btn. An earlier reading of the same file, before that pass, was 453,448 bytes; the
 // field counts did not move.
 //
+// One thing does get DRAWN rather than filled, and it is not a field at all: an `overlays` option
+// appends a content stream to a page, under its annotations. shared/sheet-marks.js is the only
+// caller, and it uses it to trace the HP and Stress boxes a character actually has and to fill in
+// their Proficiency pips — geometry the sheet's own artwork already half-draws, and which no
+// widget can carry because the checkboxes over those boxes are deliberately bigger than them.
+// Being page content and not an annotation, it is untouched by /NeedAppearances, by the
+// whole-document fallback below, and by a Chrome save.
+//
 // So nothing here recreates the template. The output is the original bytes VERBATIM, followed by
 // an incremental update: fresh copies of only the objects whose value changed, one new appearance
-// stream per value we drew, a cross-reference section covering only those, and a trailer whose
-// /Prev points back at the original one. Every byte the template already had — its fonts, its art,
+// stream per value we drew, one more per overlaid page, a cross-reference section covering only
+// those, and a trailer whose /Prev points back at the original one. Every byte the template already had — its fonts, its art,
 // its own appearance streams, the offsets in its xref — stays exactly where it was, which is why a
 // template re-save costs this module nothing. It also means the only offsets we compute are
 // offsets into bytes we appended ourselves.
@@ -880,6 +888,53 @@ function readTrailer(text) {
   };
 }
 
+// The pages, in the order a reader shows them.
+//
+// WALKED, NOT SCANNED. Picking every object whose /Type is /Page and sorting by object number
+// would be shorter and would happen to be right for this template, whose two pages are objects 4
+// and 735 in that order — but page order is the /Kids arrays' business and nothing else's, and an
+// editor that re-saves a file is free to renumber. A caller asking for "page 1" and silently
+// getting page 2 is the kind of wrong that only shows up on paper.
+//
+// Depth-first through /Kids, following /Type/Pages nodes and collecting /Type/Page leaves. `seen`
+// is not defensive tidiness: a /Kids cycle is a file this would otherwise hang on, and a template
+// nobody can open is a better outcome than a browser tab that stops responding.
+function readPages(objects, catalogDict) {
+  const rootRef = /^(\d+)[\0\t\n\f\r ]+0[\0\t\n\f\r ]+R$/.exec((entryValue(catalogDict, "Pages") || "").trim());
+  if (!rootRef) {
+    throw new UnsupportedPdfError(
+      "pdf-form.js: the Catalog has no /Pages reference, so the page tree can't be walked. (A page " +
+      "tree written inline rather than as an indirect reference is also unsupported.)",
+    );
+  }
+  const pages = [];
+  const seen = new Set();
+  const walk = (num) => {
+    if (seen.has(num)) {
+      throw new UnsupportedPdfError(`pdf-form.js: the page tree visits object ${num} twice — /Kids has a cycle`);
+    }
+    seen.add(num);
+    const object = objects.get(num);
+    if (!object) throw new UnsupportedPdfError(`pdf-form.js: the page tree names object ${num}, which isn't in the file`);
+    const dict = object.dict.trim();
+    const type = entryValue(dict, "Type");
+    if (type === "/Page") {
+      pages.push({ obj: num, dict: object.dict });
+      return;
+    }
+    if (type !== "/Pages") {
+      throw new UnsupportedPdfError(
+        `pdf-form.js: object ${num} is in the page tree but its /Type is ${JSON.stringify(type || "(none)")}`,
+      );
+    }
+    for (const kid of (entryValue(dict, "Kids") || "").matchAll(/(\d+)[\0\t\n\f\r ]+0[\0\t\n\f\r ]+R/g)) {
+      walk(Number(kid[1]));
+    }
+  };
+  walk(Number(rootRef[1]));
+  return pages;
+}
+
 function toLatin1Text(bytes) {
   if (bytes instanceof Uint8Array) return latin1(bytes);
   if (bytes instanceof ArrayBuffer) return latin1(new Uint8Array(bytes));
@@ -892,6 +947,7 @@ function toLatin1Text(bytes) {
  *
  * @param {Uint8Array} bytes  the template, as it sits on disk
  * @returns {{fields: Map<string, {obj:number, type:('Tx'|'Btn'), dict:string}>,
+ *            pages: {obj:number, dict:string}[],
  *            acroForm: {obj:number, dict:string}, root:number, size:number, prevStartxref:number}}
  *   `dict` is the raw bytes between "N 0 obj" and "endobj" as a latin1 string — one character per
  *   byte, the representation tests.js already uses for PDF bytes — so it can be searched directly.
@@ -1015,6 +1071,7 @@ export function readForm(bytes) {
 
   return {
     fields,
+    pages: readPages(objects, catalog.dict.trim()),
     acroForm: { obj: acroObj, dict: acro.dict },
     root: trailer.root,
     size: trailer.size,
@@ -1067,14 +1124,20 @@ export function fillForm(bytes, values, options) {
  *
  * @param {Uint8Array} bytes   the template
  * @param {Object<string, (string|boolean)>} values  field name → value
- * @param {{appearances?: boolean}} [options]
+ * @param {{appearances?: boolean, overlays?: Object<number, string>}} [options]
  *   `appearances: false` (the default) writes /V, deletes /AP and sets /NeedAppearances true —
  *   the reader lays the text out. `appearances: true` writes /V, an /AP /N Form XObject per filled
  *   text field, and /NeedAppearances false: the reader draws what we drew. The header argues which
  *   costs what.
+ *
+ *   `overlays` — page index → PDF operators to append to that page's content, under its
+ *   annotations. Independent of `appearances` in both directions: this is page content, so
+ *   /NeedAppearances has no opinion about it and neither does the fallback. An empty string draws
+ *   nothing rather than appending an empty stream, so a caller can hand over a whole page's worth
+ *   of "maybe" without testing it first.
  * @returns {{bytes: Uint8Array, fellBack: FillReport["fellBack"], truncated: string[]}}
  */
-export function fillFormWithReport(bytes, values, { appearances = false } = {}) {
+export function fillFormWithReport(bytes, values, { appearances = false, overlays = null } = {}) {
   if (!values || typeof values !== "object") {
     throw new TypeError(`pdf-form.js: values must be an object of field name → value, got ${typeof values}`);
   }
@@ -1119,9 +1182,13 @@ export function fillFormWithReport(bytes, values, { appearances = false } = {}) 
 
   // Only when there is text to draw. A sheet of nothing but ticked boxes needs no font, and adding
   // one would make the output differ from a run that wrote the same boxes a different way.
+  // The first object number no template object is using. /Size is one past the template's highest,
+  // and `highest + 1` covers a template whose own /Size is too small for its objects — a file a
+  // reader would already be mis-reading, but not one we should make worse by writing over object
+  // 1334 because a trailer said 900.
+  const highest = Math.max(form.acroForm.obj, ...[...form.fields.values()].map((f) => f.obj));
   let ourFont = null;
   if (texts.length) {
-    const highest = Math.max(form.acroForm.obj, ...[...form.fields.values()].map((f) => f.obj));
     ourFont = { name: freeFontName(form.acroForm.dict), obj: Math.max(trailer.size, highest + 1) };
   }
 
@@ -1149,6 +1216,60 @@ export function fillFormWithReport(bytes, values, { appearances = false } = {}) 
   // The flag means "reader, please lay these values out"; the only reason to stop asking is that
   // we have laid them out ourselves.
   updates.set(form.acroForm.obj, acroWithFont(form.acroForm.dict, ourFont, drawn.streams === null));
+
+  // ---------- page overlays ----------
+  //
+  // Content appended to a page, under its annotations: what shared/sheet-marks.js draws for the HP,
+  // Stress and Proficiency slots. This end of it knows nothing about slots — it takes operators and
+  // a page index and appends a stream, which is the same division fillForm keeps everywhere else.
+  //
+  // /Contents BECOMES AN ARRAY, and the spec's own rule is what makes that safe: §7.8.2 says the
+  // streams in a /Contents array are concatenated AS IF they were one stream, with the division
+  // only permitted at a token boundary. So the operators arrive in the graphics state the page's
+  // own content left behind. Both of this template's pages leave the q/Q stack balanced at depth
+  // zero with no top-level `cm` (measured 2026-09-01: page one 530 q and 530 Q, page two 315 and
+  // 315, neither ever going negative), so an appended stream starts in identity user space — but
+  // sheet-marks.js still sets every piece of state it uses, because that is a fact about this
+  // template rather than a promise from the spec.
+  //
+  // ALLOCATED LAST, above the font and every appearance stream. That ordering is the whole reason
+  // this block sits below them rather than beside them: turning overlays on must not renumber a
+  // single appearance object, or the "same values, keys reordered, byte-identical" test stops
+  // meaning what it says.
+  if (overlays) {
+    let free = Math.max(trailer.size, highest + 1, ...[...updates.keys()].map((num) => num + 1));
+    for (const key of Object.keys(overlays).sort((a, b) => Number(a) - Number(b))) {
+      const ops = overlays[key];
+      if (!ops) continue; // "" means "this page has nothing to draw", not "append an empty stream"
+      const index = Number(key);
+      const page = form.pages[index];
+      if (!page) {
+        throw new RangeError(
+          `pdf-form.js: an overlay was given for page index ${JSON.stringify(key)}, and the document ` +
+          `has ${form.pages.length} page${form.pages.length === 1 ? "" : "s"}`,
+        );
+      }
+      const obj = free++;
+      updates.set(obj, { dict: "<<>>", stream: ops });
+      // /Contents is one reference, an array of them, or absent — and the first two shapes both
+      // appear in this very template: page one is `/Contents 1366 0 R`, page two is a
+      // three-element array left behind by the normalisation pass that wrapped its content in a
+      // translation. Absent is legal too (§7.7.3.3: a page with no content is an empty page), and
+      // it is what a hand-built fixture has. Anything else — an inline stream, which is not legal
+      // here, or a reference this scan can't parse — is refused rather than guessed at, because
+      // the failure mode of guessing is a page that draws nothing at all.
+      const contents = (entryValue(page.dict.trim(), "Contents") || "").trim();
+      const existing = contents.startsWith("[") ? contents.slice(1, -1).trim() : contents;
+      if (existing && !/^(\d+[\0\t\n\f\r ]+\d+[\0\t\n\f\r ]+R[\0\t\n\f\r ]*)+$/.test(existing)) {
+        throw new UnsupportedPdfError(
+          `pdf-form.js: page ${index + 1} (object ${page.obj}) has /Contents ${JSON.stringify(contents.slice(0, 40))}, ` +
+          "which is neither a stream reference nor an array of them, so there is nothing to append to",
+        );
+      }
+      updates.set(page.obj, rewriteDict(page.dict, ["Contents"],
+        `/Contents[${existing ? `${existing} ` : ""}${formatNumber(obj)} 0 R]`));
+    }
+  }
 
   // Chunks plus a running byte counter, exactly as pdf.js:216-228 does it and for the same reason:
   // an offset read from the counter is true whatever the chunks contain, where an offset computed

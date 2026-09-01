@@ -165,6 +165,10 @@ const {
   rectOf,
 } = await import(`../shared/pdf-form.js${RUN}`);
 const {
+  SLOT_GEOMETRY,
+  slotMarkOps,
+} = await import(`../shared/sheet-marks.js${RUN}`);
+const {
   CARDS_PER_PAGE,
   CARD_HEIGHT,
   CARD_WIDTH,
@@ -5200,7 +5204,7 @@ const formFailure = (fn) => {
 function buildFormPdf({
   fields = "5 0 R 6 0 R 7 0 R 8 0 R", acroForm = "/AcroForm 3 0 R", extra = [], tail = "%%EOF\n",
   info = "12 0 R", id = "[<0102030405060708090A0B0C0D0E0F10><100F0E0D0C0B0A090807060504030201>]",
-  widgets = [],
+  widgets = [], contents = "",
 } = {}) {
   // Object numbers are positions in `objects` below, and `widgets` goes last, so the first of them
   // is one past the twelve standard objects and whatever `extra` added. Computed here because
@@ -5216,7 +5220,7 @@ function buildFormPdf({
     `<</Type/Catalog/Pages 2 0 R${acroForm}>>`,
     "<</Type/Pages/Kids[4 0 R]/Count 1>>",
     `<</Fields[${fields}${widgetRefs}]/DA(/Helvetica 0 Tf 0 g)/DR<</Font<</Helvetica 11 0 R>>>>>>`,
-    `<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]/Annots[5 0 R 6 0 R 7 0 R 8 0 R${widgetRefs}]>>`,
+    `<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]${contents}/Annots[5 0 R 6 0 R 7 0 R 8 0 R${widgetRefs}]>>`,
     // The second trap: a /TU whose literal string nests parentheses. Scanning for the next ")"
     // ends this dictionary in the middle of "as written", and the walk that follows then reports
     // a perfectly good template as malformed. /V is here too, so the rewrite has to REMOVE it —
@@ -6354,6 +6358,176 @@ group("Byte plumbing: one stream per drawn field, and the /Length that has to be
   check("which is a file with no /AP on the field and the reader asked to draw it",
     formObject(formText(withEmoji.bytes), 3).includes("/NeedAppearances true")
       && !formObject(formText(withEmoji.bytes), 14).includes("/AP"));
+}
+
+// ---------- the slots a character HAS, drawn under the boxes they mark in play ----------
+//
+// The sheet's HP row is twelve boxes, five drawn solid and seven dashed; Stress is six and six;
+// Proficiency is six rings with one pip filled. The dashed and the empty ones are slots a character
+// might grow into, and the printed sheet expects you to trace the ones you own in pen.
+// shared/sheet-marks.js does that in ink instead, as page content appended under the annotations —
+// its header says why the checkbox widgets are the wrong place to hang it, the short version being
+// that they are DELIBERATELY bigger than the boxes drawn beneath them so the tick reads.
+//
+// The geometry cannot be re-measured here: the template is in a private repo and this runner never
+// opens it. tools/sheet/slot-geometry.py does that. What IS checkable without the file is the
+// counting, the clamps, the refusals, and the one invariant that ties the two together — at the
+// rules' own maximum the traced boxes fill the row exactly.
+{
+  // Every path starts with `m` and is closed by exactly one paint operator, so counting the paints
+  // per colour section counts the shapes. Written as a walk over the lines rather than a regex over
+  // the whole string so that a stream with its sections in an unexpected order is counted wrong
+  // LOUDLY rather than quietly.
+  const shapes = (ops) => {
+    const out = { traced: 0, washed: 0, pips: 0 };
+    let where = null;
+    for (const line of ops.split("\n")) {
+      if (line === `${SLOT_GEOMETRY.trace} RG`) where = "traced";
+      else if (line === `${SLOT_GEOMETRY.wash} rg`) where = "washed";
+      else if (line === `${SLOT_GEOMETRY.pip} rg`) where = "pips";
+      else if (line === "S" || line === "f") out[where] += 1;
+    }
+    return out;
+  };
+  const marks = (over) => shapes(slotMarkOps({ "hp-slots": "5", "stress-slots": "6", proficiency: "1", ...over }));
+
+  group("The slot marks say how many boxes this character has, and no more");
+  {
+    eq("a starting character owns exactly the boxes the artwork already draws, so nothing is traced",
+      marks({}), { traced: 0, washed: 13, pips: 0 });
+    // 9 HP is 4 past the 5 the sheet draws solid and 9 Stress is 3 past its 6, so 7 traced; three
+    // washed on each row; and Proficiency 5 is 4 pips past the one the template fills in for you.
+    eq("the character on the desk: HP 9, Stress 9, Proficiency 5",
+      marks({ "hp-slots": "9", "stress-slots": "9", proficiency: "5" }),
+      { traced: 7, washed: 6, pips: 4 });
+    eq("a row that is entirely owned washes nothing",
+      marks({ "hp-slots": "12", "stress-slots": "12", proficiency: "6" }),
+      { traced: 13, washed: 0, pips: 5 });
+
+    // THE INVARIANT THAT TIES THESE CONSTANTS TO THE TEMPLATE. The sheet was drawn to the rules'
+    // ceilings: Hit Points and Stress are both capped at 12 (advancement.js:138-139), and
+    // Proficiency tops out at 6 — base 1, achievements at levels 2, 5 and 8, and one two-slot pick
+    // in each of tiers 3 and 4. That is why this feature has no overflow case at all. If an SRD
+    // revision ever raises one of those caps, THIS goes red, rather than the sheet quietly running
+    // off the end of a row that nothing in the app knows the length of.
+    eq("the rules' maximum fills each row exactly, which is why there is no overflow case",
+      [MAX_HIT_POINT_SLOTS, MAX_STRESS_SLOTS], SLOT_GEOMETRY.rows.map((r) => r.count));
+    eq("and at that maximum nothing is left to wash out",
+      marks({ "hp-slots": String(MAX_HIT_POINT_SLOTS), "stress-slots": String(MAX_STRESS_SLOTS) }).washed, 0);
+
+    // The clamp sheet-marks.js keeps anyway. It cannot be reached through the app today, which is
+    // exactly why it is worth a test: the check above is what notices the rule changing, and this
+    // is what stops the drawing running past the last box while somebody fixes it.
+    eq("a count past the end of the row draws the row, not past it",
+      marks({ "hp-slots": "40", "stress-slots": "40", proficiency: "40" }),
+      { traced: 13, washed: 0, pips: 5 });
+  }
+
+  group("A number the sheet hasn't got draws nothing, rather than drawing zero");
+  {
+    // deriveSheet prints "" for a number it hasn't got, and a character with no class has no Hit
+    // Points. Twelve washed-out boxes asserting "you have none" is a worse answer than the
+    // untouched template, which asserts nothing.
+    eq("no values at all", slotMarkOps({}), "");
+    eq("empty strings", slotMarkOps({ "hp-slots": "", "stress-slots": "", proficiency: "" }), "");
+    eq("a dash, which is what an unfilled slot prints elsewhere on this sheet",
+      slotMarkOps({ "hp-slots": "—" }), "");
+    eq("and each row is judged on its own, so a classless character still gets its Stress",
+      marks({ "hp-slots": "", proficiency: "" }), { traced: 0, washed: 6, pips: 0 });
+    check("nothing but a bare integer counts", ["9.0", " 9", "9 ", "+9", "-9", "9 of 12", "nine", "0x9"]
+      .every((bad) => slotMarkOps({ "hp-slots": bad, "stress-slots": "", proficiency: "" }) === ""));
+    eq("and zero is a number, so it washes the whole row out",
+      marks({ "hp-slots": "0", "stress-slots": "", proficiency: "" }), { traced: 0, washed: 12, pips: 0 });
+  }
+
+  group("The mark stream is bytes a PDF can carry, and the same bytes every time");
+  {
+    const ops = slotMarkOps({ "hp-slots": "9", "stress-slots": "9", proficiency: "5" });
+    check("pure ASCII, because pdf-form.js writes it through asciiBytes()", !/[^\x20-\x7e\n]/.test(ops));
+    check("it saves and restores the graphics state it borrows", ops.startsWith("q\n") && ops.endsWith("Q\n"));
+    check("and sets every piece of state it depends on, rather than inheriting any",
+      ops.includes(`${SLOT_GEOMETRY.lineWidth} w 1 J 0 j [] 0 d\n`));
+    eq("the same values in a different order are the same string",
+      ops, slotMarkOps({ proficiency: "5", "stress-slots": "9", "hp-slots": "9" }));
+
+    // THE PITCH, CHECKED AGAINST SOMETHING OTHER THAN ITSELF. The constants are measured off a
+    // file this runner cannot open, so a bound derived from `pitch` would move with a typo in it
+    // and catch nothing — which is what the first version of this check did. `last` is the final
+    // box's own measured position, so the four terms have to agree or one of them is wrong.
+    const rows = [...SLOT_GEOMETRY.rows, SLOT_GEOMETRY.pips];
+    eq("the pitch walks from the first box to the last one the artwork actually draws",
+      rows.map((r) => Number((r.x + r.pitch * (r.count - 1)).toFixed(2))),
+      rows.map((r) => Number(r.last.toFixed(2))));
+
+    // And the absolute backstop: whatever the constants say, a mark off the page is wrong. Both
+    // checks are needed — this one catches an error of hundreds of points, the one above catches
+    // an error of one.
+    const starts = [...ops.matchAll(/(?:^|\n)([\d.]+) ([\d.]+) m /g)].map((m) => [Number(m[1]), Number(m[2])]);
+    const [hp] = SLOT_GEOMETRY.rows;
+    const onPage = ([x, y]) => x >= 0 && x <= 612 && y >= 0 && y <= 792;
+    eq("every path starts on the page", starts.filter((point) => !onPage(point)).length, 0);
+    check("and there really are paths to check", starts.length === 7 + 6 + 4);
+    // The positive control. An assertion that nothing fell outside is worth nothing until the
+    // predicate has been seen to say no — CLAUDE.md's rule about empty greps, in a bounds check.
+    check("the check can fail: ten pitches further on is off the sheet",
+      !onPage([hp.x + hp.pitch * 40, hp.y]));
+  }
+}
+
+group("An overlay is appended to a page's content, under the annotations and beside the /AP");
+{
+  const same = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
+  const throws = (fn, pattern) => {
+    try { fn(); return false; } catch (err) { return pattern.test(err.message); }
+  };
+  const marks = "q 1 0 0 RG 10 10 m 20 20 l S Q\n";
+  const text = formText(fillFormWithReport(FORM.bytes, { name: "Vaani" }, { appearances: true, overlays: { 0: marks } }).bytes);
+
+  // Object 4 is the fixture's one page; 13 is the font this fill adds and 14 the appearance stream
+  // for `name`, so the overlay is 15 — allocated LAST, above everything the fill already numbered.
+  // That ordering is the point of where the block sits in fillFormWithReport: turning overlays on
+  // must renumber nothing, or the byte-identical guarantee at the end of this group stops meaning
+  // what it says.
+  check("the page's /Contents names the new stream", formObject(text, 4).includes("/Contents[15 0 R]"));
+  check("which holds the operators verbatim", formObject(text, 15).includes(marks));
+  check("and carries a /Length counted off those bytes", formObject(text, 15).includes(`/Length ${marks.length}`));
+  check("while the appearance stream the fill had already allocated has not moved",
+    formObject(text, 14).includes("/BBox[0 0 264 20]"));
+
+  // Independent of the appearance flag in both directions: page content is not an annotation, so
+  // /NeedAppearances has no opinion about it and the whole-document fallback cannot take it down.
+  // That is what lets the slot marks look the same in both export modes.
+  const plain = formText(fillForm(FORM.bytes, { name: "Vaani" }, { overlays: { 0: marks } }));
+  check("an overlay survives the mode that asks the reader to lay the text out instead",
+    plain.includes("/NeedAppearances true") && formObject(plain, 14).includes(marks));
+
+  // The fixture's page has no /Contents at all, which is legal (§7.7.3.3) and is the case the
+  // checks above are really exercising. A page that already HAS one has to gain a second, not
+  // lose its first — both spellings, because this template writes one of each.
+  check("the fixture really does have a page with no /Contents to begin with",
+    !formObject(FORM.text, 4).includes("/Contents"));
+  const drawing = "<</Length 15>>\nstream\n0 0 1 1 re f\nendstream";
+  for (const [shape, spelling] of [["one reference", "/Contents 13 0 R"], ["an array", "/Contents[13 0 R]"]]) {
+    const had = buildFormPdf({ contents: spelling, extra: [drawing] });
+    const out = formText(fillForm(had.bytes, {}, { overlays: { 0: marks } }));
+    check(`a page whose /Contents is ${shape} keeps what it had and gains ours`,
+      formObject(out, 4).includes("/Contents[13 0 R 14 0 R]") && out.includes("0 0 1 1 re f"));
+  }
+  check("a /Contents this cannot parse is refused, rather than replaced with ours alone",
+    throws(() => fillForm(buildFormPdf({ contents: "/Contents(not a stream)" }).bytes, {}, { overlays: { 0: marks } }),
+      /page 1 .*\/Contents/));
+
+  check("an empty overlay appends nothing, so a caller need not test for it first",
+    same(fillForm(FORM.bytes, { name: "Vaani" }, { appearances: true, overlays: { 0: "" } }),
+      fillForm(FORM.bytes, { name: "Vaani" }, { appearances: true })));
+  check("a page index the document hasn't got is refused rather than dropped",
+    throws(() => fillForm(FORM.bytes, {}, { overlays: { 3: marks } }), /page index "3".*has 1 page/s));
+
+  // The determinism rule the appearance streams already live under, extended over the object an
+  // overlay allocates.
+  check("same values, keys reordered, byte-identical",
+    same(fillForm(FORM.bytes, { name: "V", pronouns: "she" }, { appearances: true, overlays: { 0: marks } }),
+      fillForm(FORM.bytes, { pronouns: "she", name: "V" }, { appearances: true, overlays: { 0: marks } })));
 }
 
 // ---------- the sheet's fields ----------

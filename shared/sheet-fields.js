@@ -36,6 +36,14 @@
 // wants them, empty and ready to pencil in. Contrast the trait marks and the level up grid, which
 // ARE answered: a marked advancement is a choice already made and kept, not a resource spent.
 //
+// That rule is about the FIELDS, and it did not change when the sheet started saying which HP and
+// Stress boxes a character has at all. shared/sheet-marks.js draws those, and drawing is not
+// ticking: HOW MANY BOXES YOU HAVE is a permanent stat this file already prints as a number
+// (`hp-slots` below), where WHICH ONES ARE MARKED is state nothing here knows. So the boxes stay
+// unanswered as fields — still empty, still clickable, still yours to mark — and the capacity gets
+// drawn underneath them in page content instead. If those two ever look like the same decision,
+// the test is whether a long rest would change it: it clears marks and it does not change maxima.
+//
 // NOTHING TO SAY YET — boxes the template offers a player that the app has no model behind.
 // `gold-*`, the two `inventory1-`/`inventory2-` weapon blocks, `suggested-traits`,
 // `suggested-primary-weapon`, `suggested-armor` and `inventory-initial-options`. The app tracks
@@ -321,6 +329,12 @@ export function sheetFieldValues(character, db, { loadout = false } = {}) {
   // The counts, not the boxes. The template draws twelve checkboxes for each of these — what a
   // player marks off in play — and a small field beside them for how many they have at all. This
   // fills the number and leaves all twenty-four boxes alone; see the header.
+  //
+  // These two strings are read a SECOND time, by shared/sheet-marks.js, which traces the boxes
+  // this character owns and washes out the ones they do not. Read rather than re-derived, on
+  // purpose: the one failure that feature can have which no reader would catch is the drawing
+  // disagreeing with the number printed beside it, and two derivations of one number is exactly
+  // how they would come to. Whatever this line writes, that is what gets drawn.
   fields["hp-slots"] = text(s.hitPoints);
   fields["stress-slots"] = text(s.stress);
   fields["damage-threshold-major"] = text(s.thresholds?.major);
