@@ -44,7 +44,7 @@
 //   3. It would only work in one export mode. /NeedAppearances true asks the reader to regenerate
 //      appearances, and the readers that honour it draw their own idea of a checkbox over ours.
 //      Page content is not an annotation, so the flag has no opinion about it — and, for the same
-//      reason, a Chrome save leaves it alone, where it regenerates all 71 appearance streams.
+//      reason, a Chrome save leaves it alone — measured: the overlay came back byte for byte.
 //
 // Page content also draws UNDER the annotations, which is the behaviour this wants: a player who
 // ticks `hp7` in a reader gets the template's check on top of our traced box, not instead of it.

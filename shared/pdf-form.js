@@ -164,16 +164,32 @@
 // ghostscript's substituted Helvetica is noticeably wide, Chrome shrinks `class-features` to 6pt
 // in 19 lines using 127 of the box's 195.7 points, and Firefox drops 341 of its 1430 characters.
 //
-// AND WHAT A CHROME SAVE COSTS, WHICH IS THE OTHER HALF OF THE ARGUMENT. Ctrl-S in Chrome does not
-// hand back the file it was given. It regenerates all 71 appearances at its own sizes; it rewrites
-// every U+2019 in /V as a SEMICOLON (the same character in three files: the raw export has 4,
-// Firefox's save keeps all 4, Chrome's save has 0 and four semicolons — `Beastform;s`, which is on
-// the printed paper); and it draws em dashes through a CJK fallback font, `/_86 6 Tf (\xa1\xaa) Tj`,
-// 30 of them across the prose fields. Two of those three have an answer upstream of the save: the
-// em dash is ours the moment we draw it, and the curly quotes are to be rewritten in /V itself at
-// sheetFieldValues() — a separate step of the same plan, and deliberately not this file's, since
-// /V is the value and this module only ever copies it. Nothing here can stop the regeneration
-// itself, which is why "Clean format" is worth a user-facing checkbox rather than a silent default.
+// AND WHAT A CHROME SAVE COSTS, WHICH TURNED OUT TO DEPEND ENTIRELY ON THIS FLAG. Measured twice,
+// and the two measurements say opposite things:
+//
+//   /NeedAppearances TRUE   Ctrl-S does not hand back the file it was given. It regenerates all 71
+//                           appearances at its own sizes; it rewrites every U+2019 in /V as a
+//                           SEMICOLON (the same character in three files: the raw export has 4,
+//                           Firefox's save keeps all 4, Chrome's save has 0 and four semicolons —
+//                           `Beastform;s`, which is on printed paper); and it draws em dashes
+//                           through a CJK fallback font, `/_86 6 Tf (\xa1\xaa) Tj`, 30 of them
+//                           across the prose fields.
+//   /NeedAppearances FALSE  Ctrl-S changes ONLY what the user changed. Measured 2026-09-01 on a
+//                           real save: 44 of 45 filled text fields kept OUR /AP byte for byte, the
+//                           45th being the one field edited in the viewer; the flag came back
+//                           `false`; the page-content overlay was untouched; and rendering both
+//                           files at 200dpi and masking the five widgets the user actually touched
+//                           left ZERO differing pixels on page 1 and none at all on page 2.
+//
+// So the flag is not only about who lays the text out, it is also what makes a save non-destructive
+// — the reader has no standing instruction to redraw, so it doesn't. Chrome's redraw of the ONE
+// edited field reads /DA and comes back at our own size and our own font (`/DhHelv 24 Tf`), so an
+// edited field does not jump.
+//
+// Two of the three old costs had an answer upstream of the save anyway, and both are still worth
+// keeping: the em dash is ours the moment we draw it, and the curly quotes are rewritten in /V at
+// sheetFieldValues(). Keep them — the corruption was real when measured, this file cannot know
+// which mode a user will export in, and an edited prose field is still redrawn by Chrome.
 //
 // "CHROME AND FIREFOX AGREE" IS A CLAIM ABOUT PRINT, AND ONLY PRINT. Firefox's viewer never draws
 // our /AP at all: pdf.worker.mjs:53928 hands a text field to an HTML input and paints that

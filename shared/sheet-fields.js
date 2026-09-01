@@ -121,10 +121,14 @@ function featuresText(features) {
 //
 // MEASURED, on one character across three files. The raw export carries 4 \u00d7 U+2019; Firefox's
 // save preserves all four; CHROME'S SAVE REWRITES EVERY ONE AS A SEMICOLON \u2014 `Beastform;s`, and
-// those semicolons are on printed, scanned paper. The mechanism is unexplained (the same save
-// also regenerates all 71 appearance streams and draws em dashes through a CJK fallback font;
-// shared/pdf-form.js's header has the rest of that inventory). One Ctrl-S is all it takes, so
-// waiting for an explanation would mean shipping the corruption.
+// those semicolons are on printed, scanned paper. The mechanism is unexplained. One Ctrl-S is all
+// it takes, so waiting for an explanation would mean shipping the corruption.
+//
+// MEASURED UNDER /NeedAppearances TRUE, which is half the story and the smaller half. A save of a
+// Clean-format export (the flag false) was measured on 2026-09-01 and changed nothing but the one
+// field the user edited — see shared/pdf-form.js's header for the numbers. This flattening still
+// earns its keep in both modes: the non-Clean export is still offered, an edited prose field is
+// still redrawn, and a substitution that costs a reader nothing is not worth a mode test.
 //
 // THE TRAP: THIS RUNS OPPOSITE TO THE MINUS-SIGN SUBSTITUTION, AND BOTH ARE RIGHT
 //
