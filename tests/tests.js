@@ -6379,9 +6379,11 @@ group("Byte plumbing: one stream per drawn field, and the /Length that has to be
   // per colour section counts the shapes. Written as a walk over the lines rather than a regex over
   // the whole string so that a stream with its sections in an unexpected order is counted wrong
   // LOUDLY rather than quietly.
-  // An armor shield is a whole line of its own -- `q ... cm <path> f Q` -- because it is the one
-  // shape that arrives pre-translated rather than emitted at its final coordinates. So it is
-  // counted by its transform, and the S/f tally never sees it.
+  // An armor shield is a whole line of its own -- `q sx 0 0 sy tx ty cm <path> f Q` -- because it
+  // is the one shape that arrives pre-placed rather than emitted at its final coordinates: one
+  // outline lifted from the template, translated per slot and shrunk a little so the artwork's
+  // hairline ring keeps its air. So it is counted by its transform, and the S/f tally never sees
+  // it.
   const shapes = (ops) => {
     const out = { traced: 0, washed: 0, shields: 0, pips: 0 };
     let where = null;
@@ -6389,7 +6391,7 @@ group("Byte plumbing: one stream per drawn field, and the /Length that has to be
       if (line === `${SLOT_GEOMETRY.trace} RG`) where = "traced";
       else if (line === `${SLOT_GEOMETRY.wash} rg`) where = "washed";
       else if (line === `${SLOT_GEOMETRY.pip} rg`) where = "pips";
-      else if (line.startsWith("q 1 0 0 1 ")) out.shields += 1;
+      else if (/^q [\d.]+ 0 0 [\d.]+ /.test(line)) out.shields += 1;
       else if (line === "S" || line === "f") out[where] += 1;
     }
     return out;
@@ -6451,11 +6453,13 @@ group("Byte plumbing: one stream per drawn field, and the /Length that has to be
     // 4, so counting them proves nothing; where the eight ARE is the whole assertion.
     const g = SLOT_GEOMETRY.shields;
     const placed = (armor) => [...slotMarkOps({ "armor-score": armor })
-      .matchAll(/q 1 0 0 1 ([\d.]+) ([\d.]+) cm/g)]
+      .matchAll(/q [\d.]+ 0 0 [\d.]+ ([\d.]+) ([\d.]+) cm/g)]
       .map((m) => [Number(m[1]), Number(m[2])]);
+    // The slot's own corner plus the inset, since the outline is shrunk toward its middle rather
+    // than offset: shrinking by 2d and translating by d is what centres it in the space it had.
     const at = (index) => [
-      Number((g.x + g.pitch * (index % g.columns)).toFixed(3)),
-      Number((g.y - g.rowPitch * Math.floor(index / g.columns)).toFixed(3)),
+      Number((g.x + g.pitch * (index % g.columns) + g.washInset).toFixed(3)),
+      Number((g.y - g.rowPitch * Math.floor(index / g.columns) + g.washInset).toFixed(3)),
     ];
     eq("Armor Score 4 washes slots 5 to 12 — the last of the second row, then rows three and four",
       placed("4").map((p) => p.map((v) => Number(v.toFixed(3)))),
@@ -6463,11 +6467,21 @@ group("Byte plumbing: one stream per drawn field, and the /Length that has to be
     // The positive control for that: the same eight slots numbered DOWN the columns instead land
     // somewhere else entirely, so the check above is really about order and not just about count.
     const columnMajor = (index) => [
-      Number((g.x + g.pitch * Math.floor(index / (g.count / g.columns))).toFixed(3)),
-      Number((g.y - g.rowPitch * (index % (g.count / g.columns))).toFixed(3)),
+      Number((g.x + g.pitch * Math.floor(index / (g.count / g.columns)) + g.washInset).toFixed(3)),
+      Number((g.y - g.rowPitch * (index % (g.count / g.columns)) + g.washInset).toFixed(3)),
     ];
     check("and filling down the columns instead would put them in different places",
       [4, 5, 6, 7, 8, 9, 10, 11].some((i) => String(at(i)) !== String(columnMajor(i))));
+
+    // The shrink that goes with that translation. Scaling by (w - 2d)/w and moving by d leaves the
+    // outline centred in its old space with `washInset` of clearance on every side, which is what
+    // lets the artwork's 0.26pt ring print whole instead of being crowded by our fill.
+    const scales = [...slotMarkOps({ "armor-score": "0" }).matchAll(/q ([\d.]+) 0 0 ([\d.]+) /g)]
+      .map((m) => [Number(m[1]), Number(m[2])]);
+    eq("every shield is shrunk by one inset on each side, and by the same amount as every other",
+      [...new Set(scales.map(String))],
+      [String([Number(((g.width - 2 * g.washInset) / g.width).toFixed(4)),
+        Number(((g.height - 2 * g.washInset) / g.height).toFixed(4))])]);
 
     // The same redundancy the rows have, in two dimensions: `lastX` and `lastY` are the far corner
     // measured directly, so a mistyped pitch cannot agree with them.
@@ -6512,6 +6526,46 @@ group("Byte plumbing: one stream per drawn field, and the /Length that has to be
       ops.includes(`${SLOT_GEOMETRY.lineWidth} w 1 J 0 j [] 0 d\n`));
     eq("the same values in a different order are the same string",
       ops, slotMarkOps({ proficiency: "5", "stress-slots": "9", "hp-slots": "9" }));
+
+    // A TRACED BOX SITS ON THE ARTWORK; A WASHED ONE PULLS BACK FROM IT. Those are opposite
+    // requirements on the same rectangle, and getting them the same way round is the whole reason
+    // the inset is a separate constant rather than something folded into the geometry. A trace
+    // inset by half a point would no longer land on the dashes it is meant to replace — which is
+    // invisible in a shape count and obvious on paper.
+    const extents = (path) => {
+      const nums = [...path.matchAll(/([\d.]+) ([\d.]+)(?= |$)/g)].map((m) => [Number(m[1]), Number(m[2])]);
+      const xs = nums.map((q) => q[0]);
+      const ys = nums.map((q) => q[1]);
+      return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)].map((v) => Number(v.toFixed(3)));
+    };
+    const paths = ops.split("\n").filter((line) => line.endsWith(" h"));
+    const [hpRow] = SLOT_GEOMETRY.rows;
+    const boxOf = (i) => [hpRow.x + hpRow.pitch * i, hpRow.y, hpRow.x + hpRow.pitch * i + hpRow.width, hpRow.y + hpRow.height];
+    const shrink = ([a, b, c, d], n) => [a + n, b + n, c - n, d - n].map((v) => Number(v.toFixed(3)));
+    // With HP 9 the washes come first (sheet-marks.js draws them before the traces so a trace always
+    // wins an overlap), three of them, starting at box ten.
+    eq("a washed box is the artwork's rectangle pulled in by one inset on every side",
+      extents(paths[0]), shrink(boxOf(9), hpRow.washInset));
+    eq("and a traced box is the artwork's rectangle exactly, with no inset at all",
+      extents(paths[6]), shrink(boxOf(5), 0));
+    check("which are different rectangles, or neither assertion above means anything",
+      String(extents(paths[0])) !== String(shrink(boxOf(9), 0)));
+
+    // The row inset has an ORACLE, and this is it: the boxes are a stroke centred on the path we
+    // fill, so exactly half that stroke is the amount which hands every dash back whole. Any other
+    // value is either still covering the dashes or leaving a gap, and both are visible on paper.
+    eq("a row's wash pulls back by exactly half the stroke it sits inside",
+      SLOT_GEOMETRY.rows.map((r) => r.washInset),
+      SLOT_GEOMETRY.rows.map(() => SLOT_GEOMETRY.lineWidth / 2));
+    // The shield's inset has NO oracle and this test does not pretend otherwise. Its ring lies
+    // outside the path we fill, so nothing about the artwork fixes the number — a quarter point is
+    // roughly one ring-width of clearance, chosen by rendering it, and retuning it is a judgement
+    // call rather than a regression. What IS checkable is that it stays a clearance: positive, so
+    // the ring gets air at all, and far smaller than the shape, so a washed slot still reads as a
+    // shield rather than a dot.
+    check("the shield's inset is a clearance, not a resize",
+      SLOT_GEOMETRY.shields.washInset > 0
+        && SLOT_GEOMETRY.shields.washInset < SLOT_GEOMETRY.shields.width / 8);
 
     // THE PITCH, CHECKED AGAINST SOMETHING OTHER THAN ITSELF. The constants are measured off a
     // file this runner cannot open, so a bound derived from `pitch` would move with a typo in it

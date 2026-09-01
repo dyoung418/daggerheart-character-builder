@@ -93,8 +93,8 @@ import { formatNumber as n } from "./pdf.js";
 // tools/sheet/slot-geometry.py re-measures every term of it.
 export const SLOT_GEOMETRY = Object.freeze({
   rows: Object.freeze([
-    Object.freeze({ field: "hp-slots", x: 36.956, pitch: 18.777, last: 243.503, width: 15.287, y: 553.765, height: 7.643, count: 12, printed: 5 }),
-    Object.freeze({ field: "stress-slots", x: 62.863, pitch: 16.5162, last: 244.541, width: 13.447, y: 531.71, height: 7.643, count: 12, printed: 6 }),
+    Object.freeze({ field: "hp-slots", x: 36.956, pitch: 18.777, last: 243.503, width: 15.287, y: 553.765, height: 7.643, count: 12, printed: 5, washInset: 0.5 }),
+    Object.freeze({ field: "stress-slots", x: 62.863, pitch: 16.5162, last: 244.541, width: 13.447, y: 531.71, height: 7.643, count: 12, printed: 6, washInset: 0.5 }),
   ]),
   pips: Object.freeze({ field: "proficiency", x: 443.97, pitch: 11.442, last: 501.18, y: 615.04, radius: 3.235, count: 6, printed: 1 }),
   // The Armor Score slots: twelve shields in a 3-wide, 4-tall grid, filled left to right and then
@@ -110,6 +110,14 @@ export const SLOT_GEOMETRY = Object.freeze({
   shields: Object.freeze({
     field: "armor-score", x: 135.945, pitch: 13.068, lastX: 162.081, columns: 3,
     y: 701.515, rowPitch: 14.3753, lastY: 658.389, count: 12,
+    // The outline's own extent, which the wash inset needs in order to shrink about its centre.
+    width: 10.307, height: 11.531,
+    // A QUARTER, not the half the boxes use, and the difference is geometry rather than taste —
+    // see `washInset` below for the whole argument. Here the dark ring is 0.26pt and lies entirely
+    // OUTSIDE the path we fill, so the inset buys clearance rather than correcting an overlap: one
+    // ring-width of air is enough, and half a point on a 10pt shape starts to read as a smaller
+    // shield floating inside a larger one.
+    washInset: 0.25,
   }),
   // The artwork's own corner radius and stroke weight. A traced box is the SAME PATH the solid
   // boxes are drawn with, at the same width and the same round cap, which is why it lands on the
@@ -120,11 +128,31 @@ export const SLOT_GEOMETRY = Object.freeze({
   // the same path in a lighter grey, drawn as separate fragments rather than with a dash pattern,
   // which is why a solid stroke of the same weight covers them completely.
   trace: "0.42353 0.42745 0.43922",
-  // RGB(217,218,221): the dashed grey, most of the way to white. Chosen by rendering it, not
-  // computed. It has to read as "not yours" from across a table while staying clearly lighter than
-  // the template's tick — the check a player marks is a small dark stroke about 4pt wide, so a pale
-  // even wash across the whole box cannot be mistaken for one.
-  wash: "0.85098 0.8549 0.86667",
+  // RGB(198,199,203). Chosen by rendering it and then by READING IT ON PAPER, which moved it: the
+  // first value shipped was RGB(217,218,221), and printed it very nearly disappeared — a washed box
+  // measured ~252 against bare paper at ~254.5 on a 2026-09-01 scan, and the armor shields lost
+  // their hairline outline along with it. This is about half again as much ink.
+  //
+  // It stays clearly LIGHTER than the dashed outline it sits inside (RGB 188,189,192) so the two
+  // still read as fill and edge rather than one blob, and far lighter than the template's tick
+  // (a small dark stroke about 4pt wide), so a washed box can never be mistaken for a marked one.
+  wash: "0.77647 0.78039 0.79608",
+  // HOW FAR THE WASH PULLS BACK FROM THE OUTLINE IT SITS INSIDE — one per row, above, because the
+  // two shapes are not alike and a single number that suited both would be a coincidence.
+  //
+  // The HP and Stress boxes are a 1.0pt stroke CENTRED on the path we fill, so a fill on that same
+  // path covers the inner half of every dash — which is why, before this existed, a washed box's
+  // dashes printed at half weight and then very nearly vanished. Half the stroke width is exactly
+  // the amount that hands all of it back: the wash abuts the dash's inner edge, no gap, no overlap.
+  //
+  // The armor shields have no stroke at all — a dark shape with a smaller white one laid on top —
+  // so their 0.26pt ring lies wholly outside the path we fill, and an inset there is clearance
+  // rather than correction. Hence a quarter rather than a half.
+  //
+  // Both numbers exist because of paper. On screen the shipped wash was unmistakable; printed and
+  // scanned on 2026-09-01 a washed box measured ~252 against bare paper at ~254.5, and the shields
+  // lost their hairline ring along with the fill. Screen was the wrong witness for a feature whose
+  // whole purpose is a sheet you print.
   // RGB(62,62,63), lifted from the one pip the template fills in for you.
   pip: "0.24314 0.24314 0.24706",
 });
@@ -187,6 +215,16 @@ function boxAt(row, index) {
   return [x, row.y, x + row.width, row.y + row.height];
 }
 
+// The wash for one box: the same rounded rectangle, pulled in by WASH_INSET on every side. A
+// rounded rect is the one shape here that admits an exact inset — shrink the corner radius by the
+// same amount and the offset curve IS a rounded rect — so this is a true offset and not an
+// approximation. The radius floors at zero for a box too small to keep its corners, which no box
+// on this sheet is, but which is cheaper to write than to reason about later.
+function insetRect(row, [x0, y0, x1, y1]) {
+  const d = row.washInset;
+  return roundedRect(x0 + d, y0 + d, x1 - d, y1 - d, Math.max(0, SLOT_GEOMETRY.radius - d));
+}
+
 // One armor shield, translated into place. A `cm` rather than twelve translated copies of the
 // path: the operators are identical for every slot, so the only thing that differs is where it
 // lands, and saying so in one transform is both smaller and easier to check than the same curve
@@ -194,7 +232,15 @@ function boxAt(row, index) {
 function shieldAt(grid, index) {
   const x = grid.x + grid.pitch * (index % grid.columns);
   const y = grid.y - grid.rowPitch * Math.floor(index / grid.columns);
-  return `q 1 0 0 1 ${n(x)} ${n(y)} cm ${SHIELD_PATH} f Q\n`;
+  // SCALED ABOUT ITS CENTRE, not offset. PDF has no offset-path operator and a shield is not a
+  // shape with an exact one anyway, so the inset is approximated by shrinking the whole outline
+  // toward its middle. That is not the same thing — a scale pulls the pointed tip in further than
+  // the flat sides — but on a 10.3 x 11.5pt shape at a half-point it is a difference of tenths of
+  // a point in one direction, and the alternative is carrying a second hand-fitted path.
+  const d = grid.washInset;
+  const sx = (grid.width - 2 * d) / grid.width;
+  const sy = (grid.height - 2 * d) / grid.height;
+  return `q ${n(sx)} 0 0 ${n(sy)} ${n(x + d)} ${n(y + d)} cm ${SHIELD_PATH} f Q\n`;
 }
 
 /**
@@ -225,7 +271,7 @@ export function slotMarkOps(fieldValues) {
     // ...and wash out everything past the last one they own, whether the artwork drew it dashed or
     // not. A row can only be shorter than `printed` if a future rule lowers a minimum, and in that
     // case washing a box the template drew solid is the right answer rather than a special case.
-    for (let i = to; i < row.count; i++) washes.push(roundedRect(...boxAt(row, i), SLOT_GEOMETRY.radius));
+    for (let i = to; i < row.count; i++) washes.push(insetRect(row, boxAt(row, i)));
   }
 
   // Armor is WASHED ONLY, and its slots are numbered across the grid before down it — the order
