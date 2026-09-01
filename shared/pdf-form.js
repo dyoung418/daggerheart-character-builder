@@ -557,13 +557,30 @@ function acroWithFont(acroDict, font, needAppearances) {
 
 // The field's own /DA with the font name swapped for ours, so the size and colour the template
 // chose survive — including `0 Tf`, which is what asks the viewer to fit the text to the box.
-function daNaming(fieldDict, fontName) {
+function daNaming(fieldDict, fontName, size = 0) {
   const da = entryValue(fieldDict.trim(), "DA");
   const inner = da && da.startsWith("(") ? da.slice(1, -1) : "";
   const swapped = /^\s*\/[^\s/]+/.test(inner)
     ? inner.replace(/^\s*\/[^\s/]+/, `/${fontName}`)
     : `/${fontName} 0 Tf 0 g`;
-  return `(${swapped})`;
+  // WRITE THE SIZE WE CHOSE, once we have chosen one. Every /DA in this template says `0 Tf` —
+  // "reader, pick a size" — and preserving that while drawing at a size of our own leaves the
+  // field telling two stories. It also has one very visible consequence, which is the reason this
+  // parameter exists at all:
+  //
+  // Firefox's VIEWER never draws an /AP. pdf.worker.mjs:53927 hands every field to a real HTML
+  // <input>, and pdf.mjs:17421 sizes that input `min(fontSize || 9, (height - 2) / 1.35)` — so
+  // `0 Tf` falls through to a hardcoded NINE POINTS whatever the box is. `evasion` is a 32.3pt
+  // shield and Firefox draws its two digits at 9px, which is what "it still looks small in
+  // Firefox" means: not our layout losing, our layout never being consulted. Writing 26 there
+  // gives min(26, 22.4) = 22.4px instead, and the on-screen field finally resembles the printed
+  // one. Chrome's regeneration reads the same key, so a Chrome save lands nearer our layout too.
+  //
+  // Only when appearances are ON. With them off the reader really is doing the fitting, and a
+  // fixed size would stop it shrinking to fit text the user types — which is precisely the mode
+  // chosen by someone who intends to type into it.
+  const sized = size > 0 ? swapped.replace(/(^\s*\/[^\s/]+\s+)[\d.]+(\s+Tf)/, `$1${formatNumber(size)}$2`) : swapped;
+  return `(${sized})`;
 }
 
 function rewriteDict(dict, dropKeys, additions) {
@@ -1122,7 +1139,7 @@ export function fillFormWithReport(bytes, values, { appearances = false } = {}) 
     // FIRST — which is the template's `q\nQ\n`, so every filled field prints blank, with no
     // fallback and nothing on the page to say so.
     updates.set(field.obj, rewriteDict(field.dict, ["V", "AP", "DA"],
-      `/V${utf16HexString(String(value))}/DA${daNaming(field.dict, ourFont.name)}` +
+      `/V${utf16HexString(String(value))}/DA${daNaming(field.dict, ourFont.name, drawing ? drawing.size : 0)}` +
       (drawing ? `/AP<</N ${formatNumber(drawing.obj)} 0 R>>` : "")));
     if (drawing) updates.set(drawing.obj, { dict: appearanceDict(drawing.box, ourFont), stream: drawing.ops });
   }
@@ -1300,7 +1317,9 @@ function drawFields(texts, ourFont) {
   const streams = new Map();
   const truncated = [];
   laid.forEach((entry, index) => {
-    streams.set(entry.field.obj, { obj: ourFont.obj + 1 + index, ops: entry.result.ops, box: entry.box });
+    streams.set(entry.field.obj, {
+      obj: ourFont.obj + 1 + index, ops: entry.result.ops, box: entry.box, size: entry.result.size,
+    });
     if (entry.result.notes.truncated) truncated.push(entry.name);
   });
   return { streams, fellBack: null, truncated };
