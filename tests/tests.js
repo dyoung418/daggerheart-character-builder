@@ -141,9 +141,28 @@ const {
   formatNumber,
   pageContentStream,
 } = await import(`../shared/pdf.js${RUN}`);
+// The three layers under the sheet's own appearance streams, imported in the order they stack:
+// bytes and widths, then wrapping and operators, then objects and xref offsets. `measure` is
+// renamed on the way in because the wrap tests inject a measurer of their own under that name —
+// shared/pdf-text.js does the same, for the same reason.
 const {
+  HELVETICA_WIDTHS,
+  encodeWinAnsi,
+  literalBody,
+  measure: helveticaMeasure,
+} = await import(`../shared/winansi.js${RUN}`);
+const {
+  LAYOUT,
+  fitLines,
+  textAppearance,
+  wrapLines,
+} = await import(`../shared/pdf-text.js${RUN}`);
+const {
+  fieldBox,
   fillForm,
+  fillFormWithReport,
   readForm,
+  rectOf,
 } = await import(`../shared/pdf-form.js${RUN}`);
 const {
   CARDS_PER_PAGE,
@@ -5171,10 +5190,22 @@ const formFailure = (fn) => {
 // parameters because a file identifier may legally be written as literal strings full of bytes no
 // ASCII writer would accept, and null for either drops the key entirely — the template that names
 // neither is the one that proves neither is invented.
+//
+// `widgets` appends extra widget dictionaries and lists them in BOTH /Fields and /Annots, so a
+// group that needs a trap the four standard fields haven't got can add one without renumbering
+// anything: they land after object 12, above every number the assertions below pin. It defaults to
+// empty, and the default fixture is byte-identical to the one that existed before it was added —
+// which is what lets TRAP_WIDGETS carry the /Q, /Ff, /DA and /Rect shapes the appearance work
+// needs without a single existing check moving.
 function buildFormPdf({
   fields = "5 0 R 6 0 R 7 0 R 8 0 R", acroForm = "/AcroForm 3 0 R", extra = [], tail = "%%EOF\n",
   info = "12 0 R", id = "[<0102030405060708090A0B0C0D0E0F10><100F0E0D0C0B0A090807060504030201>]",
+  widgets = [],
 } = {}) {
+  // Object numbers are positions in `objects` below, and `widgets` goes last, so the first of them
+  // is one past the twelve standard objects and whatever `extra` added. Computed here because
+  // /Fields and /Annots are written before the array is built.
+  const widgetRefs = widgets.map((_, i) => ` ${13 + extra.length + i} 0 R`).join("");
   // The appearance stream every widget below points its /AP at — and the fixture's first trap.
   // Its content spells "7 0 obj" on a line of its own, which is object 7's header: a scanner
   // that runs one global regex over the file finds it, and because a later definition wins in an
@@ -5184,8 +5215,8 @@ function buildFormPdf({
   const objects = [
     `<</Type/Catalog/Pages 2 0 R${acroForm}>>`,
     "<</Type/Pages/Kids[4 0 R]/Count 1>>",
-    `<</Fields[${fields}]/DA(/Helvetica 0 Tf 0 g)/DR<</Font<</Helvetica 11 0 R>>>>>>`,
-    "<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]/Annots[5 0 R 6 0 R 7 0 R 8 0 R]>>",
+    `<</Fields[${fields}${widgetRefs}]/DA(/Helvetica 0 Tf 0 g)/DR<</Font<</Helvetica 11 0 R>>>>>>`,
+    `<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]/Annots[5 0 R 6 0 R 7 0 R 8 0 R${widgetRefs}]>>`,
     // The second trap: a /TU whose literal string nests parentheses. Scanning for the next ")"
     // ends this dictionary in the middle of "as written", and the walk that follows then reports
     // a perfectly good template as malformed. /V is here too, so the rewrite has to REMOVE it —
@@ -5220,6 +5251,7 @@ function buildFormPdf({
       + "/Differences[149/Lslash 150/OE 151/Scaron]>>>>",
     "<</Producer(Master PDF Editor)/CreationDate(D:20260101000000Z)>>",
     ...extra,
+    ...widgets,
   ];
 
   let text = "%PDF-1.7\n%\xe2\xe3\xcf\xd3\n";
@@ -5438,8 +5470,21 @@ group("What one value at a time does to the file");
   const blank = lastXrefSection(formText(fillForm(FORM.bytes, { name: "", pronouns: null, "agi-marked": undefined })));
   eq("an empty, null or undefined value rewrites nothing but the AcroForm",
     blank.entries.map((e) => e.obj), [3]);
-  check("which is still asked to draw the values, since this module writes no /AP of its own",
+  // /NeedAppearances is the request that the READER lay the values out, and it is set either way
+  // round — false exactly when there is a drawing of ours to look at. Both halves are asserted
+  // here because the flag and the /AP have to move together: true beside our own /AP makes a
+  // reader regenerate over the top of it, and false beside no /AP at all draws NOTHING in Firefox
+  // (`_getAppearance` returns null at pdf.worker.mjs:54101), which is a blank field with no error.
+  check("with appearances off the AcroForm still asks the reader to draw the values",
     formObject(formText(fillForm(FORM.bytes, { name: "x" })), 3).includes("/NeedAppearances true"));
+  check("and with them on it stops asking, because we drew them",
+    formObject(formText(fillForm(FORM.bytes, { name: "x" }, { appearances: true })), 3)
+      .includes("/NeedAppearances false"));
+  // A fill of nothing but ticks draws nothing, so the request stands — the flag follows the
+  // DRAWING, not the option.
+  check("while a fill of nothing but ticks keeps asking even with appearances on, since nothing was drawn",
+    formObject(formText(fillForm(FORM.bytes, { "agi-marked": true }, { appearances: true })), 3)
+      .includes("/NeedAppearances true"));
 
   // The verbatim-copy path, which is not a second asciiBytes(): 0xEE came out of the template a
   // moment ago and goes back unchanged. A re-encode would put 0xC3 0xAE there instead.
@@ -5459,27 +5504,47 @@ group("What one value at a time does to the file");
     [formFailure(() => fillForm(FORM.bytes, readForm(FORM.bytes)))], "second argument");
 }
 
-group("The appearance a filled text field shipped with is deleted; a ticked box keeps its own");
+group("The appearance a filled text field shipped with is replaced; a ticked box keeps its own");
 {
   // The half of this module that no rendering check would ever catch, which is why it is pinned
   // here rather than left to a look at the export. A template's text widget ships with an /AP
-  // drawing an EMPTY box, and a viewer that trusts a present /AP over /NeedAppearances draws that
-  // emptiness: the file is correct and the page is blank. Measured, not reasoned about — pixels
-  // differing from the empty template at -dPrinted=true -r100: keeping the stale /AP left
-  // ghostscript at 39, which is a blank sheet, where dropping it prints 4119. Poppler drew the
+  // drawing an EMPTY box — 12 FlateDecode bytes inflating to `q\nQ\n`, identical in all 71 of them
+  // — and a viewer that trusts a present /AP over /NeedAppearances draws that emptiness: the file
+  // is correct and the page is blank. Measured, not reasoned about — pixels differing from the
+  // empty template at -dPrinted=true -r100: keeping the stale /AP left ghostscript at 39, which is
+  // a blank sheet, where dropping it prints 4119 and drawing our own prints 4089. Poppler drew the
   // values either way, so the screen said it worked, and so would a screenshot of it.
-  const filled = fillForm(FORM.bytes, { name: "Fáelán", "agi-marked": true, "str-marked": true });
+  //
+  // THE RULE IS "EXACTLY ONE /AP", NOT "NO /AP", and it always was: `["V", "AP", "DA"]` stays in
+  // the drop list in both modes and the ADDITIONS differ. Leaving "AP" out when we add one of our
+  // own would leave the widget carrying two /AP keys, and ghostscript takes the FIRST — the
+  // template's `q\nQ\n` — so every filled field would print blank, with no fallback and nothing on
+  // the page to say so. This group fills with appearances ON, which makes the four checkbox
+  // assertions below a second fact: they are unedited, and they still pass, because not one line
+  // of the /Btn branch changed when the /Tx branch learned to draw.
+  const filled = fillForm(FORM.bytes,
+    { name: "Fáelán", "agi-marked": true, "str-marked": true }, { appearances: true });
   const text = formText(filled);
 
   // The positive control, and the group is worth nothing without it: the widget HAS an /AP to
-  // lose, so "no /AP" below is a fact about what fillForm wrote and not about a key that was
-  // never in this fixture.
+  // replace, so what is asserted below is a fact about what fillForm wrote and not about a key
+  // that was never in this fixture.
   check("the template's text widget really does carry an /AP to lose",
     readForm(FORM.bytes).fields.get("name").dict.includes("/AP<</N 10 0 R>>"));
-  eq("and the rewritten field carries none — not an emptied one, not a nulled one",
-    (formObject(text, 5).match(/\/AP/g) || []).length, 0);
+  const rewritten = formObject(text, 5);
+  eq("and the rewritten field carries exactly one — not two, not an emptied one, not a nulled one",
+    (rewritten.match(/\/AP/g) || []).length, 1);
+  const drawing = Number((/\/AP<<\/N (\d+) 0 R>>/.exec(rewritten) || [])[1]);
+  check("which points at a FRESH object rather than back at the template's shared one",
+    Number.isInteger(drawing) && drawing !== 10);
+  check("and that object is really in the file, as a form XObject with a stream in it",
+    formObject(text, drawing).includes("/Subtype/Form") && formObject(text, drawing).includes("stream"));
   check("while the value it was rewritten for is in it, so the field wasn't simply left alone",
-    formObject(text, 5).includes("/V<FEFF"));
+    rewritten.includes("/V<FEFF"));
+  // With appearances off the same field carries none at all, which is the other half of the same
+  // rule and the mode everything falls back to.
+  eq("and with appearances off it carries none, which is what /NeedAppearances is then for",
+    (formObject(formText(fillForm(FORM.bytes, { name: "Fáelán" })), 5).match(/\/AP/g) || []).length, 0);
 
   // The other half, one edit away from the first: "strip /AP from every widget" passes everything
   // above and unticks every box. A checkbox's /AP is its two REAL appearances, and /AS is the key
@@ -5648,6 +5713,641 @@ group("A file identifier is quoted back out of the template, never composed");
     !trailer.includes("/ID") && !trailer.includes("/Info"));
   check("and is still a file, with the /Prev that makes the update an update",
     trailer.includes(`/Prev ${plain.xrefAt}`));
+}
+
+// ---------- drawing the sheet's text ourselves ----------
+//
+// shared/winansi.js and shared/pdf-text.js are the two pure modules under the appearance streams
+// shared/pdf-form.js now writes. They exist because the alternative — /NeedAppearances true, which
+// formally asks the READER to lay the values out — was answered four ways by four readers, and one
+// of them answered it by dropping 341 of the 1430 characters in `class-features` on printed paper,
+// silently. Firefox's shipped pdf.worker.mjs:54240 sizes a block so that `chunks × fontSize ≤
+// height` and then renders it at `height / numberOfLines ≈ 1.35 × fontSize`, so the block overflows
+// the field and the /AP's own /BBox clips the tail.
+//
+// Widths, encoding, wrapping, fitting and operators are strings in and strings out — no PDF, no
+// DOM, no renderer — which is the whole reason a layout that four readers disagreed about is
+// checkable in a runner with none of them in it. The two groups that DO open a file are the ones
+// where those strings become objects, a /Length and an xref section, and they fill the fixture
+// below rather than the real template: data/sheet is a symlink into a private repo, so it is absent
+// in CI and in any clone.
+
+// Four more widgets for that fixture, carrying the four shapes the real template has that the four
+// standard fields haven't. Every one of them decides something about the drawing, and every one is
+// a place a wrong implementation fails quietly rather than loudly:
+//
+//   /Q 2          three of the template's fields are right-aligned, and /Q decides the x of every
+//                 line — the difference between a number in its box and one off the edge.
+//   /Ff 4096      bit 13, multiline, set on 16 of the template's 71 text fields. It is the ONLY
+//                 branch the reader bug lives in; the single-line branch is closed-form.
+//   1 1 1 rg      `name-pg2` is white on a banner measured at RGB(61,61,63), and carries the same
+//                 string as `name` — so the template gives a free two-colour check on one value.
+//   reversed /Rect  §12.5.2 lets a rectangle store its corners in either order, and this template
+//                 really does: `hope1` is [41.25 487.5 52.75 477], top-left to bottom-right.
+//                 Subtracting in file order gives a NEGATIVE extent, and a form XObject whose
+//                 /BBox has one draws NOTHING in either PDFium or MuPDF — no error, no warning, an
+//                 empty field. The real one is a checkbox, so nothing draws into it and the trap
+//                 is unarmed there; here it is a text field, so it goes off.
+//
+// They all point their /AP at object 10, like everything else in this fixture, because that is the
+// other trap: object 10 is the appearance for both text widgets AND for both states of both
+// checkboxes, so an implementation that "updates the /AP the widget already points at" would draw
+// one field's text into five places, two of them ticks.
+const TRAP_WIDGETS = [
+  "<</Type/Annot/Subtype/Widget/FT/Tx/T(proficiency)/P 4 0 R/Rect[500 700 540 720]/Q 2"
+    + "/DA(/Helvetica 0 Tf 0 g)/AP<</N 10 0 R>>>>",
+  "<</Type/Annot/Subtype/Widget/FT/Tx/T(class-features)/P 4 0 R/Rect[36 400 300 590]/Ff 4096"
+    + "/DA(/Helvetica 0 Tf 0 g)/AP<</N 10 0 R>>>>",
+  "<</Type/Annot/Subtype/Widget/FT/Tx/T(name-pg2)/P 4 0 R/Rect[36 300 300 320]"
+    + "/DA(/Helvetica 0 Tf 1 1 1 rg)/AP<</N 10 0 R>>>>",
+  "<</Type/Annot/Subtype/Widget/FT/Tx/T(armor-score)/P 4 0 R/Rect[41.25 487.5 72.75 467.5]"
+    + "/DA(/Helvetica 0 Tf 0 g)/AP<</N 10 0 R>>>>",
+];
+const TRAPS = buildFormPdf({ widgets: TRAP_WIDGETS });
+
+group("The fixture's four appearance traps are really in it");
+{
+  // The positive control for the whole of the byte-plumbing group below, stated once here: each of
+  // those four shapes has to be READ off the widget before it can be honoured, so an assertion
+  // that one was honoured means nothing unless the widget really says it.
+  const form = readForm(TRAPS.bytes);
+  eq("eight live fields now, the original four and the four traps",
+    [...form.fields.keys()],
+    ["name", "pronouns", "agi-marked", "str-marked", "proficiency", "class-features", "name-pg2", "armor-score"]);
+  eq("and they are numbered above everything the assertions above pin",
+    ["proficiency", "class-features", "name-pg2", "armor-score"].map((n) => form.fields.get(n).obj),
+    [13, 14, 15, 16]);
+  eq("one is right-aligned, one is multiline, one is white, and one has its corners the wrong way round",
+    ["proficiency", "class-features", "name-pg2", "armor-score"].map((n) => {
+      const box = fieldBox(form.fields.get(n).dict, n);
+      return [box.quad, box.multiline, box.colour, box.height];
+    }),
+    [[2, false, "0 g", 20], [0, true, "0 g", 190], [0, false, "1 1 1 rg", 20], [0, false, "0 g", 20]]);
+  check("the reversed one really is stored top-left to bottom-right, so normalising it is doing something",
+    /\/Rect\[41\.25 487\.5 72\.75 467\.5\]/.test(form.fields.get("armor-score").dict));
+  check("and every one of them points its /AP at the object the checkboxes also use",
+    ["name", "proficiency", "class-features", "name-pg2", "armor-score"]
+      .every((n) => form.fields.get(n).dict.includes("/AP<</N 10 0 R>>"))
+      && form.fields.get("agi-marked").dict.includes("/AP<</N<</Yes 10 0 R/Off 10 0 R>>>>"));
+  // And the default fixture is untouched by the widening, which is what lets every check above
+  // this point stay exactly as it was written.
+  eq("while the default fixture still has its original four, and its original object numbers",
+    [[...readForm(FORM.bytes).fields.keys()].length, readForm(FORM.bytes).fields.get("name").obj], [4, 5]);
+}
+
+group("Helvetica's widths: 224 codes, one sum, and the code that is not a control");
+{
+  eq("the table covers the whole byte range, so no code can index off the end",
+    HELVETICA_WIDTHS.length, 256);
+  eq("codes 0-31 are zero, because nothing may draw a control character",
+    HELVETICA_WIDTHS.slice(0, 32).filter((w) => w !== 0).length, 0);
+  eq("and 32 to 255 is 224 codes, counted rather than assumed", HELVETICA_WIDTHS.slice(32).length, 224);
+
+  // NO HOLES. A missing entry reads as `undefined`, `thousandths += undefined` is NaN, and every
+  // comparison the fitter makes against NaN is false — so a hole does not throw, it silently sends
+  // one field to the 6pt floor and looks like a layout bug rather than a table bug.
+  const holes = [];
+  for (let code = 32; code <= 255; code++) {
+    if (!Number.isInteger(HELVETICA_WIDTHS[code]) || HELVETICA_WIDTHS[code] <= 0) holes.push(code);
+  }
+  eq("every one of them has a positive integer width — no holes", holes, []);
+
+  // The three whole-table checks tools/sheet/helvetica-table.py prints on stderr, so a
+  // re-derivation of the table is checkable here without anyone reading 256 numbers.
+  let sum = 0;
+  for (let code = 32; code <= 255; code++) sum += HELVETICA_WIDTHS[code];
+  eq("they sum to 120823, which is the whole table in one number", sum, 120823);
+  eq("across 28 distinct values", new Set(HELVETICA_WIDTHS.slice(32)).size, 28);
+  eq("and \"Hello\" at 11pt measures 25.058pt, which is what PyMuPDF measures for real Helvetica",
+    helveticaMeasure(encodeWinAnsi("Hello").codes, 11), 25.058);
+
+  // Ten spot values: a space, a hyphen, a digit, two capitals of very different widths, the
+  // narrowest and one of the widest lowercase letters, and three of the high codes.
+  eq("ten spot values, read off the table by hand",
+    [32, 45, 48, 65, 87, 105, 109, 0x80, 0x85, 0xa0].map((c) => HELVETICA_WIDTHS[c]),
+    [278, 333, 556, 667, 944, 222, 833, 556, 1000, 278]);
+
+  // THE TRAP. WinAnsi is neither Latin-1 nor cp1252: it fills DEL and cp1252's five holes (0x81
+  // 0x8D 0x8F 0x90 0x9D) with /bullet. A table that zeroed "the control range" would mis-measure
+  // every line holding one, and the error runs the dangerous way — a line measured narrower than
+  // it draws fits a box it then overflows, which is this feature's own defect with our name on it.
+  eq("code 127 is /bullet at 350, not a control at 0", HELVETICA_WIDTHS[127], 350);
+  // The positive control: its neighbours are their own ordinary glyphs, so 350 above is a fill
+  // rather than a table that says 350 everywhere.
+  eq("while 126 and 128 are their own widths, so that is a fill and not a flat table",
+    [HELVETICA_WIDTHS[126], HELVETICA_WIDTHS[128]], [584, 556]);
+  eq("and the other five holes carry it too", [0x81, 0x8d, 0x8f, 0x90, 0x9d].map((c) => HELVETICA_WIDTHS[c]),
+    [350, 350, 350, 350, 350]);
+}
+
+group("Encoding: what WinAnsi draws, what it can't, and what never reaches the file raw");
+{
+  // Codes come back as a latin1 string — one character per byte — so every assertion below reads
+  // them out as numbers rather than trusting a terminal to show the difference between byte 0x97
+  // and the character U+0097, which is the confusion the module exists to keep straight.
+  const bytes = (codes) => [...codes].map((c) => c.charCodeAt(0));
+
+  // SUBSTITUTED, NOT UNMAPPABLE, and the distinction is what keeps the feature switched on: nine
+  // of the 69 SRD 2.0 armors carry U+2212 (Scale Mail, Banded and their improved forms), and
+  // `unmappable` is the note that sends the WHOLE DOCUMENT back to reader layout.
+  const minus = encodeWinAnsi("\u2212 and \u2011");
+  eq("U+2212 MINUS SIGN and U+2011 NON-BREAKING HYPHEN are both drawn as an ASCII hyphen",
+    bytes(minus.codes), bytes("- and -"));
+  eq("and both are reported, by code point, in first-appearance order, with what they became",
+    minus.notes.substituted.map((n) => [n.codePoint, n.replacement, n.count]),
+    [[0x2212, "-", 1], [0x2011, "-", 1]]);
+  eq("neither counts as unmappable or removed, which are the two notes a caller acts on",
+    [minus.notes.unmappable.length, minus.notes.removed.length], [0, 0]);
+  eq("and three of the same character is one note with a count, not three notes",
+    encodeWinAnsi("\u2212\u2212\u2212").notes.substituted,
+    [{ char: "\u2212", codePoint: 0x2212, count: 3, replacement: "-" }]);
+
+  // Walked as CODE POINTS, not code units: an emoji is one thing to report rather than two
+  // surrogate halves that mean nothing to whoever reads the message.
+  const emoji = encodeWinAnsi("a\u{1f600}b");
+  eq("an emoji is unmappable, as ONE note rather than two surrogate halves",
+    emoji.notes.unmappable, [{ char: "\u{1f600}", codePoint: 0x1f600, count: 1 }]);
+  eq("and nothing of it is left in the bytes", bytes(emoji.codes), bytes("ab"));
+
+  // U+00AD SOFT HYPHEN, with its witness in the shipped data: data/srd_2_0/classes.json's Patron's
+  // Pact reads "supernatural entity<AD>—such as", and WinAnsi's BYTE 0xAD is a real /hyphen — so
+  // passing the code point straight through prints "entity-—such".
+  const soft = encodeWinAnsi("entity\u00ad\u2014such");
+  eq("U+00AD is removed rather than drawn as the hyphen its own byte would be",
+    bytes(soft.codes), [...bytes("entity"), 0x97, ...bytes("such")]);
+  eq("and it is reported as removed, which is a note the user is deliberately NOT shown",
+    [soft.notes.removed.map((n) => n.codePoint), soft.notes.unmappable.length], [[0xad], 0]);
+  // The positive control: byte 0xAD really is a drawable hyphen, so "removed" is a decision taken
+  // about a glyph that exists rather than a character the table had no room for.
+  eq("the positive control: WinAnsi 0xAD is a real /hyphen, 333/1000 em wide", HELVETICA_WIDTHS[0xad], 333);
+
+  // U+00A0 runs the other way. It IS a glyph, so it encodes; the wrapper must then not break at it,
+  // which the wrapping group below is about.
+  eq("U+00A0 NO-BREAK SPACE encodes to byte 0xA0 rather than being removed",
+    bytes(encodeWinAnsi("a\u00a0b").codes), [97, 0xa0, 98]);
+  eq("and it is a space-width glyph, which is why it costs a line its width",
+    HELVETICA_WIDTHS[0xa0], 278);
+
+  eq("a bullet is byte 0x95, and reaches the file as the octal escape \\225",
+    [bytes(encodeWinAnsi("•").codes), literalBody(encodeWinAnsi("•").codes)], [[0x95], "\\225"]);
+  eq("and featuresText's own bullet, U+00B7 MIDDLE DOT, is byte 0xB7 and \\267",
+    [bytes(encodeWinAnsi("·").codes), literalBody(encodeWinAnsi("·").codes)], [[0xb7], "\\267"]);
+  eq("the string syntax itself is escaped, so no value can end the literal early",
+    literalBody(encodeWinAnsi("a(b)c\\d").codes), "a\\(b\\)c\\\\d");
+  eq("every `j` goes out as \\152 and every `/` as \\057, unconditionally",
+    [literalBody(encodeWinAnsi("endobj").codes), literalBody(encodeWinAnsi("/ObjStm").codes)],
+    ["endob\\152", "\\057Ob\\152Stm"]);
+
+  // Those last two rules, end to end, because they are not tidiness: readForm REFUSES any file
+  // containing /ObjStm before it parses a byte of it, and its object scanner finds an object's end
+  // with indexOf("endobj"). `class-features`, `appearance` and `connections` are unbounded
+  // textareas, so both tokens are one paste away — and the error the user would otherwise get
+  // names the TEMPLATE as unreadable, which is wrong and unfixable from where they are standing.
+  const risky = fillForm(TRAPS.bytes,
+    { name: "endobj", "class-features": "/ObjStm /Encrypt /Type/XRef" }, { appearances: true });
+  const riskyText = formText(risky);
+  check("the drawing really does carry both tokens — this is what is being escaped",
+    riskyText.includes("(endob\\152)") && riskyText.includes("\\057Ob\\152Stm"));
+  const appended = riskyText.slice(TRAPS.bytes.length);
+  check("and no raw /ObjStm survives in the bytes we appended", !appended.includes("/ObjStm"));
+  eq("nor a raw endobj beyond the one that ends each object we wrote",
+    (appended.match(/endobj/g) || []).length, lastXrefSection(riskyText).entries.length);
+  eq("so the filled file still reads back as a form rather than being refused by name",
+    formFailure(() => readForm(risky)), "");
+  eq("with every field still on it", readForm(risky).fields.size, readForm(TRAPS.bytes).fields.size);
+
+  // A positive control per rule, and the group is worth nothing without them: undo one escape and
+  // the same bytes really are refused, undo the other and an object walk really does stop inside
+  // a stream. Both are made from the file that just passed, so nothing else differs.
+  const unslashed = Uint8Array.from(riskyText.replace(/\\057Ob\\152Stm/g, "/ObjStm"), (c) => c.charCodeAt(0));
+  has("with the `/` escape undone, that same file is refused by name",
+    [formFailure(() => readForm(unslashed))], "/ObjStm");
+  const apObj = Number((/\/AP<<\/N (\d+) 0 R>>/.exec(formObject(riskyText, 5)) || [])[1]);
+  check("and the drawn field's appearance object runs all the way to its own endobj",
+    formObject(riskyText, apObj).includes("endstream"));
+  check("where with the `j` escape undone the same walk stops inside the stream",
+    !formObject(riskyText.replace(/endob\\152/g, "endobj"), apObj).includes("endstream"));
+}
+
+group("Wrapping: newlines are structure, and a no-break space is not a break");
+{
+  // A measurer of exactly ten points to the character, so every break below can be read off the
+  // fixture by counting — tests.js:4870's idiom, one layer down. Size is ignored on purpose here:
+  // these assertions are about where the breaks land, and the fitting group below is the one that
+  // varies the size.
+  const measure = (text) => text.length * 10;
+
+  eq("a word wider than the line hard-breaks rather than being pushed to a fresh line forever",
+    wrapLines("supercalifragilistic", 100, 10, measure), ["supercalif", "ragilistic"]);
+  eq("and the halves rejoin with nothing inserted between them",
+    wrapLines("supercalifragilistic", 100, 10, measure).join(""), "supercalifragilistic");
+  eq("greedy: as many words as fit, then the next line",
+    wrapLines("aaaa bb cccccc dd", 100, 10, measure), ["aaaa bb", "cccccc dd"]);
+
+  // NEWLINES ARE STRUCTURE AND THEY COME FIRST. gear.js:183 joins a weapon's features with "\n",
+  // gear.js:149 prefixes each list item with "\n• ", and sheet-fields.js:455 joins two classes'
+  // features with "\n\n" — a blank line the reader has to SEE, or the multiclass's features read
+  // as more of the first class's.
+  eq("a blank line between two paragraphs survives as a blank line",
+    wrapLines("aaaa\n\nbbbb", 100, 10, measure), ["aaaa", "", "bbbb"]);
+  eq("and wrapping never runs across a newline, however much room the line had",
+    wrapLines("aa\nbb", 100, 10, measure), ["aa", "bb"]);
+  eq("trailing blank lines are dropped — invisible height is still height, and can cost a point",
+    wrapLines("aaaa\n\n\n", 100, 10, measure), ["aaaa"]);
+  eq("while a leading one is kept, because it is a line the sheet shows",
+    wrapLines("\naaaa", 100, 10, measure), ["", "aaaa"]);
+  eq("a run of spaces collapses to one, as it does in card-content.js's wrap",
+    wrapLines("aa    bb", 100, 10, measure), ["aa bb"]);
+
+  // U+00A0. card-content.js's wrap() splits on /\s+/, and in a latin1 codes string JavaScript's \s
+  // ALSO matches 0xA0 — which is a real /space GLYPH, 278/1000 em wide. Breaking there is the one
+  // thing that character exists to forbid, which is why the only break opportunity here is 0x20.
+  const nbsp = encodeWinAnsi("aaaaa\u00a0bbbbb").codes;
+  eq("a no-break space is not a break opportunity, so the pair hard-breaks instead",
+    wrapLines(nbsp, 100, 10, measure).map((line) => [...line].map((c) => c.charCodeAt(0))),
+    [[97, 97, 97, 97, 97, 0xa0, 98, 98, 98, 98], [98]]);
+  // The positive control: the identical string with an ordinary space in it breaks at the space,
+  // so the assertion above is about 0xA0 and not about a wrapper that never breaks.
+  eq("the positive control: with an ASCII space there, it breaks at the space",
+    wrapLines("aaaaa bbbbb", 100, 10, measure), ["aaaaa", "bbbbb"]);
+
+  // A single-line field has one line, so its newlines become spaces. Every reader does this, and
+  // /V keeps the newline either way.
+  eq("a newline in a SINGLE-line field collapses to a space rather than losing a word",
+    fitLines("aaaa\nbbbb", { width: 102, height: 20, measure }).lines, ["aaaa bbbb"]);
+}
+
+group("Fitting: the assertion that stands in for a reader we cannot run");
+{
+  // Linear in size, one point of advance per character per point of size — every glyph exactly one
+  // em wide — so each number below is arithmetic rather than a table lookup. The sweep further
+  // down uses the real Helvetica measurer instead, because that is where the invariant has to hold.
+  const measure = (codes, size) => codes.length * size;
+
+  // THE PREDICATE, written out from LAYOUT here rather than called out of the module, so that the
+  // fitter and this test have to be changed in two places before they can agree wrongly. It is
+  // deliberately the BASELINE form and not the tidier block form `lines × LEADING + DESCENT ≤
+  // h − 2`: the first baseline sits FIRST_BASELINE (0.905em) below the top inset, not a whole
+  // LEADING (1.116em) below it, and only the GAPS between lines cost a leading. The two agree on a
+  // tall box; on the sheet's three 16pt-tall multiline boxes the block form is two points
+  // conservative, sizing `class-subclass` at 10pt where the approved render draws it at 12. See
+  // shared/pdf-text.js's lastBaseline().
+  const lastBaseline = (count, size, height) =>
+    height - LAYOUT.INSET - LAYOUT.FIRST_BASELINE * size - (count - 1) * LAYOUT.LEADING * size;
+
+  // The assertion itself, and it is read off the OPERATORS rather than off the fit. That is the
+  // whole point: the failure being guarded against is the FITTER and the EMITTER disagreeing about
+  // the same distance — Firefox sizes with one constant and draws with another — and a predicate
+  // that asked the fitter what it had decided could not see that at all. So this parses the Tm
+  // lines back out of the finished stream and asks where the text actually is.
+  const placements = (ops) => ({
+    size: Number(/\/\S+ ([\d.]+) Tf/.exec(ops)[1]),
+    at: [...ops.matchAll(/^1 0 0 1 (-?[\d.]+) (-?[\d.]+) Tm /gm)]
+      .map((m) => ({ x: Number(m[1]), y: Number(m[2]) })),
+  });
+  const drawingFits = (value, box) => {
+    const laid = textAppearance(value, box);
+    const { size, at } = placements(laid.ops);
+    const measureOf = box.measure || helveticaMeasure;
+    // A blank line emits no operators and still costs a leading step, so the drawn lines are the
+    // non-empty ones, in order.
+    const shown = laid.lines.filter((line) => line !== "");
+    if (shown.length !== at.length) return false;
+    return shown.every((line, i) => {
+      const width = measureOf(line, size);
+      // A descender's room under the last baseline, and every line inside the drawable width and
+      // placed so it ends inside it — which is one assertion about the fit and one about /Q.
+      if (at[i].y - LAYOUT.DESCENT * size < 0) return false;
+      if (width > box.width - 2 * LAYOUT.INSET) return false;
+      if (at[i].x < 0 || at[i].x + width > box.width - LAYOUT.INSET + 1e-9) return false;
+      // The TOP is checked on the single-line branch only, and deliberately: what 1.156 buys there
+      // is that the FONT's whole bbox fits (Adobe Helvetica's is [-166 -225 1000 931]), so no glyph
+      // of any value can reach the edge. Multiline's first baseline is Chrome's h − 1 − 0.905s,
+      // which puts the bbox top a hair ABOVE the clip on purpose — 0.31pt at 12pt, and only for a
+      // glyph that reaches the full bbox top. shared/pdf-text.js's header says so and the reference
+      // render was approved with it.
+      return box.multiline || at[i].y + 0.931 * size <= box.height;
+    });
+  };
+
+  // Every box SHAPE on the sheet — a stat circle, the name banner, a 16pt multiline row, the
+  // prose block, the inventory list and a narrow column — crossed with values that push the fit in
+  // different directions. The values are literals rather than catalogue text on purpose: data/ is
+  // user-installable (sources.local.json can say ["void"], which is 24 classes rather than 15), so
+  // a pinned size would go red on an SRD update with a message blaming the fitter for a change in
+  // the words. This asserts the INVARIANT, which is the thing a reader would have told us.
+  const boxes = [
+    { what: "a stat circle", width: 30, height: 30 },
+    { what: "the name banner", width: 264, height: 20 },
+    { what: "a 16pt multiline row", width: 160, height: 16, multiline: true },
+    { what: "the class-features block", width: 276, height: 196, multiline: true },
+    { what: "the inventory list", width: 296.5, height: 91.2, multiline: true },
+    { what: "a narrow column", width: 40, height: 120, multiline: true },
+  ];
+  const values = [
+    "4", "13", "+2", "—",
+    "Fáelán of the Wildering Reach",
+    "Unstoppable\n\nFrontline Tank",
+    "· Clear a Hit Point.\n· Clear an Armor Slot.",
+    // Escaped, never literal: a minus sign, a non-breaking hyphen and a no-break space all look
+    // like something else in an editor, and a fixture whose point is a character you cannot see is
+    // one bad paste from a test that stopped testing anything.
+    "Beastform’s ranges — nature’s own \u2212 1 \u2011 to \u2011 1\u00a0\u00a0 spacing • and a bullet",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    ("You mark 1 fewer Stress. When you succeed on a roll with Hope, you may spend it. ").repeat(6),
+  ];
+  const broken = [];
+  const drewNothing = [];
+  for (const box of boxes) {
+    for (const value of values) {
+      const where = `${box.what}: ${JSON.stringify(value.slice(0, 24))}`;
+      if (!drawingFits(value, box)) broken.push(where);
+      // The sizes are deliberately not pinned, but "it drew something" is not a size, and without
+      // it an empty `broken` would also be what a fitter that returned no lines at all produced.
+      if (!placements(textAppearance(value, box).ops).at.length) drewNothing.push(where);
+    }
+  }
+  eq("every line the emitter places is inside its box, under a baseline the fitter left room beneath",
+    broken, []);
+  // The control on the loop itself: an empty `broken` proves nothing unless the sweep ran and every
+  // field in it came back with text on it. An off-by-one in a sweep reads exactly like a clean bill
+  // of health.
+  eq("and the sweep really did lay out 60 fields, none of them blank",
+    [boxes.length * values.length, drewNothing], [60, []]);
+
+  // FIREFOX'S BUG, ENCODED AS A TEST. pdf.worker.mjs:54240 accepts a size when `chunks × fontSize ≤
+  // height` and then renders the block at `height / numberOfLines ≈ 1.35 × fontSize`, so what it
+  // draws is about 35% taller than what it measured, runs out of the bottom of the field, and is
+  // clipped by the /AP's own /BBox. No error, no ellipsis, no scrollbar: 341 characters simply not
+  // on the paper.
+  //
+  // The value carries its own newlines so that the LINE COUNT is the same at every size and the
+  // two rules are being compared on the vertical question alone — a value that wrapped would let
+  // the width term decide it, and the case would prove nothing about the leading.
+  const firefoxAccepts = (lines, size, height) => lines * size <= height; // their rule, verbatim
+  const ffBox = { width: 102, height: 50, multiline: true, measure };
+  const ff = fitLines("a\nb\nc\nd", ffBox);
+  eq("four lines at any size, which is what makes this a test of the leading and nothing else",
+    ff.lines.length, 4);
+  check("Firefox's own rule accepts 12pt here — 4 × 12 ≤ 50 — so this is the bug and not a strawman",
+    firefoxAccepts(4, 12, ffBox.height));
+  check("and the block it would then draw does NOT fit: the last baseline lands below the box floor",
+    lastBaseline(4, 12, ffBox.height) < 0);
+  eq("ours refuses 12 and takes the largest size whose laid-out block fits, which is 10", ff.size, 10);
+  check("and what it then draws is inside the box", drawingFits("a\nb\nc\nd", ffBox));
+  // The boundary, which is what says the fitter is not simply timid: one point more overflows, by
+  // six hundredths of a point.
+  check("while 11 would not, so 10 is the largest that fits and not the first that looked safe",
+    lastBaseline(4, 11, ffBox.height) < LAYOUT.DESCENT * 11 && firefoxAccepts(4, 11, ffBox.height));
+
+  // A multiline box on this sheet is sized for a LIST, not for its contents: `inventory-items` is
+  // 294.5 × 91.2pt and often holds one short line. Uncapped, this fitter puts a potion name in it
+  // at 36pt, which looks like a mistake rather than a character sheet.
+  const potion = fitLines("Minor Health Potion", { width: 296.5, height: 91.2, multiline: true });
+  eq("a list-sized box holding one short line stops at the 12pt cap, and LAYOUT agrees it is 12",
+    [potion.size, LAYOUT.MAX_MULTILINE_SIZE], [12, 12]);
+  eq("on one line, so it is the cap that stopped it and not the box", potion.lines.length, 1);
+  // The positive control, and the reason the cap is on one branch only: single-line boxes are the
+  // stat circles and the name banner, where filling the box IS the design.
+  eq("while a single-line box goes well past 12, because filling it is the point",
+    fitLines("13", { width: 30, height: 30 }).size, 25);
+
+  // THE 6pt FLOOR. Below it the text stops being readable on paper, so the fitter keeps as many
+  // lines as the box holds, ends the last one with a visible ellipsis and REPORTS it. Never clips
+  // silently — reproducing the defect with our own arithmetic would be the same page with a
+  // different author.
+  const overflowing = fitLines("aaaaaaaaaa ".repeat(20), { width: 102, height: 20, multiline: true, measure });
+  eq("a value that will not fit even at 6pt is cut at the floor, and LAYOUT agrees the floor is 6",
+    [overflowing.size, LAYOUT.MIN_SIZE], [6, 6]);
+  check("and reported, which is what lets the caller name the field", overflowing.truncated);
+  const lastLine = overflowing.lines[overflowing.lines.length - 1];
+  eq("with a visible ellipsis on the last line it did draw — WinAnsi 0x85, /ellipsis",
+    lastLine.charCodeAt(lastLine.length - 1), 0x85);
+  check("and that line, ellipsis included, still fits the width it was cut to",
+    measure(lastLine, LAYOUT.MIN_SIZE) <= 100);
+  // The positive control: the same box with a value that fits reports nothing and carries no
+  // ellipsis, so `truncated` is a finding rather than a constant.
+  const fitting = fitLines("aaaa", { width: 102, height: 20, multiline: true, measure });
+  check("while a value that fits is neither cut nor reported",
+    !fitting.truncated && !fitting.lines.join("").includes("\u0085"));
+
+  // A reversed /Rect reaches shared/pdf-text.js normalised, and this is the assertion that says so
+  // out loud: a box with no room in it is refused by name rather than laid out into nothing.
+  has("a box with no room to draw in is refused rather than quietly producing an empty field",
+    [formFailure(() => fitLines("x", { width: 1, height: 20 }))], "box.width");
+}
+
+group("Operators: the exact stream, one line at a time");
+{
+  // Same one-em measurer, so every x below is arithmetic that can be checked by hand: a line of
+  // three characters at 17pt is 51 points wide, and nothing else enters into it. Each stream is
+  // asserted as ONE exact literal, the way tests.js:4056 does for pdf.js's page operators — a
+  // stream is a program, and an assertion on a substring of it is an assertion about a fragment of
+  // a program.
+  const measure = (codes, size) => codes.length * size;
+  const box = { width: 102, height: 20, colour: "0 g", fontName: "DhHelv", measure };
+
+  // Left, /Q 0. The clip is `1 1 (w−2) (h−2) re W n`, the baseline is h/2 − 0.355 × size, and the
+  // x is the inset: 1. Size is closed-form — min(h / 1.156, (w − 2) / textWidth) floored — which
+  // here is min(17.30, 33.33) = 17.
+  eq("a left-aligned single line, whole",
+    textAppearance("abc", box).ops,
+    "/Tx BMC\nq\n1 1 100 18 re W n\nBT\n0 g\n/DhHelv 17 Tf\n1 0 0 1 1 3.965 Tm (abc) Tj\nET\nQ\nEMC");
+
+  // Centred, /Q 1. x = (w − textWidth) / 2 = (102 − 51) / 2 = 25.5, and it is a per-LINE number:
+  // that is why every line is placed with an absolute Tm rather than a Td or a TL/T*.
+  eq("a centred one, with the x arithmetic done by hand: (102 − 3 × 17) / 2",
+    textAppearance("abc", { ...box, quad: 1 }).ops,
+    "/Tx BMC\nq\n1 1 100 18 re W n\nBT\n0 g\n/DhHelv 17 Tf\n1 0 0 1 25.5 3.965 Tm (abc) Tj\nET\nQ\nEMC");
+
+  // Right, /Q 2. x = w − 1 − textWidth = 102 − 1 − 51 = 50.
+  eq("and a right-aligned one, at w − 1 − textWidth",
+    textAppearance("abc", { ...box, quad: 2 }).ops,
+    "/Tx BMC\nq\n1 1 100 18 re W n\nBT\n0 g\n/DhHelv 17 Tf\n1 0 0 1 50 3.965 Tm (abc) Tj\nET\nQ\nEMC");
+  eq("a /Q the spec does not define is treated as left rather than as a decision",
+    textAppearance("abc", { ...box, quad: 7 }).ops, textAppearance("abc", box).ops);
+
+  // THE COLOUR COMES FROM THE FIELD'S OWN /DA. 68 of the template's 71 text fields end `0 g`, two
+  // end `0 0 0 rg`, and one ends `1 1 1 rg` — `name-pg2`, white on a banner measured at RGB(61,
+  // 61, 63). It carries the same string as `name`, so the template gives a free two-colour check
+  // on one value, and it is the reason the colour is read rather than assumed.
+  const white = textAppearance("abc", { ...box, colour: "1 1 1 rg" }).ops;
+  eq("a field whose /DA says white draws white",
+    white,
+    "/Tx BMC\nq\n1 1 100 18 re W n\nBT\n1 1 1 rg\n/DhHelv 17 Tf\n1 0 0 1 1 3.965 Tm (abc) Tj\nET\nQ\nEMC");
+  eq("and the same value in a black field differs in exactly one line — the colour",
+    white.split("\n").filter((line, i) => line !== textAppearance("abc", box).ops.split("\n")[i]),
+    ["1 1 1 rg"]);
+  eq("a /DA fragment that is not a colour operator is refused, and black is drawn instead",
+    textAppearance("abc", { ...box, colour: "/Helvetica 9 Tf" }).ops, textAppearance("abc", box).ops);
+
+  // Multiline: an absolute Tm per line, a blank line emitting NO operators and still costing a
+  // full leading step — which is how "\n\n" survives as a blank line the reader can see. First
+  // baseline 60 − 1 − 0.905 × 12 = 48.14, then 1.116 × 12 = 13.392 per step.
+  eq("a multiline stream, blank line included, whole",
+    textAppearance("abc\n\ndef", { ...box, height: 60, multiline: true }).ops,
+    "/Tx BMC\nq\n1 1 100 58 re W n\nBT\n0 g\n/DhHelv 12 Tf\n"
+    + "1 0 0 1 1 48.14 Tm (abc) Tj\n1 0 0 1 1 21.356 Tm (def) Tj\nET\nQ\nEMC");
+  // The positive control for the step: without the blank line the second baseline is one leading
+  // higher, so the gap above really is the blank line costing its height.
+  eq("and without the blank line the second line sits one leading higher, which is what it cost",
+    textAppearance("abc\ndef", { ...box, height: 60, multiline: true }).ops.split("\n")[7],
+    "1 0 0 1 1 34.748 Tm (def) Tj");
+
+  // An empty value never reaches here from a fill — pdf-form.js skips those, so the field keeps
+  // the template's own drawing — but the module still has to answer, and a clip with nothing in it
+  // is the only answer that cannot draw a stray mark.
+  eq("an empty value emits the clip and the font and no text at all",
+    textAppearance("", box).ops, "/Tx BMC\nq\n1 1 100 18 re W n\nBT\n0 g\n/DhHelv 17 Tf\nET\nQ\nEMC");
+  // A font name that cannot be spelled as /name would not match the key in the /AP's own
+  // /Resources, and a stream naming a font the resources have not got draws a page of nothing.
+  has("a font name that cannot be written as a PDF name is refused rather than repaired",
+    [formFailure(() => textAppearance("abc", { ...box, fontName: "Dh Helv" }))], "without escaping");
+}
+
+group("Byte plumbing: one stream per drawn field, and the /Length that has to be right");
+{
+  const values = {
+    name: "Fáelán", "name-pg2": "Fáelán", proficiency: "2",
+    "class-features": "Unstoppable\n\nFrontline Tank", "armor-score": "4", "agi-marked": true,
+  };
+  const report = fillFormWithReport(TRAPS.bytes, values, { appearances: true });
+  const text = formText(report.bytes);
+  eq("a sheet of ordinary values falls back to nothing and truncates nothing",
+    [report.fellBack, report.truncated], [null, []]);
+
+  // The five text fields are widgets 5, 13, 14, 15 and 16; the tick is 7 and the AcroForm 3. The
+  // font is 17, which is the first number the fixture's own /Size leaves free, and the streams
+  // are 18 to 22,
+  // ALLOCATED IN WIDGET ORDER so that the same character out of a differently-ordered value map is
+  // the same file. Object 10 is the /AP the template points every one of those widgets at, and its
+  // ABSENCE here is the assertion: nothing is ever written into an /AP the template already had.
+  // In this fixture object 10 backs both text widgets AND both states of both checkboxes, so
+  // "update the /AP the widget points at" would draw one field's text into five places, two of
+  // them ticks.
+  const xref = lastXrefSection(text);
+  eq("exactly the objects that changed, plus the font and one stream per drawn field, in numeric order",
+    xref.entries.map((e) => e.obj), [3, 5, 7, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22]);
+  check("object 10, the appearance every widget in the template points at, is not among them",
+    !xref.entries.some((e) => e.obj === 10));
+  // The positive control for that: object 10 really is what every one of them points at, so its
+  // absence is a fact about what the writer did and not about an object nothing referenced.
+  check("the positive control: every filled widget really did point its /AP at object 10",
+    ["name", "proficiency", "class-features", "name-pg2", "armor-score"]
+      .every((n) => readForm(TRAPS.bytes).fields.get(n).dict.includes("/AP<</N 10 0 R>>")));
+  // The offsets have to survive a RUN, which this update is the first thing here ever to write:
+  // objects 13 to 22 are consecutive by construction — the four trap widgets, the font and the five
+  // streams — so the subsection loop finally goes round its `while`, having never once done so on a
+  // template whose own objects are three apart at the closest.
+  const headers = [...text.slice(xref.at, xref.endAt).matchAll(/^(\d+ \d+)\r\n/gm)].map((m) => m[1]);
+  eq("written as four subsections, the last of them one header and ten entries",
+    headers, ["3 1", "5 1", "7 1", "13 10"]);
+  const misplaced = xref.entries.filter((e) => !text.startsWith(`${e.obj} 0 obj\r\n`, Number(e.raw.slice(0, 10))));
+  eq("and every offset still lands exactly on its own \"N 0 obj\"", misplaced.map((e) => e.obj), []);
+  check("the section still ends exactly where the trailer begins", text.startsWith("trailer", xref.endAt));
+
+  // /LENGTH COUNTS WHAT LIES BETWEEN THE NEWLINE THAT ENDS `stream` AND THE ONE THAT BEGINS
+  // `endstream`, NEITHER INCLUDED (pdf.js:260-271 is the precedent). Sliced by the /Length the
+  // dictionary states rather than by searching for "endstream", so a /Length one byte out lands
+  // the slice off the end of the operators and this says so.
+  const streamOf = (obj) => {
+    const body = Number.isInteger(obj) ? formObject(text, obj) : "";
+    const at = body.indexOf("\r\nstream\n");
+    // An object with no stream in it comes back with its parts EMPTY rather than as null, so a
+    // wrong /AP pointer fails each check below on its own terms — the discipline the /ID group
+    // states at :5681, and the reason a run stays reportable when something goes wrong early.
+    if (at < 0) return { dict: "", length: NaN, ops: "", tail: "" };
+    const dict = body.slice(body.indexOf("<<"), at);
+    const from = at + "\r\nstream\n".length;
+    const length = Number((/\/Length (\d+)/.exec(dict) || [])[1]);
+    return { dict, length, ops: body.slice(from, from + length), tail: body.slice(from + length) };
+  };
+  const drawn = [18, 19, 20, 21, 22].map(streamOf);
+  eq("every appearance object states a /Length that ends exactly on its own \\nendstream",
+    drawn.map((s) => s.tail), drawn.map(() => "\nendstream\r\n"));
+  eq("and each is the form XObject §12.5.5 needs to map the drawing onto the widget",
+    drawn.filter((s) => s.dict.includes("/Type/XObject/Subtype/Form/FormType 1")
+      && s.dict.includes("/Matrix[1 0 0 1 0 0]")
+      && s.dict.includes("/Resources<</Font<</DhHelv 17 0 R>>>>")).length, 5);
+
+  // The tie between the two modules: the bytes in the file are the bytes shared/pdf-text.js
+  // composed for the box shared/pdf-form.js read off the widget. Nothing here re-derives a layout.
+  const form = readForm(TRAPS.bytes);
+  const streamFor = (field) => {
+    const widget = form.fields.get(field);
+    const ap = Number((/\/AP<<\/N (\d+) 0 R>>/.exec(formObject(text, widget.obj)) || [])[1]);
+    return { drawn: streamOf(ap), want: textAppearance(values[field], { ...fieldBox(widget.dict, field), fontName: "DhHelv" }) };
+  };
+  const mismatched = ["name", "proficiency", "class-features", "name-pg2", "armor-score"]
+    .filter((field) => streamFor(field).drawn.ops !== streamFor(field).want.ops);
+  eq("every field's stream in the file is the one pdf-text.js composed for the box pdf-form.js read",
+    mismatched, []);
+
+  // The four traps the fixture carries, each read back out of the finished file.
+  const prof = streamFor("proficiency").drawn.ops;
+  const profBox = { ...fieldBox(form.fields.get("proficiency").dict, "proficiency"), fontName: "DhHelv" };
+  check("the /Q 2 field is drawn right-aligned, where the same box at /Q 0 would put it at the inset",
+    prof === textAppearance("2", profBox).ops
+      && prof !== textAppearance("2", { ...profBox, quad: 0 }).ops);
+
+  // The blank line between the two paragraphs emits NO operators and still costs a full leading
+  // step, which is how "\n\n" survives as a blank line the reader can see. Read as the GAP between
+  // the two baselines: two steps, not one.
+  const features = streamFor("class-features").drawn.ops;
+  const featureSize = Number(/\/DhHelv ([\d.]+) Tf/.exec(features)[1]);
+  const featureYs = [...features.matchAll(/^1 0 0 1 [\d.]+ ([\d.]+) Tm /gm)].map((m) => Number(m[1]));
+  eq("the /Ff 4096 field draws two lines, the blank one between them drawing nothing",
+    featureYs.length, 2);
+  check("and the blank line still cost its leading step — the gap is two of them, not one",
+    Math.abs((featureYs[0] - featureYs[1]) - 2 * LAYOUT.LEADING * featureSize) < 5e-5);
+  check("the white /DA reaches the stream as its own colour operator, and the black one does not",
+    streamFor("name-pg2").drawn.ops.includes("\n1 1 1 rg\n")
+      && streamFor("name").drawn.ops.includes("\n0 g\n"));
+  // The reversed /Rect. §12.5.2 allows either corner order and this template really does it
+  // (`hope1` is [41.25 487.5 52.75 477]); subtracting in file order gives a NEGATIVE extent, and a
+  // form XObject whose /BBox has one draws NOTHING in either PDFium or MuPDF — no error, no
+  // warning, an empty field on the page.
+  eq("the reversed /Rect is normalised on both axes before it becomes a /BBox",
+    rectOf(form.fields.get("armor-score").dict), { x: 41.25, y: 467.5, width: 31.5, height: 20 });
+  check("so the /BBox in the file has positive extents rather than the negative one file order gives",
+    streamFor("armor-score").drawn.dict.includes("/BBox[0 0 31.5 20]"));
+
+  // Every byte of an appearance stream is COMPOSED, not quoted back, so all of it goes out through
+  // asciiBytes() — shared/winansi.js octal-escapes anything above 0x7E on the way in. A high byte
+  // here would be a value run through TextEncoder, which writes two bytes where the template had
+  // one and shifts every offset after it.
+  check("nothing in the appended region is a byte above 0x7F",
+    report.bytes.slice(TRAPS.bytes.length).every((b) => b <= 0x7f));
+  // The positive control: the values really do contain a character UTF-8 would have used two bytes
+  // for, so the check above is the encoding working rather than a fixture with nothing to encode.
+  check("the positive control: the values really do carry non-ASCII text",
+    [...values.name].some((c) => c.charCodeAt(0) > 0x7f));
+
+  const same = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
+  check("two runs of the same fill are the same bytes",
+    same(fillForm(TRAPS.bytes, values, { appearances: true }), report.bytes));
+  // Allocation ORDER is the rule this one is about: numbered by widget object, never by the
+  // caller's keys, or the same character out of two differently-ordered maps would be two files.
+  // Five text fields, so reversing the map really does reorder the allocation.
+  check("and so is the same fill written with its keys in the other order",
+    same(fillForm(TRAPS.bytes, Object.fromEntries(Object.entries(values).reverse()), { appearances: true }),
+      report.bytes));
+
+  // THE FALLBACK IS THE WHOLE DOCUMENT'S. With /NeedAppearances false a field carrying /V and no
+  // /AP is laid out by PDFium, MuPDF and ghostscript — but Firefox draws NOTHING for it
+  // (`_getAppearance` returns null at pdf.worker.mjs:54101), so a per-field fallback would be one
+  // field silently blank in one reader, which is this feature's own defect with our name on it.
+  const withEmoji = fillFormWithReport(TRAPS.bytes, { ...values, "class-features": "Beastform \u{1f43a}" },
+    { appearances: true });
+  const fellBack = withEmoji.fellBack || { reason: null, fields: [] };
+  eq("one undrawable character sends the WHOLE document back to reader layout, and says which field",
+    [fellBack.reason, fellBack.fields.map((f) => [f.field, f.characters.map((c) => c.codePoint)])],
+    ["unmappable", [["class-features", [0x1f43a]]]]);
+  check("and the bytes it emits are exactly the bytes appearances-off would have written",
+    same(withEmoji.bytes, fillForm(TRAPS.bytes, { ...values, "class-features": "Beastform \u{1f43a}" })));
+  check("which is a file with no /AP on the field and the reader asked to draw it",
+    formObject(formText(withEmoji.bytes), 3).includes("/NeedAppearances true")
+      && !formObject(formText(withEmoji.bytes), 14).includes("/AP"));
 }
 
 // ---------- the sheet's fields ----------

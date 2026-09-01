@@ -556,6 +556,16 @@ h1, h2, h3, .btn-primary, .btn-ghost, .btn-small, .top-nav a {
 /* Both buttons size to their label — .btn-ghost is full-width elsewhere, which would put the
    two choices on separate lines and make the second look like the only one. */
 .export-choices button { width: auto; }
+/* The sheet export's one option, under the two buttons. flex rather than the default inline flow
+   because the label wraps to two lines in the modal at its narrowest, and an inline checkbox then
+   sits on the FIRST line's baseline with the second line running back under it; align-items:
+   flex-start keeps the box beside the first word and the text in one block. The margin is the
+   blank line between the buttons and the option — .export-choices puts 0.9rem above itself and
+   nothing below, so without this the option touches the buttons and reads as a third one. */
+.export-option { display: flex; align-items: flex-start; gap: 0.45rem; margin-top: 0.9rem; color: var(--text-dim); font-size: 0.82rem; }
+/* A checkbox is not a text element, so it does not inherit the font-size that shrank the label
+   beside it, and at the browser default it stands a third taller than the line it labels. */
+.export-option input { width: auto; margin: 0.1rem 0 0; flex: none; }
 /* The card PDF renders one card at a time, several seconds for a full deck, so the modal shows
    a real bar rather than a spinner. <progress> is inline-level with an intrinsic width of about
    10em, so without this it sits stubby in the middle of the panel however wide the modal is. */

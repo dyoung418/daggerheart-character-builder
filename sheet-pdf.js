@@ -29,7 +29,7 @@
 // and only because being asked to fill a template that isn't there means a caller skipped the
 // check.
 
-import { fillForm } from "./shared/pdf-form.js";
+import { fillFormWithReport } from "./shared/pdf-form.js";
 import { sheetFieldValues } from "./shared/sheet-fields.js";
 
 const TEMPLATE_PATH = "data/sheet/sheet-template.pdf";
@@ -46,7 +46,8 @@ let templatePromise = null;
  * The template bytes, or null when this browser hasn't got the template installed.
  *
  * Memoised because characters.js asks on startup and buildSheetPdf() asks again for every export,
- * and the template is ~185KB.
+ * and the template is 469,823 bytes (measured 2026-09-01, after the page-2 normalisation; an
+ * earlier reading of the same file, which several comments used to quote, was 453,448).
  *
  * @returns {Promise<Uint8Array|null>}
  */
@@ -74,17 +75,34 @@ export function sheetTemplate() {
 }
 
 /**
- * The whole export: character in, filled PDF bytes out.
+ * The whole export: character in, a filled PDF and the record of what it could not do out.
  *
  * @param {object} character a stored character; drafts are fine and fill what they have.
  * @param {object} db the merged content database.
- * @param {{loadout?: boolean}} opts whether the cards in the loadout count toward the numbers.
- *   Passed straight through, undefaulted: which of the two sheets is the default is a rule about
- *   what a printed sheet ought to say, and shared/sheet-fields.js owns it. A default restated here
- *   would be a second opinion, and the day the two disagree this one wins silently.
- * @returns {Promise<Uint8Array>}
+ * @param {{loadout?: boolean, appearances?: boolean}} opts
+ *   `loadout` — whether the cards in the loadout count toward the numbers. Passed straight
+ *   through, UNDEFAULTED: which of the two sheets is the default is a rule about what a printed
+ *   sheet ought to say, and shared/sheet-fields.js owns it. A default restated here would be a
+ *   second opinion, and the day the two disagree this one wins silently.
+ *
+ *   `appearances` — whether we draw the text ourselves. Defaulted HERE, and the difference from
+ *   `loadout` one line up is the whole reason this comment is long. No pure module has an opinion
+ *   to defer to: shared/pdf-form.js does default it, to false, but that is a library's answer to
+ *   "the caller did not ask", and it is also the path everything falls back to, so it has to stay
+ *   the conservative one. Which of the two the APP ships is a product decision about readers and
+ *   printers, and this file is the app's edge. True, because the checkbox in characters.js is
+ *   checked by default and the two must not be able to disagree — see that modal for the wording
+ *   and shared/pdf-form.js's header for what each mode costs.
+ * @returns {Promise<{bytes: Uint8Array, fellBack: (null|object), truncated: string[]}>}
+ *
+ * A RECORD, NOT BARE BYTES, following buildCardPdf (card-pdf.js:814) — and for its reason, not for
+ * symmetry. Both exports can succeed and still lose something a user would want to know about, and
+ * a caller handed only bytes has no way to find out: the card export names the cards that printed
+ * as text, and this one names a document that fell back to the reader's own layout and each field
+ * cut at the 6pt floor. shared/pdf-form.js's FillReport typedef defines both, including the two
+ * losses deliberately absent from them.
  */
-export async function buildSheetPdf(character, db, { loadout } = {}) {
+export async function buildSheetPdf(character, db, { loadout, appearances = true } = {}) {
   const template = await sheetTemplate();
   if (template === null) {
     // Not the path a user takes — the export isn't offered without a template — so this is a
@@ -96,10 +114,14 @@ export async function buildSheetPdf(character, db, { loadout } = {}) {
     );
   }
 
-  // fillForm() reads the template itself, so this file never holds a parsed form and never learns
-  // what a widget carries. That is the point: PDF structure is pdf-form.js's business at both ends.
-  // It also means the field names come from the template AS IT STANDS rather than from a list
-  // written down beside it, so a template re-authored with a field renamed fills short instead of
-  // filling wrong.
-  return fillForm(template, sheetFieldValues(character, db, { loadout }));
+  // fillFormWithReport() reads the template itself, so this file never holds a parsed form and
+  // never learns what a widget carries. That is the point: PDF structure is pdf-form.js's business
+  // at both ends. It also means the field names come from the template AS IT STANDS rather than
+  // from a list written down beside it, so a template re-authored with a field renamed fills short
+  // instead of filling wrong.
+  //
+  // The report is returned as it arrives, unread. What counts as worth telling a user is a
+  // question about a modal, and characters.js answers it; this file deciding would put half the
+  // answer somewhere no test can reach it.
+  return fillFormWithReport(template, sheetFieldValues(character, db, { loadout }), { appearances });
 }

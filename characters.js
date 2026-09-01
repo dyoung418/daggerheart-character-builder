@@ -1288,29 +1288,67 @@ function openSheetPdfPicker(ch) {
   hint.textContent = LOADOUT_HINT;
   body.appendChild(hint);
 
+  // THE CHECKBOX, AND WHY IT SAYS NOTHING ABOUT PDFs
+  //
+  // Ticked, the app draws every filled box itself and the reader prints what we drew. Unticked,
+  // the file asks the reader to lay the text out — which is what this export did before, and
+  // which four readers answered four ways: Firefox silently dropped 341 of the 1430 characters in
+  // the class features box, Chrome shrank the same box to 6pt in 19 lines using 127 of its 196
+  // points. shared/pdf-form.js's header has that measurement in full.
+  //
+  // None of which is a sentence to put in front of someone printing a character sheet. The label
+  // names the one thing a player can act on — the format is cleaner, and it is less convenient if
+  // you go on to edit the PDF by hand, because the drawing we wrote is ours rather than something
+  // an editor regenerates as it likes. "/NeedAppearances", "appearance stream" and "form XObject"
+  // are the vocabulary of the bug, not of the choice.
+  //
+  // Created before the buttons and appended after them: the buttons ARE the action, so the option
+  // has to exist by the time a handler closes over it, and it reads `box.checked` at click time —
+  // by which point runSheetPdf() is about to empty this body out from under it.
+  const option = document.createElement("label");
+  option.className = "export-option";
+  const box = document.createElement("input");
+  box.type = "checkbox";
+  box.checked = true;
+  option.appendChild(box);
+  const optionText = document.createElement("span");
+  optionText.textContent = "Clean format (not as ideal if you edit the PDF manually)";
+  option.appendChild(optionText);
+
   // The modal is NOT closed on the way through, unlike the CSV picker's: this export reads a file
   // off disk and rewrites it, so it can fail, and showExportProblem() needs a body that is still
   // on the page to write into. What replaces these buttons is runSheetPdf()'s business.
-  body.appendChild(loadoutChoiceRow((loadout) => runSheetPdf(ch, body, loadout)));
+  body.appendChild(loadoutChoiceRow((loadout) => runSheetPdf(ch, body, loadout, box.checked)));
+  body.appendChild(option);
 
   openModal("Fill official sheet (PDF)", body);
 }
 
 // Split out so the picker above is just markup: this is the half that can fail.
-async function runSheetPdf(ch, body, loadout) {
+async function runSheetPdf(ch, body, loadout, appearances) {
   // The choice is replaced by a line saying what's happening rather than left sitting there. The
-  // work is a fetch plus a rewrite of a ~185KB file and is usually a blink, but on a cold cache
-  // two buttons that still look unclicked invite a second click, and a second click would export
-  // twice.
+  // work is a fetch plus a rewrite of a 469,823-byte file (`stat` on data/sheet/sheet-template.pdf,
+  // 2026-09-01, after the page-2 normalisation; the other reading on record is 453,448 bytes,
+  // before it. This comment used to say "~185KB", which matches neither) and is usually a blink,
+  // but on a cold cache two buttons that still look unclicked invite a second click, and a second
+  // click would export twice.
   body.innerHTML = "";
   const line = document.createElement("p");
   line.className = "hint";
   line.textContent = "Filling the sheet…";
   body.appendChild(line);
 
-  let bytes;
+  // A RECORD, NOT BARE BYTES. buildSheetPdf() returns {bytes, fellBack, truncated} — the shape
+  // buildCardPdf() already returns for the same reason, that an export can succeed and still lose
+  // something worth saying. Destructuring is deliberate rather than `result.bytes` everywhere: the
+  // one bug this seam has already produced was `bytes = await buildSheetPdf(…)` left over from
+  // when it returned a Uint8Array, which put the whole record into `new Blob([record])`. That is
+  // not a type error in JavaScript — the object stringifies, and the user gets a 15-byte file
+  // called .pdf containing "[object Object]", with a clean console and a modal that closes on
+  // success as if nothing were wrong. Caught in the browser (run-app), invisible to tests/.
+  let bytes, fellBack, truncated;
   try {
-    bytes = await buildSheetPdf(ch, db, { loadout });
+    ({ bytes, fellBack, truncated } = await buildSheetPdf(ch, db, { loadout, appearances }));
   } catch (err) {
     showExportProblem(body, "The sheet couldn't be filled, so nothing was saved. " +
       (err && err.message ? err.message : String(err)));
@@ -1318,11 +1356,101 @@ async function runSheetPdf(ch, body, loadout) {
   }
 
   downloadFile(sheetPdfFilename(ch), bytes, "application/pdf");
-  // Closed on success, unlike the card export's modal, which stays open because it has print
-  // settings to hand you — cards that don't fit a sleeve are the failure that advice exists to
-  // prevent. A filled sheet prints like any other page, so a panel that only said "done" would
-  // cost a click and give nothing back.
-  closePopover();
+
+  // CLOSED WHEN THERE IS NOTHING TO SAY, OPEN WHEN THERE IS.
+  //
+  // The card export's modal always stays open, because it has print settings to hand you and
+  // cards that don't fit a sleeve are the failure that advice exists to prevent. A filled sheet
+  // prints like any other page, so on an ordinary export a panel saying "done" would cost a click
+  // and give nothing back — which is why this one closed unconditionally before there was
+  // anything it could report.
+  //
+  // Now there is. Both of these change WHAT THE SHEET SAYS rather than how it looks, which is the
+  // line shared/pdf-form.js's FillReport draws and the reason the minus-sign and quote
+  // substitutions are not in the record at all: a panel that cried wolf on the many sheets
+  // carrying Scale Mail would train people to dismiss the one that carries a real loss.
+  //
+  // The download happens either way, above, and before this branch. A sheet that fell back is
+  // still a filled sheet and a truncated field is still 99% of a field, so withholding the file
+  // would be a worse answer than saving it and saying what happened.
+  if (fellBack || truncated.length > 0) showSheetPdfLosses(body, fellBack, truncated);
+  else closePopover();
+}
+
+// The panel for the two losses that survive a successful fill. Same shape as showCardPdfAdvice():
+// the body of the modal that is already open is rewritten, so if the export outlasted the modal
+// this writes into a detached node and does nothing, which is the right outcome.
+//
+// Fields are named by their PDF field name — "class-features", not "Class Features". It is what
+// the box is called inside the file, so it is the string that finds it in a PDF editor, and this
+// panel is only ever read by someone who has just been told their PDF is imperfect. Inventing a
+// display name here would also be a second list to keep in step with the template.
+function showSheetPdfLosses(body, fellBack, truncated) {
+  body.innerHTML = "";
+
+  const saved = document.createElement("p");
+  saved.textContent = "The sheet was saved.";
+  body.appendChild(saved);
+
+  if (fellBack) {
+    // Document-level, never per-field: with /NeedAppearances false a field carrying a value and no
+    // drawing of its own renders as nothing at all in Firefox, so there is no per-field fallback
+    // to reach for — one undrawable character switches the whole sheet back. Saying so is the
+    // point of this note, because the fix is in the character, not in the app.
+    //
+    // Two counts, and they are counts of different things: the verb agrees with the BOXES, the
+    // noun with the CHARACTERS. One box holding 漢字 read "1 box … contains a character (漢 ×2,
+    // 字 ×1, 😀 ×1)" when both agreed with the boxes, which is the sentence saying one and showing
+    // four.
+    const chars = unmappableChars(fellBack.fields);
+    const note = document.createElement("p");
+    note.className = "hint";
+    note.textContent = `${plural(fellBack.fields.length, "box")} on this sheet ` +
+      `${fellBack.fields.length === 1 ? "contains" : "contain"} ` +
+      `${chars.length === 1 ? "a character" : "characters"} the PDF's font can't draw ` +
+      `(${chars.map((n) => `${n.char} ×${n.count}`).join(", ")}), so the whole sheet is laid ` +
+      "out by your PDF reader instead of by this app. It will still print, but a long box can come " +
+      "out shrunk, or in Firefox cut short. Replacing those characters and exporting again " +
+      "restores it.";
+    body.appendChild(note);
+  }
+
+  if (truncated.length > 0) {
+    // Only reachable from the three free-text boxes — appearance holds 1,273 characters at the 6pt
+    // floor — so this note is rare and its subject is always something the user typed.
+    const note = document.createElement("p");
+    note.className = "hint";
+    note.textContent = `${plural(truncated.length, "box")} held more text than fits even at the ` +
+      `smallest size, so ${truncated.length === 1 ? "it was" : "they were"} cut short with an ` +
+      `ellipsis: ${truncated.join(", ")}. Shortening the text is the only fix — the sheet has the ` +
+      "room it has.";
+    body.appendChild(note);
+  }
+
+  appendExportClose(body);
+}
+
+// The distinct undrawable characters across every field that carried one, in first-appearance
+// order, each with its total — the raw material for "漢 ×3, 😀 ×1".
+//
+// Deduplicated a SECOND time here, on top of shared/winansi.js's own per-field deduplication,
+// because a phrase pasted into two boxes reports the same character in both and "漢 ×3, 漢 ×2"
+// reads as a bug in the message rather than as two fields.
+//
+// Order comes from the fields, which arrive in widget order, and from the notes inside them, which
+// arrive in first-appearance order — never from the accumulator's own key order. That is what
+// makes the same character produce the same sentence on every export, and it is the same rule the
+// modules below it are held to.
+function unmappableChars(fields) {
+  const totals = new Map();
+  const order = [];
+  for (const { characters } of fields) {
+    for (const note of characters) {
+      if (!totals.has(note.codePoint)) order.push(note);
+      totals.set(note.codePoint, (totals.get(note.codePoint) || 0) + note.count);
+    }
+  }
+  return order.map((note) => ({ char: note.char, count: totals.get(note.codePoint) }));
 }
 
 // daggerheart-sheet-<name>-<stamp>.pdf, beside daggerheart-cards-<name>-<stamp>.pdf. No

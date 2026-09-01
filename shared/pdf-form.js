@@ -4,18 +4,25 @@
 // -----------------------------------------------------
 // pdf.js writes a PDF from nothing — a deck of card images and some stroked lines, a subset small
 // enough to emit by hand. This file does the opposite job on the opposite kind of file: the
-// official character sheet is a one-page form somebody drew in Master PDF Editor
+// official character sheet is a two-page form somebody drew in Master PDF Editor
 // (data/sheet/sheet-template.pdf, a symlink into the private content repo), full of art, fonts
-// and 100 form widgets we could not begin to author. We do not want to author it. We want to put
-// 52 strings and six ticks into it — its 52 text fields, and six of its 48 checkboxes
-// (sheet-fields.js's header says why only six) — and hand back the same file.
+// and 182 form widgets we could not begin to author. We do not want to author it. We want to put
+// 56 strings and 46 ticks into it — 56 of its 71 text fields, and 46 of its 111 checkboxes
+// (sheet-fields.js's header says which boxes it leaves blank, and the two different reasons it
+// leaves them) — and hand back the same file.
+//
+// Every count in this header was measured in that template on 2026-08-31, after the page-2
+// normalisation that step 0 of the appearance work did: 469,823 bytes, 182 live widgets, 71 /Tx
+// and 111 /Btn. An earlier reading of the same file, before that pass, was 453,448 bytes; the
+// field counts did not move.
 //
 // So nothing here recreates the template. The output is the original bytes VERBATIM, followed by
-// an incremental update: fresh copies of only the objects whose value changed, a cross-reference
-// section covering only those, and a trailer whose /Prev points back at the original one. Every
-// byte the template already had — its fonts, its art, its appearance streams, the offsets in its
-// xref — stays exactly where it was, which is why a template re-save costs this module nothing.
-// It also means the only offsets we compute are offsets into bytes we appended ourselves.
+// an incremental update: fresh copies of only the objects whose value changed, one new appearance
+// stream per value we drew, a cross-reference section covering only those, and a trailer whose
+// /Prev points back at the original one. Every byte the template already had — its fonts, its art,
+// its own appearance streams, the offsets in its xref — stays exactly where it was, which is why a
+// template re-save costs this module nothing. It also means the only offsets we compute are
+// offsets into bytes we appended ourselves.
 //
 // The two modules share pdf.js's rules, and import them rather than restating them:
 // asciiBytes() (pdf.js:16-27 — never TextEncoder, because one UTF-8 double-byte shifts every
@@ -23,8 +30,34 @@
 //
 // It is in shared/ because it is bytes in, bytes out: no DOM, no fetch, nothing to mock. Fetching
 // the template and handing the result to the browser is sheet-pdf.js's job, which is why that file
-// sits at the repo root with the other page code. Two exports, and both take the template bytes as
-// their first argument: readForm(bytes) and fillForm(bytes, values).
+// sits at the repo root with the other page code.
+//
+// Since the appearance work it imports one more thing: shared/pdf-text.js's textAppearance(), the
+// only call in this file that knows what a letter is. The direction of that import is the design —
+// this file hands out a box and gets back a finished content stream, and pdf-text.js has never
+// seen a PDF object.
+//
+// THE EXPORTS, AND WHY THE READERS ARE AMONG THEM
+// -----------------------------------------------
+// Three entry points, all taking the template bytes first: readForm(bytes),
+// fillFormWithReport(bytes, values, options) — the fill, plus the record of what it could not do —
+// and fillForm(bytes, values, options), which is that call with the record thrown away, for the
+// caller and the 21 test call sites that only ever wanted the bytes.
+//
+// Under them, five readers of a widget's dictionary: rectOf(), daParts(), multilineOf(),
+// quadOf(), and fieldBox(), which composes those four into the box shared/pdf-text.js lays text
+// into. They are exported for a reason no other private helper here has: the geometry they
+// compute has an INDEPENDENT ANSWER inside the template. Master PDF Editor wrote a correct /BBox
+// into all 71 existing /AP /N objects, and on this template every one of them matches its
+// widget's /Rect to within 0.001pt — so a test can diff our arithmetic against the file's own,
+// field by field, but only if it can call the reader. Nothing else here is public because
+// nothing else has a witness.
+//
+// The character and layout layers are deliberately NOT here: shared/winansi.js owns bytes and
+// widths, shared/pdf-text.js owns wrapping, fitting and operators, and both are pure and
+// dependency-free so the suite can assert on a content stream as one exact literal. This file
+// owns objects, streams and xref offsets, and it is the only one of the three that has ever seen
+// a byte of the template.
 //
 // THE SUBSET THIS HANDLES — AND WHAT IT REFUSES
 // ---------------------------------------------
@@ -47,49 +80,138 @@
 //   - two live fields with the same /T. See the next paragraph, which is the whole reason this is
 //     an error and not "last one wins".
 //
+// Refused later, and ONLY when appearances are being generated — with `appearances: false` none of
+// this is parsed, so every refusal below has the same answer: fill without them.
+//   - a widget whose /MK /R says it is rotated (fieldBox). We would draw the text upright inside a
+//     box the reader turns, which is a wrong sheet rather than an ugly one. The check sees only an
+//     INLINE /MK, which is 57 of this template's 182 widgets; fieldBox's own comment says why the
+//     other 125 are not resolved and what was measured in them instead.
+//   - a /Rect that is not four numbers, or an /Ff that is not an integer (rectOf, multilineOf).
+//     Both are geometry we would otherwise have to guess, and both guesses lose text.
+//   - a box with no room to draw in, which reaches us from shared/pdf-text.js and is re-thrown
+//     with the field's name on it, because that module is handed a box and never learns whose.
+//
 // THE TRAP THAT COST THE MOST: STALE WIDGETS
 // -------------------------------------------
-// The template contains 104 objects carrying /Subtype/Widget, but only 100 live fields. Editing a
-// form leaves orphans behind: object 33 is a `name` text field from an earlier session, superseded
-// by object 679, and objects 562, 673 and 676 are similar litter. They are not in the page's
-// /Annots and not in the AcroForm's /Fields, so no viewer will ever show or fill them — but a scan
-// for "every object with a /T" finds them, and then finds `name` twice.
+// Editing a form leaves orphans behind, and this template used to carry four: object 33 was a
+// `name` text field from an earlier session, superseded by object 679, with objects 562, 673 and
+// 676 similar litter. They were in neither the page's /Annots nor the AcroForm's /Fields, so no
+// viewer would ever have shown or filled them — but a scan for "every object with a /T" finds
+// them, and then finds `name` twice.
+//
+// Today's file has none: 182 widget objects, 182 live fields, and objects 33, 562, 673 and 676
+// are not in it at all (a re-save dropped them; 679 is still `name`). So the filter below is
+// currently load-bearing for nobody, and the thing that keeps it honest is the hand-built fixture
+// at tests/tests.js:5200, which carries the second `name` on purpose. Do not delete the filter
+// because the template stopped needing it — the template stopped needing it by being re-saved,
+// and the next re-save is a save away.
 //
 // So the live field list comes from the AcroForm's /Fields array (verified equal, object for
 // object, to the page's /Annots), and the scan only supplies the bytes. Without that filter a
 // perfectly good template makes readForm throw "duplicate field name", and "fix your template"
 // would be the wrong advice.
 //
-// WHY /NeedAppearances, AND WHAT IT COSTS
-// ---------------------------------------
+// TWO WAYS TO FILL A FORM, AND WHY THE SECOND ONE EXISTS
+// ------------------------------------------------------
 // A filled field has two halves: /V, the value, and /AP, a little stream drawing that value in the
-// field's box. We write /V and DELETE /AP, then set /NeedAppearances true on the AcroForm to ask
-// the viewer to draw the value itself. We don't generate the drawing, because doing so means
-// shaping text into a box with a font we would have to measure — every /DA in this template says
-// `0 Tf`, i.e. "pick a size that fits", and resolving that is the viewer's job.
+// field's box. There are only two coherent things to do about the second half, and this module
+// does both — `appearances` picks which:
 //
-// DELETING /AP IS NOT TIDINESS, IT IS THE WHOLE THING WORKING. The template's text fields ship
-// with an /AP that draws an EMPTY field (`/Tx BMC … EMC`, nothing between). A viewer that trusts a
-// present /AP over /NeedAppearances draws that emptiness — the file is correct and the page is
-// blank. This was measured, not reasoned about. Rendering the same character three ways and
-// counting pixels that differ from the untouched template, at -dPrinted=true -r100:
+//   false (the default)  write /V, DELETE /AP, set /NeedAppearances true. A formal request that
+//                        the READER lay the text out. Also what runs when anything below cannot
+//                        be done, so this path is never dead code.
+//   true                 write /V, REPLACE /AP with a Form XObject we composed, and set
+//                        /NeedAppearances false. The reader draws what we drew.
+//
+// The second exists because four readers answered the first request four ways, and one of them
+// answered it by dropping text. On paper, Firefox lost 341 of the 1430 characters in
+// `class-features` — the whole of the Druid's Strange Patterns — with nothing on the page to say
+// so: pdf.worker.mjs:54240 sizes the block so that `chunks × fontSize ≤ height` and then renders
+// it at `height / numberOfLines ≈ 1.35 × fontSize`, so the laid-out block overflows the field and
+// the /AP's own /BBox clips the tail. Silently. shared/pdf-text.js exists to not make that
+// mistake, and its header carries the arithmetic and the placement constants.
+//
+// WHAT THE FLAG COSTS, MEASURED. When /AP is deleted, /NeedAppearances true is not tidiness, it is
+// the whole thing working. The template's text fields ship with an /AP that draws an EMPTY field —
+// 12 FlateDecode bytes that inflate to exactly `q\nQ\n`, byte-identical in all 71 of them
+// (measured 2026-09-01; the token `/Tx BMC` an earlier version of this comment named occurs ZERO
+// times in the file) — and a viewer that trusts a present /AP over /NeedAppearances draws that
+// emptiness. The file is correct and the page is blank. Rendering the same character three ways
+// and counting pixels that differ from the untouched template, at -dPrinted=true -r100:
 //
 //     keep /AP + /NeedAppearances      ghostscript    39 px   poppler  183546 px
 //     drop /AP + /NeedAppearances      ghostscript  4119 px   poppler  183546 px
 //     generate our own /AP             ghostscript  4089 px   poppler  ~same
 //
 // Ghostscript is the one that exposes it, and it is not a toy target: it is the renderer this
-// project's own template-fidelity check runs. Poppler regenerates either way, which is exactly why
-// testing on one renderer would have shipped a sheet that looks right on screen and prints blank.
+// project's template-fidelity check drives (tools/sheet/fidelity.py, which lives in the private
+// content repo and not in this tree — it was deleted along the way, when the LibreOffice re-export
+// it used as its control was deleted, and has come back since with a synthesised one). Poppler
+// regenerates either way, which is exactly why testing on one renderer would have shipped a sheet
+// that looks right on screen and prints blank.
 //
-// The remaining cost of not generating /AP is that each viewer regenerates with its own metrics,
-// so the same field is spaced differently in different readers — ghostscript's fallback font is
-// noticeably wide. Generating appearance streams here would fix that and is the known next step;
-// it needs a Helvetica width table and a wrapper, and neither is in this file, on purpose.
+// The third row is the argument for writing the /AP rather than deleting one: it is the only row
+// that does not depend on a reader agreeing to do the work, and it lands within 30 pixels of the
+// row that does. Everything the second row leaves to the reader, each reader answers differently —
+// ghostscript's substituted Helvetica is noticeably wide, Chrome shrinks `class-features` to 6pt
+// in 19 lines using 127 of the box's 195.7 points, and Firefox drops 341 of its 1430 characters.
 //
-// Checkboxes are the other half of the same story. /V alone leaves a box that reads as ticked to a
-// script and unticked to a human: /AS is the key that actually selects which of the widget's
-// prebuilt appearance states is drawn. Both, always.
+// AND WHAT A CHROME SAVE COSTS, WHICH IS THE OTHER HALF OF THE ARGUMENT. Ctrl-S in Chrome does not
+// hand back the file it was given. It regenerates all 71 appearances at its own sizes; it rewrites
+// every U+2019 in /V as a SEMICOLON (the same character in three files: the raw export has 4,
+// Firefox's save keeps all 4, Chrome's save has 0 and four semicolons — `Beastform;s`, which is on
+// the printed paper); and it draws em dashes through a CJK fallback font, `/_86 6 Tf (\xa1\xaa) Tj`,
+// 30 of them across the prose fields. Two of those three have an answer upstream of the save: the
+// em dash is ours the moment we draw it, and the curly quotes are to be rewritten in /V itself at
+// sheetFieldValues() — a separate step of the same plan, and deliberately not this file's, since
+// /V is the value and this module only ever copies it. Nothing here can stop the regeneration
+// itself, which is why "Clean format" is worth a user-facing checkbox rather than a silent default.
+//
+// "CHROME AND FIREFOX AGREE" IS A CLAIM ABOUT PRINT, AND ONLY PRINT. Firefox's viewer never draws
+// our /AP at all: pdf.worker.mjs:53928 hands a text field to an HTML input and paints that
+// instead. Checking this feature by looking at Firefox's screen is checking something else.
+//
+// Checkboxes are the other half of the same story, and NO code path here writes an /AP for one.
+// /V alone leaves a box that reads as ticked to a script and unticked to a human: /AS is the key
+// that actually selects which of the widget's prebuilt appearance states is drawn. Both, always.
+// Their appearance does change with the flag even though not one line here touches them — with
+// /NeedAppearances true, MuPDF and PDFium ignore a ticked box's /AP and draw a check of their own;
+// with it false, both draw the tick the template's author drew. Every ticked box on a filled sheet
+// therefore changes appearance in Chrome's engine, and no test in this project can see it: the way
+// to check is one export from before this change against one from after, side by side on screen.
+//
+// THE UNDRAWABLE CHARACTER, AND WHY THE FALLBACK IS THE WHOLE DOCUMENT'S
+// ----------------------------------------------------------------------
+// If any value carries a character WinAnsi cannot draw and shared/winansi.js has no substitution
+// for — a CJK ideograph, Cyrillic, an emoji — this module writes NO appearance streams at all and
+// emits exactly the file the `false` path would have, reporting what it found and where.
+//
+// Not per field, and the difference is the whole point. With /NeedAppearances false, a field
+// carrying /V and no /AP is still laid out by PDFium, MuPDF and ghostscript — but Firefox draws
+// NOTHING for it: `_getAppearance` returns null (pdf.worker.mjs:54101), `this.appearance` is never
+// set, and `getOperatorList` (:53936) hands back an empty operator list. So a per-field fallback
+// would be one field silently blank in one reader, which is this feature's own defect wearing our
+// name. Read out of Firefox 154's shipped source, not inferred.
+//
+// THE FIRST STREAM THIS MODULE HAS EVER WRITTEN
+// ----------------------------------------------
+// Everything above the emit loop used to be dictionaries, so `updates` held strings. It now holds
+// `string | {dict, stream}` — a TYPED UNION rather than a flag or a second map, so the loop has to
+// look at what it is holding before it can write it, and so /Length is counted off the bytes that
+// loop actually pushed. /Length counts what lies between the newline that ends `stream` and the
+// one that begins `endstream`, neither included; pdf.js:260-271 is the precedent and says what
+// getting it wrong costs.
+//
+// One FRESH object per drawn field, numbered base+1 … base+N above the added font at base, and
+// ordered by WIDGET OBJECT NUMBER — never by the caller's keys, or the same character exported
+// from two differently-ordered value maps would produce two different files. Nothing here ever
+// writes into an /AP object the template already had: in the test fixture object 10 is the
+// appearance for both text widgets AND for both states of both checkboxes, so "update the /AP the
+// widget points at" would draw one field's text into five places, two of them ticks. The real
+// template is one step short of that trap — its 71 text /APs are separate objects — but every one
+// of them is FlateDecode-compressed, so "reusing" one still means composing a whole new object
+// from scratch and appending it. Reuse would save an object NUMBER and nothing else, in exchange
+// for the one failure mode above.
 //
 // BYTES, STRINGS, AND WHICH IS WHICH
 // -----------------------------------
@@ -98,15 +220,22 @@
 // is character n of this string"). That is what lets a field's dictionary be handed back to a test
 // as something it can .includes() on. Composed text still goes out through asciiBytes(); only
 // bytes we QUOTED BACK from the template go through verbatimBytes(), which accepts 0x80-0xFF
-// precisely because it is copying, not encoding.
+// precisely because it is copying, not encoding. An appearance stream is composed, not quoted —
+// shared/winansi.js octal-escapes every byte above 0x7E on the way in — so it goes out through
+// asciiBytes() like any other text this file writes, and a leaked high byte is a thrown error
+// rather than a silently shifted xref.
 //
 // DETERMINISM
 // -----------
 // Same template plus same values in, byte-identical file out: updated objects are written in
-// numeric order rather than in the caller's key order, no /Info and no /ID are invented (the
-// original trailer's are copied through as references), and no timestamp is written anywhere.
+// numeric order rather than in the caller's key order, appearance objects are ALLOCATED in widget
+// order rather than in the caller's key order (which is the same rule one layer earlier — the
+// number is in the file, so it has to be decided by something the file already fixes), no /Info
+// and no /ID are invented (the original trailer's are copied through as references), and no
+// timestamp is written anywhere.
 
 import { asciiBytes, formatNumber } from "./pdf.js";
+import { textAppearance } from "./pdf-text.js";
 
 // PDF's own whitespace set (including NUL) and delimiters. Getting these two right is what stops
 // "/V" from matching "/Version" and what makes a dictionary walk terminate where the spec says.
@@ -130,8 +259,8 @@ class UnsupportedPdfError extends Error {
   }
 }
 
-// Bytes → latin1 string, in chunks because String.fromCharCode(...bytes) on a 187KB template
-// blows the argument limit and throws RangeError somewhere far from the cause.
+// Bytes → latin1 string, in chunks because String.fromCharCode(...bytes) on a 470KB template blows
+// the argument limit and throws RangeError somewhere far from the cause.
 function latin1(bytes) {
   let out = "";
   for (let i = 0; i < bytes.length; i += 0x2000) {
@@ -226,9 +355,10 @@ function endOfBracketed(s, i, open, close) {
 
 // An indirect reference is three tokens ("4 0 R"), so a value that starts as a number has to look
 // ahead or the walk below reads " 0 R" as the next key and gives up on a dictionary that is
-// perfectly fine. Not a hypothetical, though not every widget either: 33 of this template's 100
-// live fields carry /P 4 0 R — all 33 of them text fields, and none of the 48 checkboxes — and
-// every one of those 33 is a field the sheet fills.
+// perfectly fine. Not a hypothetical, though not every widget either: 41 of this template's 182
+// live fields carry an indirect /P — 34 of them `/P 4 0 R` for page 1 and 7 pointing at page 2 —
+// and all 41 are text fields, none of the 111 checkboxes among them (measured 2026-09-01). /BS and
+// /MK add another 125 apiece, on widgets of both kinds.
 const REFERENCE_TAIL = /^[\0\t\n\f\r ]+\d+[\0\t\n\f\r ]+R(?![A-Za-z0-9])/;
 
 // The end of any one value token, starting at a non-whitespace character.
@@ -358,16 +488,22 @@ function utf16HexString(value) {
 //     149 -> /Lslash   (WinAnsi: bullet)      151 -> /Scaron  (WinAnsi: emdash)
 //     146 -> /trademark (WinAnsi: quoteright) 150 -> /OE      (WinAnsi: endash)
 //
-// Chrome honours that array and draws a quote for a bullet; poppler resolves by Unicode and draws
-// the bullet, which is exactly the kind of split that ships. Measured across the 15 classes in
-// data/: 21 bullets, 7 curly apostrophes, 4 em dashes, 2 en dashes — plus armor-name, which is the
-// em dash itself for a character with nothing equipped.
+// BOTH PDFium (Chrome) AND MuPDF HONOUR THAT ARRAY, including inside a content stream we write —
+// measured, and worth stating twice because an earlier version of this comment guessed the other
+// way. Draw a bullet through their /Helvetica and a Ł comes out. Poppler resolves by Unicode and
+// draws the bullet, which is exactly the kind of split that ships. Measured across the 15 classes
+// in data/: 21 bullets, 7 curly apostrophes, 4 em dashes, 2 en dashes — plus armor-name, which is
+// the em dash itself for a character with nothing equipped.
 //
 // So we ADD a font instead of correcting theirs. Nothing the editor authored is modified, which
 // means this does not depend on which editor authored it: whatever any producer writes into
 // /Differences becomes irrelevant, because the fields we fill no longer name that font. Correcting
 // their font in place would have been ten lines instead of these forty, and would have been a
 // patch shaped like one editor's bug.
+//
+// The same font, by the same name, is what every appearance stream this module writes names in its
+// OWN /Resources (appearanceDict below). That is not belt and braces: a form XObject with no /Font
+// resource of its own inherits the page's, and the page's is theirs.
 const OUR_FONT_DICT = "<</Type/Font/Subtype/Type1/BaseFont/Helvetica/Encoding/WinAnsiEncoding>>";
 
 // Inserts entries before a dictionary's closing >>.
@@ -390,10 +526,17 @@ function freeFontName(acroDict) {
   return name;
 }
 
-// The AcroForm with our font reachable from /DR/Font, building whichever level is missing.
-function acroWithFont(acroDict, font) {
+// The AcroForm with our font reachable from /DR/Font, building whichever level is missing, and
+// with /NeedAppearances set either way round.
+//
+// The font goes in /DR whether we drew the values or not, and it is not redundant when we did: our
+// /AP carries its own /Resources, but the moment anyone TYPES in a field the reader regenerates
+// that field's appearance from /DA and /DR, and /DR is where it looks the name up. Leaving it out
+// would make our own /DA name a font the file does not offer, which is a blank field the first
+// time someone corrects a typo.
+function acroWithFont(acroDict, font, needAppearances) {
   const drop = ["NeedAppearances"];
-  let additions = "/NeedAppearances true";
+  let additions = `/NeedAppearances ${needAppearances ? "true" : "false"}`;
   if (font) {
     const dr = entryValue(acroDict.trim(), "DR");
     const fontsRef = `/${font.name} ${font.obj} 0 R`;
@@ -448,6 +591,206 @@ function onStateOf(dict) {
   if (!normal || !normal.startsWith("<<")) return DEFAULT_ON_STATE;
   const state = dictEntries(normal).find((e) => e.key !== "Off");
   return state ? state.key : DEFAULT_ON_STATE;
+}
+
+// ---------- what a widget says about its own box ----------
+//
+// Five readers over one widget dictionary, all of them built on entryValue() above, and all five
+// exported for the reason the header gives: the geometry they compute has an independent answer
+// inside the template, so a test can diff our arithmetic against the file's own.
+//
+// They are only ever called when appearances are being generated. With `appearances: false` this
+// module writes no drawing, so none of this is parsed and a template that would fail one of these
+// checks still fills — which is the fallback advice every refusal below gives.
+
+// PDF numbers: optionally signed, decimal point optional, and NO exponent — `1e-7` is the number 1
+// followed by a keyword in this grammar. Matching them out of the array rather than splitting on
+// whitespace means "[ 11.6295 22.2755 274.019 227.972]" (Master PDF Editor's own spacing, note the
+// leading space) needs no trimming, and an indirect "/Rect 5 0 R" comes out as two numbers rather
+// than as a rectangle at the origin.
+const PDF_NUMBERS = /[-+]?(?:\d+\.?\d*|\.\d+)/g;
+
+// /Ff bit 13 (1-based, so 1 << 12): the text field is multiline. Set on 16 of this template's 71
+// text fields, always alongside bit 26 — /Ff 33558528 is 4096 + 33554432 — which is why this masks
+// rather than compares.
+const MULTILINE_FLAG = 1 << 12;
+
+// The three non-stroking colour operators a /DA may end with, and how many operands each takes.
+// Nothing else from a /DA is ever copied into a stream we compose; see daParts().
+const COLOUR_ARITY = Object.freeze({ g: 1, rg: 3, k: 4 });
+
+// A colour operand as the plan's whitelist spells one: digits and an optional point, no sign, no
+// exponent. Colour components are 0..1, so a "-" here is a malformed /DA and not a colour.
+const COLOUR_OPERAND = /^\d*\.?\d+$/;
+
+/**
+ * A widget's /Rect, normalised so width and height are positive.
+ *
+ * NORMALISING IS NOT TIDINESS. §12.5.2 says a /Rect may store its corners in either order, and
+ * this template really does: `hope1` is `[41.25 487.5 52.75 477]`, top-left to bottom-right
+ * (measured 2026-09-01; it is the only one of the 182, and it is a checkbox, so no text field
+ * depends on this today). Subtracting in file order there gives a height of −10.5, and a form
+ * XObject whose /BBox has a negative extent draws NOTHING in either PDFium or MuPDF — no error, no
+ * warning, an empty field on the page. min/max on BOTH axes, because the same is true sideways.
+ *
+ * @param {string} dict  the widget's dictionary, "<<…>>"
+ * @returns {{x:number, y:number, width:number, height:number}} the lower-left corner and the extents
+ */
+export function rectOf(dict) {
+  const raw = entryValue(dict.trim(), "Rect");
+  if (raw === null) {
+    throw new UnsupportedPdfError(
+      "pdf-form.js: a widget has no /Rect, so there is no box to draw its value into. Fill with " +
+      "appearances switched off, which asks the reader to place it instead.",
+    );
+  }
+  const numbers = (raw.match(PDF_NUMBERS) || []).map(Number);
+  if (numbers.length !== 4 || numbers.some((n) => !Number.isFinite(n))) {
+    throw new UnsupportedPdfError(
+      `pdf-form.js: a widget's /Rect is ${JSON.stringify(raw)}, which is not four numbers. ` +
+      "An indirect /Rect (`5 0 R`) looks like this and is deliberately not resolved: a rectangle " +
+      "is two corners, and this module takes both of them from the widget itself.",
+    );
+  }
+  const [x0, y0, x1, y1] = numbers;
+  return {
+    x: Math.min(x0, x1),
+    y: Math.min(y0, y1),
+    width: Math.abs(x1 - x0),
+    height: Math.abs(y1 - y0),
+  };
+}
+
+/**
+ * A text field's /DA, split into the size it asks for and the colour it draws in.
+ *
+ * THE COLOUR IS REBUILT, NOT QUOTED. A /DA is a string somebody else's editor wrote, and the
+ * drawing this module composes is a content stream: pasting bytes from one into the other is how a
+ * template gets to choose our operators. So the operands are matched against a whitelist of
+ * digits, counted against the operator's own arity, and then RE-EMITTED through formatNumber() —
+ * what reaches the stream is a number we computed, not a byte we copied. shared/pdf-text.js checks
+ * the same shape again at the last moment (its COLOUR_OPERATORS), because it is the file that
+ * actually writes it.
+ *
+ * The size comes back and is deliberately not used: all 71 /DA strings in this template read
+ * `/Helvetica 0 Tf …`, and `0 Tf` means "pick a size that fits", which is the whole job
+ * shared/pdf-text.js does. Honouring a template's FIXED size would mean drawing a block we have
+ * not proved fits the box — which is Firefox's bug (pdf.worker.mjs:54240) with our name on it. It
+ * is returned because splitting the string is what makes the colour trustworthy: you cannot know
+ * which tokens are the colour without knowing what the others were.
+ *
+ * @param {string} dict  the widget's dictionary
+ * @returns {{size:number, colour:(string|null)}}  size 0 means "fit it" (or "no /DA"); a null
+ *   colour means the /DA named none we recognise, and the caller draws black.
+ */
+export function daParts(dict) {
+  const raw = entryValue(dict.trim(), "DA");
+  // An indirect /DA — legal, and what `19 0 R` would look like here — reads as "no /DA": the
+  // default is black at a fitted size, which is what every field on this template asks for anyway.
+  if (raw === null || (!raw.startsWith("(") && !raw.startsWith("<"))) return { size: 0, colour: null };
+  const da = decodeString(raw);
+  const tokens = da.trim().split(/[\0\t\n\f\r ]+/);
+  let size = 0;
+  let colour = null;
+  for (let i = 0; i < tokens.length; i++) {
+    // Later operators win, exactly as they would if a reader executed the string, so this keeps
+    // looking rather than stopping at the first hit.
+    if (tokens[i] === "Tf" && i >= 1 && Number.isFinite(Number(tokens[i - 1]))) size = Number(tokens[i - 1]);
+    const arity = COLOUR_ARITY[tokens[i]];
+    if (arity === undefined || i < arity) continue;
+    const operands = tokens.slice(i - arity, i);
+    if (!operands.every((operand) => COLOUR_OPERAND.test(operand))) continue;
+    colour = `${operands.map((operand) => formatNumber(Number(operand))).join(" ")} ${tokens[i]}`;
+  }
+  return { size, colour };
+}
+
+/**
+ * Is this text field multiline? /Ff bit 13.
+ *
+ * REFUSES rather than defaults when /Ff is there but unreadable — an indirect one, say. Guessing
+ * "single line" for a 205pt-tall box is not a small mistake: the fitter would size one line to the
+ * box's width, hit the 6pt floor, and report a truncation that dropped most of the value. Guessing
+ * the other way is no better. A template this module cannot read the flags of is one to fill with
+ * appearances switched off.
+ *
+ * @param {string} dict  the widget's dictionary
+ * @returns {boolean}
+ */
+export function multilineOf(dict) {
+  const raw = entryValue(dict.trim(), "Ff");
+  if (raw === null) return false;
+  const flags = Number(raw.trim());
+  if (!Number.isInteger(flags)) {
+    throw new UnsupportedPdfError(
+      `pdf-form.js: a widget's /Ff is ${JSON.stringify(raw)}, which is not an integer, so whether ` +
+      "the field is multiline cannot be read. Fill with appearances switched off.",
+    );
+  }
+  return (flags & MULTILINE_FLAG) !== 0;
+}
+
+/**
+ * A field's /Q: 0 left, 1 centre, 2 right, and 0 when it says nothing. On this template 25 fields
+ * are centred, 3 right, 1 explicitly 0, and 153 say nothing at all.
+ *
+ * DEFAULTS where multilineOf() refuses, and the difference is what the mistake costs. A /Q nobody
+ * can read costs a line its alignment — ugly, and every character still on the page. A misread
+ * /Ff costs the page most of a paragraph. Only one of those is worth stopping an export over.
+ *
+ * @param {string} dict  the widget's dictionary
+ * @returns {number}
+ */
+export function quadOf(dict) {
+  const raw = entryValue(dict.trim(), "Q");
+  if (raw === null) return 0;
+  const quad = Number(raw.trim());
+  return Number.isInteger(quad) ? quad : 0;
+}
+
+/**
+ * Everything shared/pdf-text.js needs to lay one field's value out, read off the widget.
+ *
+ * WHAT IS NOT READ HERE, AND WHY: the border width. The clip and every inset in the placement
+ * constants stand off by 1 point, and that 1 is a constant here rather than the widget's own
+ * /BS /W. It could not be read cheaply anyway — /BS is an INDIRECT reference on 125 of this
+ * template's 182 widgets, so entryValue() hands back "797 0 R" — and resolving it would mean
+ * carrying the object table into a geometry reader for a number the template already agrees with:
+ * all 182 of its /BS dictionaries say `/W 1`, 57 inline and 125 in objects of their own (measured
+ * 2026-09-01). If a template ever disagrees, the text is a point off the border, which is a
+ * cosmetic loss on a rule this module never draws.
+ *
+ * THE ROTATION REFUSAL HAS THE SAME BLIND SPOT, on purpose and worth stating. /MK is indirect on
+ * the same 125 widgets, so a rotated one among those would not be seen. Every /MK in this
+ * template says `/R 0` — 57 inline, and the other 125 resolved and checked one by one by a script
+ * on 2026-09-01 — so the hole is empty here; it is a hole in what a DIFFERENT template could
+ * smuggle past this reader, and closing it means resolving references from inside a function whose
+ * whole contract is that it reads one dictionary. The refusal is loud where it can see, and the
+ * answer it gives (fill with appearances off) is the right answer to a rotated field either way.
+ *
+ * @param {string} dict  the widget's dictionary
+ * @param {string} [name]  the field's name, for the message if this refuses
+ * @returns {{width:number, height:number, multiline:boolean, quad:number, colour:(string|null)}}
+ */
+export function fieldBox(dict, name) {
+  const body = dict.trim();
+  const mk = entryValue(body, "MK");
+  const rotation = mk && mk.startsWith("<<") ? (entryValue(mk, "R") || "0").trim() : "0";
+  if (Number(rotation) !== 0) {
+    throw new UnsupportedPdfError(
+      `pdf-form.js: the field ${JSON.stringify(name ?? "(unnamed)")} is rotated — its /MK says /R ${rotation}. ` +
+      "This module would draw the text upright inside a box the reader then turns, which is a wrong " +
+      "sheet rather than an ugly one. Fill with appearances switched off and the reader places it.",
+    );
+  }
+  const rect = rectOf(body);
+  return {
+    width: rect.width,
+    height: rect.height,
+    multiline: multilineOf(body),
+    quad: quadOf(body),
+    colour: daParts(body).colour,
+  };
 }
 
 /**
@@ -667,6 +1010,7 @@ export function readForm(bytes) {
  *
  * @param {Uint8Array} bytes   the template
  * @param {Object<string, (string|boolean)>} values  field name → value
+ * @param {{appearances?: boolean}} [options]  see fillFormWithReport()
  * @returns {Uint8Array}
  *
  * A value of undefined, null or "" leaves that field exactly as the template had it, so a
@@ -678,13 +1022,49 @@ export function readForm(bytes) {
  * in step by hand, and a typo in either is worth a stopped export rather than a sheet that is
  * silently missing a line nobody notices until it is printed.
  */
-export function fillForm(bytes, values) {
+export function fillForm(bytes, values, options) {
+  return fillFormWithReport(bytes, values, options).bytes;
+}
+
+/**
+ * @typedef {object} FillReport  What the fill could not do, for a caller with somewhere to show it.
+ * @property {null|{reason: string, fields: {field: string, characters: object[]}[]}} fellBack
+ *   null when the drawing was written (or was never asked for). Otherwise the document fell back
+ *   to /NeedAppearances, and this says why: `reason` is "unmappable", and `fields` names each
+ *   field and the DISTINCT code points in it that WinAnsi cannot draw, in widget order, each with
+ *   a count. One field's worth is enough to write the message with — "`appearance` contains
+ *   characters this font can't draw (漢 ×3)" — and having them per field is what lets the message
+ *   say WHERE.
+ * @property {string[]} truncated  the fields whose value did not fit at the 6pt floor and were cut
+ *   with a visible ellipsis, in widget-object order. Empty on every ordinary sheet.
+ *
+ * Two things are deliberately NOT in here, and shared/winansi.js's header argues it at length: the
+ * minus-sign and non-breaking-hyphen substitutions, and the removed invisible characters. The rule
+ * is REPORT WHAT CHANGES WHAT THE SHEET SAYS. A hyphen drawn for a U+2212 preserves the meaning,
+ * and nine of the 69 SRD 2.0 armors carry one — reporting it would put a warning on a large share
+ * of real sheets, which teaches people to ignore the panel that also carries the real losses.
+ */
+
+/**
+ * fillForm(), plus the record of what it could not do.
+ *
+ * @param {Uint8Array} bytes   the template
+ * @param {Object<string, (string|boolean)>} values  field name → value
+ * @param {{appearances?: boolean}} [options]
+ *   `appearances: false` (the default) writes /V, deletes /AP and sets /NeedAppearances true —
+ *   the reader lays the text out. `appearances: true` writes /V, an /AP /N Form XObject per filled
+ *   text field, and /NeedAppearances false: the reader draws what we drew. The header argues which
+ *   costs what.
+ * @returns {{bytes: Uint8Array, fellBack: FillReport["fellBack"], truncated: string[]}}
+ */
+export function fillFormWithReport(bytes, values, { appearances = false } = {}) {
   if (!values || typeof values !== "object") {
     throw new TypeError(`pdf-form.js: values must be an object of field name → value, got ${typeof values}`);
   }
-  // Two arguments, not three. readForm() is called below, so a caller that already has a form has
-  // nothing to thread through — and handing it here would otherwise be reported as "the template
-  // has no field called fields", which sends the reader looking in the wrong file.
+  // The values go SECOND, and a readForm() result handed over here is the mistake the signature
+  // invites: readForm() is called below, so a caller that already has a form has nothing to thread
+  // through. Without this the error would be "the template has no field called fields", which
+  // sends the reader looking in the wrong file.
   if (values.fields instanceof Map && values.acroForm) {
     throw new TypeError(
       "pdf-form.js: fillForm(bytes, values) takes the values object as its SECOND argument — that " +
@@ -696,18 +1076,18 @@ export function fillForm(bytes, values) {
   const form = readForm(bytes);
   const trailer = readTrailer(text);
 
-  const updates = new Map(); // object number → the new dictionary, "<<…>>"
+  // Object number → what to write for it: a dictionary, or a dictionary and the stream that
+  // follows it. A TYPED UNION rather than a second Map or a flag, so the emit loop below has to
+  // look at what it is holding before it can write it — and so /Length is counted off the bytes
+  // that loop actually pushes rather than off a length computed anywhere else.
+  const updates = new Map(); // object number → "<<…>>" | {dict: "<<…>>", stream: "…"}
 
-  // Only when there is text to draw. A sheet of nothing but ticked boxes needs no font, and adding
-  // one would make the output differ from a run that wrote the same boxes a different way.
-  const writesText = Object.entries(values).some(([name, value]) =>
-    value !== undefined && value !== null && value !== "" && form.fields.get(name)?.type === "Tx");
-  let ourFont = null;
-  if (writesText) {
-    const highest = Math.max(form.acroForm.obj, ...[...form.fields.values()].map((f) => f.obj));
-    ourFont = { name: freeFontName(form.acroForm.dict), obj: Math.max(trailer.size, highest + 1) };
-  }
-
+  // The two kinds of fill, separated once here rather than tested for again in three places. Both
+  // keep the caller's key order, which is what makes the "unknown field" error name the first
+  // offending key rather than an arbitrary one; the DRAWING order is imposed further down, and it
+  // is not this one.
+  const ticks = [];
+  const texts = [];
   for (const [name, value] of Object.entries(values)) {
     const field = form.fields.get(name);
     if (!field) {
@@ -717,16 +1097,41 @@ export function fillForm(bytes, values) {
       );
     }
     if (value === undefined || value === null || value === "") continue;
-    if (field.type === "Btn") {
-      const state = value ? onStateOf(field.dict.trim()) : "Off";
-      updates.set(field.obj, rewriteDict(field.dict, ["V", "AS"], `/V/${state}/AS/${state}`));
-    } else {
-      updates.set(field.obj, rewriteDict(field.dict, ["V", "AP", "DA"],
-        `/V${utf16HexString(String(value))}/DA${daNaming(field.dict, ourFont.name)}`));
-    }
+    (field.type === "Btn" ? ticks : texts).push({ name, field, value });
+  }
+
+  // Only when there is text to draw. A sheet of nothing but ticked boxes needs no font, and adding
+  // one would make the output differ from a run that wrote the same boxes a different way.
+  let ourFont = null;
+  if (texts.length) {
+    const highest = Math.max(form.acroForm.obj, ...[...form.fields.values()].map((f) => f.obj));
+    ourFont = { name: freeFontName(form.acroForm.dict), obj: Math.max(trailer.size, highest + 1) };
+  }
+
+  const drawn = appearances && ourFont ? drawFields(texts, ourFont) : { streams: null, fellBack: null, truncated: [] };
+
+  for (const { field, value } of ticks) {
+    const state = value ? onStateOf(field.dict.trim()) : "Off";
+    updates.set(field.obj, rewriteDict(field.dict, ["V", "AS"], `/V/${state}/AS/${state}`));
+  }
+  for (const { field, value } of texts) {
+    const drawing = drawn.streams ? drawn.streams.get(field.obj) : undefined;
+    // "AP" stays in the drop list in BOTH modes, and the additions differ instead. Leaving it out
+    // when we add one of our own would leave the widget carrying two /AP keys: rewriteDict's own
+    // doc comment says why that is not a near-miss but a coin toss, and ghostscript takes the
+    // FIRST — which is the template's `q\nQ\n`, so every filled field prints blank, with no
+    // fallback and nothing on the page to say so.
+    updates.set(field.obj, rewriteDict(field.dict, ["V", "AP", "DA"],
+      `/V${utf16HexString(String(value))}/DA${daNaming(field.dict, ourFont.name)}` +
+      (drawing ? `/AP<</N ${formatNumber(drawing.obj)} 0 R>>` : "")));
+    if (drawing) updates.set(drawing.obj, { dict: appearanceDict(drawing.box, ourFont), stream: drawing.ops });
   }
   if (ourFont) updates.set(ourFont.obj, OUR_FONT_DICT);
-  updates.set(form.acroForm.obj, acroWithFont(form.acroForm.dict, ourFont));
+  // /NeedAppearances is false exactly when there is a drawing of ours to look at, and true in every
+  // other case — including a fill of nothing but ticks, and including the document-level fallback.
+  // The flag means "reader, please lay these values out"; the only reason to stop asking is that
+  // we have laid them out ourselves.
+  updates.set(form.acroForm.obj, acroWithFont(form.acroForm.dict, ourFont, drawn.streams === null));
 
   // Chunks plus a running byte counter, exactly as pdf.js:216-228 does it and for the same reason:
   // an offset read from the counter is true whatever the chunks contain, where an offset computed
@@ -747,27 +1152,53 @@ export function fillForm(bytes, values) {
   for (const num of changed) {
     offsets.set(num, at);
     write(`${formatNumber(num)} 0 obj\r\n`);
-    push(verbatimBytes(updates.get(num)));
+    const update = updates.get(num);
+    if (typeof update === "string") {
+      // A rewritten dictionary: mostly template bytes, quoted back, so verbatimBytes and not
+      // write(). The BYTES, STRINGS section of the header is about exactly this line.
+      push(verbatimBytes(update));
+    } else {
+      // An appearance stream, and every byte of it is ours: the dictionary is composed here and
+      // the operators come out of shared/pdf-text.js, which guarantees pure ASCII (its literal
+      // bodies are octal-escaped above 0x7E). So this side goes through asciiBytes(), which is
+      // the stricter check and the right one — nothing here is a copy.
+      //
+      // /Length COUNTED FROM THE BYTES THIS LOOP PUSHES, which is the whole reason `updates` is a
+      // union rather than two maps: it counts the bytes between the newline that ends "stream" and
+      // the one that begins "endstream", neither included, exactly as pdf.js:260-271 does it. A
+      // /Length computed anywhere else is a claim about bytes somebody else wrote.
+      const body = asciiBytes(update.stream);
+      write(withEntries(update.dict, `/Length ${formatNumber(body.length)}`));
+      write("\r\nstream\n");
+      push(body);
+      write("\nendstream");
+    }
     write("\r\nendobj\r\n");
   }
 
-  // /Size is one past the highest object number in the file, and we DO add one — the font above —
-  // so this has to grow. Taking the max rather than trailer.size + 1 also covers a template whose
-  // own /Size was already too small for its fields, where a reader ignores everything above it and
-  // the sheet comes out empty.
+  // /Size is one past the highest object number in the file, and we DO add objects — the font, and
+  // one appearance stream per drawn field — so this has to grow. Taking the max rather than
+  // trailer.size + N also covers a template whose own /Size was already too small for its fields,
+  // where a reader ignores everything above it and the sheet comes out empty.
   const size = Math.max(trailer.size, changed.length ? changed[changed.length - 1] + 1 : 0);
 
   const xrefAt = at;
   write("xref\r\n");
-  // One subsection per run of consecutive object numbers, which for this template means one
-  // subsection per ENTRY. Its fillable objects are never numbered next to each other: the 100 live
-  // fields and the AcroForm are scattered from 32 to 713, three apart at the closest, so a
-  // realistic export — 52 text fields, six trait marks and the AcroForm — writes 59 subsections of
-  // one entry each, and not one run longer than that. Which is fine, and the reason it is fine is
-  // that a reader takes each subsection's length from that subsection's own header: what has to
-  // add up is the entries, not the runs. Sorting above is for determinism — same values in, same
-  // bytes out — and not to make runs long; the run-joining here is only what keeps the section
-  // right on some other template whose numbering does fall consecutively.
+  // One subsection per run of consecutive object numbers. NOTHING THE TEMPLATE OWNS IS EVER IN A
+  // RUN: its 182 widgets are numbered 41 to 1334 and its AcroForm is 32, three apart at the
+  // closest, so a realistic export writes one subsection per rewritten widget — 73 of them, all of
+  // one entry, for the 48 text fields, 23 ticks, the AcroForm and the font of a real character
+  // (measured 2026-09-01 against data/sheet/sheet-template.pdf).
+  //
+  // The objects WE allocate are the exception, and they are why the run-joining below is no longer
+  // theoretical: the font and the N appearance streams are consecutive by construction. That same
+  // export with appearances on writes the same 73 subsections but 121 entries, the last of them a
+  // single run of 49 — the font, then one stream per drawn field. This loop had never once been
+  // round its `while` before that.
+  //
+  // Either shape is fine, and the reason it is fine is that a reader takes each subsection's
+  // length from that subsection's own header: what has to add up is the entries, not the runs.
+  // Sorting above is for determinism — same values in, same bytes out — not to make runs long.
   for (let i = 0; i < changed.length;) {
     let end = i + 1;
     while (end < changed.length && changed[end] === changed[end - 1] + 1) end++;
@@ -804,5 +1235,101 @@ export function fillForm(bytes, values) {
     out.set(chunk, cursor);
     cursor += chunk.length;
   }
-  return out;
+  return { bytes: out, fellBack: drawn.fellBack, truncated: drawn.truncated };
+}
+
+/**
+ * Lay out every filled text field, or decide the document cannot be drawn at all.
+ *
+ * ORDERED BY WIDGET OBJECT NUMBER, never by the caller's keys. The appearance objects are numbered
+ * as they are ALLOCATED, so allocating in key order would make `{name, level}` and `{level, name}`
+ * produce two different files out of the same character. tests.js:5447 is where that rule is
+ * already written down for the dictionaries — same values, keys swapped, byte-identical output —
+ * and note that its fixture fills ONE text field, so a version of this test with teeth needs two.
+ * (The real template does have teeth: 48 text fields filled from a reversed value map came back
+ * byte-identical, checked while writing this.) The widget numbers come from the template, so they
+ * are the same list whatever the caller did.
+ *
+ * FRESH OBJECTS, ALWAYS: base+1 … base+N, above the font at base. Nothing here ever writes into
+ * the template's existing /AP objects, and the test fixture is built to punish an implementation
+ * that tries — its object 10 is the appearance for BOTH text widgets AND for both states of BOTH
+ * checkboxes, so "update the /AP the widget already points at" would draw one field's text into
+ * five places, two of them ticks. The real template is one step short of that: all 71 of its text
+ * /APs are separate objects. They are FlateDecode-compressed, though, so reusing one would mean
+ * composing a whole new object anyway — the only thing saved would be an object number.
+ *
+ * THE FALLBACK IS THE WHOLE DOCUMENT'S, and this is where it is decided. If any value carries a
+ * character WinAnsi cannot draw and winansi.js has no substitution for, no stream is written at
+ * all and the caller emits exactly today's file. NOT per field: with /NeedAppearances false, a
+ * field carrying /V and no /AP is laid out by PDFium, MuPDF and ghostscript, but Firefox draws
+ * NOTHING for it — `_getAppearance` returns null (pdf.worker.mjs:54101), `this.appearance` is
+ * never set, and `getOperatorList` (:53936) hands back an empty operator list. So a per-field
+ * fallback would be one field silently blank in one reader, which is the exact failure this
+ * feature exists to remove, reproduced with our own name on it.
+ *
+ * @param {{name: string, field: {obj: number, dict: string}, value: *}[]} texts  the filled text fields
+ * @param {{name: string, obj: number}} ourFont
+ * @returns {{streams: (Map<number, {obj:number, ops:string, box:object}>|null),
+ *            fellBack: (null|object), truncated: string[]}}
+ *   `streams` is keyed by WIDGET object number and null when the document fell back.
+ */
+function drawFields(texts, ourFont) {
+  const ordered = [...texts].sort((a, b) => a.field.obj - b.field.obj);
+  const laid = ordered.map(({ name, field, value }) => {
+    // fieldBox() names the field in its own refusals, so it stays outside the try.
+    const box = fieldBox(field.dict, name);
+    // textAppearance() cannot name it — it is handed a box and never learns whose — so its errors
+    // are re-thrown with the field on them here, the only place that knows both. "box.width is 0.5"
+    // without a field name is a message that sends someone reading 71 widgets by hand.
+    try {
+      return { name, field, result: textAppearance(String(value), { ...box, fontName: ourFont.name }), box };
+    } catch (err) {
+      throw new UnsupportedPdfError(
+        `pdf-form.js: the field ${JSON.stringify(name)} (object ${field.obj}) cannot be drawn: ${err.message}`,
+      );
+    }
+  });
+
+  const unmappable = laid
+    .filter((entry) => entry.result.notes.unmappable.length)
+    .map((entry) => ({ field: entry.name, characters: entry.result.notes.unmappable }));
+  if (unmappable.length) {
+    return { streams: null, fellBack: { reason: "unmappable", fields: unmappable }, truncated: [] };
+  }
+
+  const streams = new Map();
+  const truncated = [];
+  laid.forEach((entry, index) => {
+    streams.set(entry.field.obj, { obj: ourFont.obj + 1 + index, ops: entry.result.ops, box: entry.box });
+    if (entry.result.notes.truncated) truncated.push(entry.name);
+  });
+  return { streams, fellBack: null, truncated };
+}
+
+/**
+ * One appearance stream's dictionary, /Length excluded — the emit loop counts that off the bytes
+ * it pushes.
+ *
+ * /BBox is [0 0 w h] and /Matrix is the identity, which together are what map the drawing onto the
+ * widget: §12.5.5 transforms the /BBox by the /Matrix and then fits the result to the annotation's
+ * /Rect. Equal extents plus an identity matrix means that fit is 1:1, so a coordinate in this
+ * stream is a point in the field's box and page 2's origin never enters into it. (Master PDF
+ * Editor's own /AP objects agree, which is the check worth having: every one of the template's 71
+ * text /BBoxes matches its widget's /Rect extents to within 0.001pt, measured 2026-09-01.)
+ *
+ * /Resources NAMING OUR OWN FONT IS LOAD-BEARING, not insurance. The template's /Helvetica carries
+ * a /Differences array that moves 149 off /bullet and onto /Lslash, and BOTH PDFium and MuPDF
+ * honour a /Differences inside a content stream — so a stream that inherited the page's font, or
+ * named the AcroForm's, would draw Ł where these bytes say bullet. Chrome's own regenerated
+ * appearances name /DhHelv in all 53 of them for the same reason.
+ *
+ * @param {{width: number, height: number}} box
+ * @param {{name: string, obj: number}} font
+ * @returns {string}
+ */
+function appearanceDict(box, font) {
+  return "<</Type/XObject/Subtype/Form/FormType 1"
+    + `/BBox[0 0 ${formatNumber(box.width)} ${formatNumber(box.height)}]`
+    + "/Matrix[1 0 0 1 0 0]"
+    + `/Resources<</Font<</${font.name} ${formatNumber(font.obj)} 0 R>>>>>>`;
 }
