@@ -88,7 +88,7 @@
 // line: uncapped, this fitter puts "Minor Health Potion" and "Flexible: +1 to Evasion" in it at
 // 36pt — the planning survey, whose predicate was a shade looser, said 40 and 25 — and every one
 // of those numbers looks like a mistake rather than a character sheet. So multiline walks the
-// integer sizes 12 → 6 and takes the first that fits. Single-line boxes are the stat circles and
+// sizes 12 → 6 in quarter points and takes the first that fits. Single-line boxes are the stat
 // the name banner, where filling the box IS the design, so that branch is closed-form and uncapped.
 //
 // THE 6pt FLOOR, AND WHY IT ENDS IN AN ELLIPSIS
@@ -183,10 +183,20 @@ export const LAYOUT = Object.freeze({
   BBOX_HEIGHT: 1.156,  // (931 + 225)/1000: the tallest Helvetica can draw, the single-line divisor
   MAX_MULTILINE_SIZE: 12, // see the header: a list-sized box holding one potion name
   MIN_SIZE: 6,         // the floor; below it, truncate with an ellipsis and report
+  SIZE_STEP: 0.25,     // the size granularity; see WHY SIZES ARE FRACTIONAL in the header
 });
 
 const { INSET, LEADING, FIRST_BASELINE, SINGLE_BASELINE, DESCENT, BBOX_HEIGHT } = LAYOUT;
-const { MAX_MULTILINE_SIZE, MIN_SIZE } = LAYOUT;
+const { MAX_MULTILINE_SIZE, MIN_SIZE, SIZE_STEP } = LAYOUT;
+
+// The ladder, as integer STEPS rather than accumulated floats: 12, 11.75, … 6. Counting in steps
+// and multiplying once keeps every size exactly representable and the search deterministic —
+// `size -= 0.25` twenty-four times does not land on 6, and byte-identical output is a tested
+// contract here (tests.js fills the same values with the keys reordered and demands the same
+// bytes).
+const STEPS_MAX = Math.round(MAX_MULTILINE_SIZE / SIZE_STEP);
+const STEPS_MIN = Math.round(MIN_SIZE / SIZE_STEP);
+const stepSize = (n) => n * SIZE_STEP;
 
 // WinAnsi 0x85 is /ellipsis — one glyph, 1000/1000 em. This is a latin1 CODES character, not the
 // Unicode U+2026 it draws and not the C1 control that shares its number; winansi.js's header
@@ -423,7 +433,7 @@ function fitCodes(codes, box) {
 }
 
 /**
- * Multiline: the largest integer size from 12 down whose LAID-OUT block fits.
+ * Multiline: the largest size from 12 down, in quarter points, whose LAID-OUT block fits.
  *
  * The predicate is the header's, and it is the whole point of this file. Note that the width test
  * is very nearly redundant — wrapLines() breaks at the same width, so it can only fail when a
@@ -440,7 +450,8 @@ function fitCodes(codes, box) {
  */
 function fitMultiline(codes, box, measure) {
   const width = box.width - 2 * INSET;
-  for (let size = MAX_MULTILINE_SIZE; size >= MIN_SIZE; size--) {
+  for (let n = STEPS_MAX; n >= STEPS_MIN; n--) {
+    const size = stepSize(n);
     const lines = wrapLines(codes, width, size, measure);
     if (lastBaseline(lines.length, size, box.height) >= DESCENT * size
       && widestLine(lines, size, measure) <= width) {
@@ -472,16 +483,23 @@ function fitMultiline(codes, box, measure) {
 /**
  * Single-line: closed-form, no iteration, no cap.
  *
- * min(h / 1.156, (w − 2) / textWidth), floored to a whole point. The asymmetry is deliberate and
+ * min(h / 1.156, (w − 2) / textWidth), floored to a quarter point. The asymmetry is deliberate and
  * is not a missing inset: the HEIGHT term divides the FULL box height, which is what 1.156 was
  * chosen against and what the readers' own single-line branch divides too (by 1.35), while the
  * WIDTH term is the drawable width, because the line really is placed one point in from the edge
  * and has to stop one point before the far one.
  *
- * Whole points, not fractions, because a stat circle that says 26 next to one that says 25.7143
- * is a rendering artefact made visible; and because the size then does not depend on the last
- * digit of the value.
+ * QUARTER points, not whole ones. This was whole points until 2026-09-01, on the argument that a
+ * stat circle reading 26 beside one reading 25.7143 is a rendering artefact made visible, and that
+ * a size a reader also lands on makes an edited field blend in. Danny overruled it, and the
+ * measurement is why: the ladder is coarse where it costs most. `class-features` at its worst
+ * takes 6pt, because 7pt needs 30 lines and about 25 fit — which left 45pt of a 205.7pt box empty
+ * and the hardest-to-read field on the sheet a point smaller than it needed to be. A quarter of a
+ * point is invisible as a difference between two boxes and worth 5-8% of type size inside one:
+ * that worst case goes 6 → 6.5, the longest single class 9 → 9.5, a mid-length one 10 → 10.5.
  *
+ * Not finer than a quarter. The gain past that is under a percent, and every extra decimal is
+ * another digit in every Tf and every Tm of a stream that is already the biggest thing we append.
  * @param {string} codes
  * @param {Box} box
  * @param {(codes: string, size: number) => number} measure
@@ -494,7 +512,7 @@ function fitSingle(codes, box, measure) {
   const width = box.width - 2 * INSET;
   const unit = measure(line, 1); // linear in size, so one measurement is the whole width term
   const byWidth = unit > 0 ? width / unit : Infinity; // an empty line is height-limited
-  const size = Math.floor(Math.min(box.height / BBOX_HEIGHT, byWidth));
+  const size = stepSize(Math.floor(Math.min(box.height / BBOX_HEIGHT, byWidth) / SIZE_STEP));
   if (size >= MIN_SIZE) return { size, lines: [line], truncated: false };
 
   // The floor. Only the width term can bring us here on this sheet: the shortest single-line box

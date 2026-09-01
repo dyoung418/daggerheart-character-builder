@@ -6093,12 +6093,18 @@ group("Fitting: the assertion that stands in for a reader we cannot run");
     firefoxAccepts(4, 12, ffBox.height));
   check("and the block it would then draw does NOT fit: the last baseline lands below the box floor",
     lastBaseline(4, 12, ffBox.height) < 0);
-  eq("ours refuses 12 and takes the largest size whose laid-out block fits, which is 10", ff.size, 10);
+  eq("ours refuses 12 and takes the largest size whose laid-out block fits, which is 10.75",
+    ff.size, 10.75);
   check("and what it then draws is inside the box", drawingFits("a\nb\nc\nd", ffBox));
   // The boundary, which is what says the fitter is not simply timid: one point more overflows, by
   // six hundredths of a point.
-  check("while 11 would not, so 10 is the largest that fits and not the first that looked safe",
+  check("while 11 would not, so 10.75 is the largest that fits and not the first that looked safe",
     lastBaseline(4, 11, ffBox.height) < LAYOUT.DESCENT * 11 && firefoxAccepts(4, 11, ffBox.height));
+  // And the quarter-point ladder is what buys that: whole points would have stopped at 10, three
+  // quarters of a point smaller, for a box that had the room. 49 − 4.253 × size ≥ 0.207 × size
+  // solves to 10.987, and 10.75 is the largest step at or under it.
+  eq("the step below the true limit is taken, not the whole point below it",
+    Math.floor(10.987 / LAYOUT.SIZE_STEP) * LAYOUT.SIZE_STEP, 10.75);
 
   // A multiline box on this sheet is sized for a LIST, not for its contents: `inventory-items` is
   // 294.5 × 91.2pt and often holds one short line. Uncapped, this fitter puts a potion name in it
@@ -6149,21 +6155,21 @@ group("Operators: the exact stream, one line at a time");
 
   // Left, /Q 0. The clip is `1 1 (w−2) (h−2) re W n`, the baseline is h/2 − 0.355 × size, and the
   // x is the inset: 1. Size is closed-form — min(h / 1.156, (w − 2) / textWidth) floored — which
-  // here is min(17.30, 33.33) = 17.
+  // here is min(17.30, 33.33) = 17.30, floored to the quarter point: 17.25.
   eq("a left-aligned single line, whole",
     textAppearance("abc", box).ops,
-    "/Tx BMC\nq\n1 1 100 18 re W n\nBT\n0 g\n/DhHelv 17 Tf\n1 0 0 1 1 3.965 Tm (abc) Tj\nET\nQ\nEMC");
+    "/Tx BMC\nq\n1 1 100 18 re W n\nBT\n0 g\n/DhHelv 17.25 Tf\n1 0 0 1 1 3.8763 Tm (abc) Tj\nET\nQ\nEMC");
 
-  // Centred, /Q 1. x = (w − textWidth) / 2 = (102 − 51) / 2 = 25.5, and it is a per-LINE number:
-  // that is why every line is placed with an absolute Tm rather than a Td or a TL/T*.
-  eq("a centred one, with the x arithmetic done by hand: (102 − 3 × 17) / 2",
+  // Centred, /Q 1. x = (w − textWidth) / 2 = (102 − 51.75) / 2 = 25.125, and it is a per-LINE
+  // number: that is why every line is placed with an absolute Tm rather than a Td or a TL/T*.
+  eq("a centred one, with the x arithmetic done by hand: (102 − 3 × 17.25) / 2",
     textAppearance("abc", { ...box, quad: 1 }).ops,
-    "/Tx BMC\nq\n1 1 100 18 re W n\nBT\n0 g\n/DhHelv 17 Tf\n1 0 0 1 25.5 3.965 Tm (abc) Tj\nET\nQ\nEMC");
+    "/Tx BMC\nq\n1 1 100 18 re W n\nBT\n0 g\n/DhHelv 17.25 Tf\n1 0 0 1 25.125 3.8763 Tm (abc) Tj\nET\nQ\nEMC");
 
-  // Right, /Q 2. x = w − 1 − textWidth = 102 − 1 − 51 = 50.
+  // Right, /Q 2. x = w − 1 − textWidth = 102 − 1 − 51.75 = 49.25.
   eq("and a right-aligned one, at w − 1 − textWidth",
     textAppearance("abc", { ...box, quad: 2 }).ops,
-    "/Tx BMC\nq\n1 1 100 18 re W n\nBT\n0 g\n/DhHelv 17 Tf\n1 0 0 1 50 3.965 Tm (abc) Tj\nET\nQ\nEMC");
+    "/Tx BMC\nq\n1 1 100 18 re W n\nBT\n0 g\n/DhHelv 17.25 Tf\n1 0 0 1 49.25 3.8763 Tm (abc) Tj\nET\nQ\nEMC");
   eq("a /Q the spec does not define is treated as left rather than as a decision",
     textAppearance("abc", { ...box, quad: 7 }).ops, textAppearance("abc", box).ops);
 
@@ -6174,7 +6180,7 @@ group("Operators: the exact stream, one line at a time");
   const white = textAppearance("abc", { ...box, colour: "1 1 1 rg" }).ops;
   eq("a field whose /DA says white draws white",
     white,
-    "/Tx BMC\nq\n1 1 100 18 re W n\nBT\n1 1 1 rg\n/DhHelv 17 Tf\n1 0 0 1 1 3.965 Tm (abc) Tj\nET\nQ\nEMC");
+    "/Tx BMC\nq\n1 1 100 18 re W n\nBT\n1 1 1 rg\n/DhHelv 17.25 Tf\n1 0 0 1 1 3.8763 Tm (abc) Tj\nET\nQ\nEMC");
   eq("and the same value in a black field differs in exactly one line — the colour",
     white.split("\n").filter((line, i) => line !== textAppearance("abc", box).ops.split("\n")[i]),
     ["1 1 1 rg"]);
@@ -6198,7 +6204,7 @@ group("Operators: the exact stream, one line at a time");
   // the template's own drawing — but the module still has to answer, and a clip with nothing in it
   // is the only answer that cannot draw a stray mark.
   eq("an empty value emits the clip and the font and no text at all",
-    textAppearance("", box).ops, "/Tx BMC\nq\n1 1 100 18 re W n\nBT\n0 g\n/DhHelv 17 Tf\nET\nQ\nEMC");
+    textAppearance("", box).ops, "/Tx BMC\nq\n1 1 100 18 re W n\nBT\n0 g\n/DhHelv 17.25 Tf\nET\nQ\nEMC");
   // A font name that cannot be spelled as /name would not match the key in the /AP's own
   // /Resources, and a stream naming a font the resources have not got draws a page of nothing.
   has("a font name that cannot be written as a PDF name is refused rather than repaired",
