@@ -434,6 +434,26 @@
     }
    }
   ],
+  "personalities": [
+   {
+    "en-US": "adaptable"
+   },
+   {
+    "en-US": "centered"
+   },
+   {
+    "en-US": "collaborative"
+   },
+   {
+    "en-US": "devoted"
+   },
+   {
+    "en-US": "cheerful"
+   },
+   {
+    "en-US": "observant"
+   }
+  ],
   "features": [
    {
     "name": {
@@ -459,6 +479,26 @@
     "paragraph": {
      "en-US": "Being part of a freeborne community means you’re from a collective that once lived under tyrannical rule but is now liberated."
     }
+   }
+  ],
+  "personalities": [
+   {
+    "en-US": "optimistic"
+   },
+   {
+    "en-US": "guarded"
+   },
+   {
+    "en-US": "courageous"
+   },
+   {
+    "en-US": "joyful"
+   },
+   {
+    "en-US": "subversive"
+   },
+   {
+    "en-US": "traumatized"
    }
   ],
   "features": [
@@ -488,6 +528,26 @@
     }
    }
   ],
+  "personalities": [
+   {
+    "en-US": "cunning"
+   },
+   {
+    "en-US": "gregarious"
+   },
+   {
+    "en-US": "intrepid"
+   },
+   {
+    "en-US": "purposeful"
+   },
+   {
+    "en-US": "quiet"
+   },
+   {
+    "en-US": "warm"
+   }
+  ],
   "features": [
    {
     "name": {
@@ -515,6 +575,26 @@
     }
    }
   ],
+  "personalities": [
+   {
+    "en-US": "careful"
+   },
+   {
+    "en-US": "generous"
+   },
+   {
+    "en-US": "insular"
+   },
+   {
+    "en-US": "loquacious"
+   },
+   {
+    "en-US": "smiley"
+   },
+   {
+    "en-US": "traditional"
+   }
+  ],
   "features": [
    {
     "name": {
@@ -540,6 +620,26 @@
     "paragraph": {
      "en-US": "You were once a member of a different community that you’re no longer part of."
     }
+   }
+  ],
+  "personalities": [
+   {
+    "en-US": "curious"
+   },
+   {
+    "en-US": "hopeful"
+   },
+   {
+    "en-US": "innocent"
+   },
+   {
+    "en-US": "isolated"
+   },
+   {
+    "en-US": "mournful"
+   },
+   {
+    "en-US": "uncanny"
    }
   ],
   "features": [
@@ -572,6 +672,26 @@
     "paragraph": {
      "en-US": "Being part of a warborne community means you come from a place that is, or was, ravaged by war."
     }
+   }
+  ],
+  "personalities": [
+   {
+    "en-US": "strategic"
+   },
+   {
+    "en-US": "devastated"
+   },
+   {
+    "en-US": "determined"
+   },
+   {
+    "en-US": "calculating"
+   },
+   {
+    "en-US": "unwavering"
+   },
+   {
+    "en-US": "devoted"
    }
   ],
   "features": [
