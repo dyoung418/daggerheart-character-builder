@@ -36,6 +36,26 @@
      }
     ]
    }
+  ],
+  "transformationQuestions": [
+   {
+    "en-US": "Your divinity has affected an aspect of your appearance. In what way do you look different from others?"
+   },
+   {
+    "en-US": "Who bestowed demigod status upon you, and what trial did you complete to earn this gift?"
+   },
+   {
+    "en-US": "You were made fun of as a child for your divine parentage. Why?"
+   },
+   {
+    "en-US": "Why was the knowledge that you are a demigod kept from you for many years? Who kept this secret?"
+   },
+   {
+    "en-US": "You have an obligation you must fulfill due to the immortal blood that runs in your veins. What is this duty?"
+   },
+   {
+    "en-US": "In what way did your divinity initially manifest? Why did it surprise you?"
+   }
   ]
  },
  {
@@ -74,6 +94,26 @@
       }
      }
     ]
+   }
+  ],
+  "transformationQuestions": [
+   {
+    "en-US": "How did you die, and what fear has your death instilled in you?"
+   },
+   {
+    "en-US": "What brought you back from beyond the veil of death?"
+   },
+   {
+    "en-US": "In life, you loved someone dearly. Why do you need to find them again?"
+   },
+   {
+    "en-US": "What must you accomplish now that you’ve returned to the Mortal Realm? How will you meet your goal?"
+   },
+   {
+    "en-US": "Who harmed you in your first life? How do you plan to deal with them now that you’ve returned?"
+   },
+   {
+    "en-US": "You had to sacrifice something dear to you in order to come back to the Mortal Realm. What did you give up, and who did you give it to?"
    }
   ]
  },
@@ -114,6 +154,26 @@
      }
     ]
    }
+  ],
+  "transformationQuestions": [
+   {
+    "en-US": "How did you first die, and how has that death affected your view on life?"
+   },
+   {
+    "en-US": "A fragment of memory from your first life haunts you. What is the memory, and why do you think it’s important?"
+   },
+   {
+    "en-US": "You had a dream for your life that you now believe you can never reach. What was your dream, and why do you think being reanimated makes it impossible to fulfill?"
+   },
+   {
+    "en-US": "How were you brought back from the dead, and how did the process change your body?"
+   },
+   {
+    "en-US": "Someone brought you back from death. Who were they, and how do you feel about this person and what they did to you?"
+   },
+   {
+    "en-US": "In the brief time you passed through the veil of death, you saw something that changed you forever. What was it?"
+   }
   ]
  },
  {
@@ -152,6 +212,26 @@
       }
      }
     ]
+   }
+  ],
+  "transformationQuestions": [
+   {
+    "en-US": "You believe you have a “true form,” but you haven’t seen it. What do you think it is, and how do you know it’s there?"
+   },
+   {
+    "en-US": "What trick have you developed to identify other shapeshifters?"
+   },
+   {
+    "en-US": "Someone you loved dearly abandoned you when they found out about your ability to change shape. Who was it, and what happened?"
+   },
+   {
+    "en-US": "What is one form you’ve vowed to never take, and why?"
+   },
+   {
+    "en-US": "Which ancestry do you live as more than others? Why do you spend so much time in this form?"
+   },
+   {
+    "en-US": "Someone you know can instantly recognize you, no matter your form. How do they claim to identify you and what does their familiarity mean to you?"
    }
   ]
  },
@@ -192,6 +272,26 @@
      }
     ]
    }
+  ],
+  "transformationQuestions": [
+   {
+    "en-US": "Who did you have to leave behind when you became a vampire, and why was it so hard to let them go?"
+   },
+   {
+    "en-US": "You once killed an innocent for their blood. What characteristic of theirs do you notice most in others?"
+   },
+   {
+    "en-US": "What does your vampirisim make you particularly vulnerable to?"
+   },
+   {
+    "en-US": "Who were you able to save using your vampiric power? What happened, and how do they feel about you now?"
+   },
+   {
+    "en-US": "How does your hunger for blood change you?"
+   },
+   {
+    "en-US": "The vampire who sired you still has a hold over you. What’s their name, and what do they want you to do for them?"
+   }
   ]
  },
  {
@@ -230,6 +330,26 @@
       }
      }
     ]
+   }
+  ],
+  "transformationQuestions": [
+   {
+    "en-US": "Someone is hunting you. Who is it, and why do they want you dead?"
+   },
+   {
+    "en-US": "What were you afraid of before you became a werewolf, and how has your new power changed that fear?"
+   },
+   {
+    "en-US": "You hear your wolf form in your head as if it were another entity. What lie does it tell you about yourself, and why are you beginning to believe it?"
+   },
+   {
+    "en-US": "What led you to kill someone you love during your rampage?"
+   },
+   {
+    "en-US": "Who cursed you to become a werewolf?"
+   },
+   {
+    "en-US": "You were once entreated to join a pack of other werewolves. How did you respond?"
    }
   ]
  }

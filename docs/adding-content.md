@@ -94,9 +94,16 @@ id. Write it either way and the loader coerces it, but uppercase-string is the s
   "startingHitPoints": 5,
   "classItems": [{ "en-US": "A romance novel" }, { "en-US": "A letter never opened" }],
   "hopeFeature": { "name": { "en-US": "Make a Scene" }, "description": [ … ] },
-  "classFeatures": [{ "name": { "en-US": "Rally" }, "description": [ … ] }]
+  "classFeatures": [{ "name": { "en-US": "Rally" }, "description": [ … ] }],
+  "backgroundQuestions": [{ "en-US": "Who from your community taught you to have such confidence…" }],
+  "connections": [{ "en-US": "What made you realize we were going to be such good friends?" }]
 }
 ```
+
+`backgroundQuestions` and `connections` are the two bulleted lists the SRD prints at the end of a
+class — prompts for the player and for the table, not mechanics. Plain localized strings, like
+`classItems`. No page reads them yet; they are carried so the CSV export can. `data/srd_1_0/` does
+not have them, and an export of that source writes both columns empty rather than dropping them.
 
 `domains` is what gates the card pickers, at creation and at every level up — a domain exists
 because a class names it and cards carry it, nothing else. A class name with more than one word is
@@ -108,6 +115,7 @@ fine; it's title-cased for display. **Required: `id`, `name`, `domains`.**
 {
   "id": "core_subclass_beastbound",
   "name": { "en-US": "Beastbound" },
+  "description": [{ "paragraph": { "en-US": "Play the Beastbound if you want to form a deep bond…" } }],
   "class": "RANGER",
   "domains": ["BONE", "SAGE"],
   "spellcastTrait": "AGILITY",
@@ -119,7 +127,9 @@ fine; it's title-cased for display. **Required: `id`, `name`, `domains`.**
 
 `class` must equal a class's uppercase `name`, not its id. `spellcastTrait` is one of `AGILITY`,
 `STRENGTH`, `FINESSE`, `INSTINCT`, `PRESENCE`, `KNOWLEDGE`, or absent for a subclass that doesn't
-cast. All three tiers should be present even if a tier has one feature. (`domains` here is carried
+cast. `description` is the one-sentence pitch the book prints under the subclass name ("Play the
+Wayfinder if you want to hunt your prey and strike with deadly force."), shaped like a class's.
+All three tiers should be present even if a tier has one feature. (`domains` here is carried
 for consistency with the SRD's files; no page reads it.)
 **Required: `id`, `name`, `class`.**
 
@@ -191,8 +201,12 @@ together.
 }
 ```
 
-Shaped like an ancestry with no `personalities`: no `level`, no `domain`, no `recallCost`, and no
-`tier`. **Required: `id`, `name`.**
+Transformations also carry `"transformationQuestions": [{ "en-US": "How did you die, and what fear
+has your death instilled in you?" }, …]` — the bulleted prompts printed under the features, same
+shape as a class's `backgroundQuestions`.
+
+Otherwise shaped like an ancestry with no `personalities`: no `level`, no `domain`, no
+`recallCost`, and no `tier`. **Required: `id`, `name`.**
 
 What the app does with it:
 

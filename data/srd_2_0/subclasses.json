@@ -4,6 +4,13 @@
   "name": {
    "en-US": "Beastbound"
   },
+  "description": [
+   {
+    "paragraph": {
+     "en-US": "Play the Beastbound if you want to form a deep bond with an animal ally."
+    }
+   }
+  ],
   "class": "RANGER",
   "domains": [
    "BONE",
@@ -93,6 +100,13 @@
   "name": {
    "en-US": "Call of the Brave"
   },
+  "description": [
+   {
+    "paragraph": {
+     "en-US": "Play the Call of the Brave if you want to use the might of your enemies to fuel your own power."
+    }
+   }
+  ],
   "class": "WARRIOR",
   "domains": [
    "BLADE",
@@ -164,6 +178,13 @@
   "name": {
    "en-US": "Call of the Slayer"
   },
+  "description": [
+   {
+    "paragraph": {
+     "en-US": "Play the Call of the Slayer if you want to strike down adversaries with immense force."
+    }
+   }
+  ],
   "class": "WARRIOR",
   "domains": [
    "BLADE",
@@ -223,6 +244,13 @@
   "name": {
    "en-US": "Divine Wielder"
   },
+  "description": [
+   {
+    "paragraph": {
+     "en-US": "Play the Divine Wielder if you want to dominate the battlefield with a legendary weapon."
+    }
+   }
+  ],
   "class": "SERAPH",
   "domains": [
    "SPLENDOR",
@@ -295,6 +323,13 @@
   "name": {
    "en-US": "Elemental Origin"
   },
+  "description": [
+   {
+    "paragraph": {
+     "en-US": "Play the Elemental Origin if you want to channel raw magic to take the shape of a particular element."
+    }
+   }
+  ],
   "class": "SORCERER",
   "domains": [
    "MIDNIGHT",
@@ -371,6 +406,13 @@
   "name": {
    "en-US": "Nightwalker"
   },
+  "description": [
+   {
+    "paragraph": {
+     "en-US": "Play the Nightwalker if you want to manipulate shadows to maneuver through the environment."
+    }
+   }
+  ],
   "class": "ROGUE",
   "domains": [
    "MIDNIGHT",
@@ -455,6 +497,13 @@
   "name": {
    "en-US": "Primal Origin"
   },
+  "description": [
+   {
+    "paragraph": {
+     "en-US": "Play the Primal Origin if you want to extend the versatility of your spells in powerful ways."
+    }
+   }
+  ],
   "class": "SORCERER",
   "domains": [
    "MIDNIGHT",
@@ -531,6 +580,13 @@
   "name": {
    "en-US": "School of Knowledge"
   },
+  "description": [
+   {
+    "paragraph": {
+     "en-US": "Play the School of Knowledge if you want a keen understanding of the world around you."
+    }
+   }
+  ],
   "class": "WIZARD",
   "domains": [
    "CODEX",
@@ -627,6 +683,13 @@
   "name": {
    "en-US": "School of War"
   },
+  "description": [
+   {
+    "paragraph": {
+     "en-US": "Play the School of War if you want to utilize trained magic for violence."
+    }
+   }
+  ],
   "class": "WIZARD",
   "domains": [
    "CODEX",
@@ -723,6 +786,13 @@
   "name": {
    "en-US": "Stalwart"
   },
+  "description": [
+   {
+    "paragraph": {
+     "en-US": "Play the Stalwart if you want to take heavy blows and keep fighting."
+    }
+   }
+  ],
   "class": "GUARDIAN",
   "domains": [
    "VALOR",
@@ -818,6 +888,13 @@
   "name": {
    "en-US": "Syndicate"
   },
+  "description": [
+   {
+    "paragraph": {
+     "en-US": "Play the Syndicate if you want to have a web of contacts everywhere you go."
+    }
+   }
+  ],
   "class": "ROGUE",
   "domains": [
    "MIDNIGHT",
@@ -920,6 +997,13 @@
   "name": {
    "en-US": "Troubadour"
   },
+  "description": [
+   {
+    "paragraph": {
+     "en-US": "Play the Troubadour if you want to play music to bolster your allies."
+    }
+   }
+  ],
   "class": "BARD",
   "domains": [
    "GRACE",
@@ -993,6 +1077,13 @@
   "name": {
    "en-US": "Vengeance"
   },
+  "description": [
+   {
+    "paragraph": {
+     "en-US": "Play the Vengeance if you want to strike down enemies who harm you or your allies."
+    }
+   }
+  ],
   "class": "GUARDIAN",
   "domains": [
    "VALOR",
@@ -1064,6 +1155,13 @@
   "name": {
    "en-US": "Warden of Renewal"
   },
+  "description": [
+   {
+    "paragraph": {
+     "en-US": "Play the Warden of Renewal if you want to use powerful magic to heal your party."
+    }
+   }
+  ],
   "class": "DRUID",
   "domains": [
    "SAGE",
@@ -1148,6 +1246,13 @@
   "name": {
    "en-US": "Warden of the Elements"
   },
+  "description": [
+   {
+    "paragraph": {
+     "en-US": "Play the Warden of the Elements if you want to embody the natural elements of the wild."
+    }
+   }
+  ],
   "class": "DRUID",
   "domains": [
    "SAGE",
@@ -1256,6 +1361,13 @@
   "name": {
    "en-US": "Wayfinder"
   },
+  "description": [
+   {
+    "paragraph": {
+     "en-US": "Play the Wayfinder if you want to hunt your prey and strike with deadly force."
+    }
+   }
+  ],
   "class": "RANGER",
   "domains": [
    "BONE",
@@ -1328,6 +1440,13 @@
   "name": {
    "en-US": "Winged Sentinel"
   },
+  "description": [
+   {
+    "paragraph": {
+     "en-US": "Play the Winged Sentinel if you want to take flight and strike crushing blows from the sky."
+    }
+   }
+  ],
   "class": "SERAPH",
   "domains": [
    "SPLENDOR",
@@ -1410,6 +1529,13 @@
   "name": {
    "en-US": "Wordsmith"
   },
+  "description": [
+   {
+    "paragraph": {
+     "en-US": "Play the Wordsmith if you want to use clever wordplay and captivate crowds."
+    }
+   }
+  ],
   "class": "BARD",
   "domains": [
    "GRACE",
@@ -1495,6 +1621,13 @@
   "name": {
    "en-US": "Executioners Guild"
   },
+  "description": [
+   {
+    "paragraph": {
+     "en-US": "Play the Executioners Guild if you want to strike down your targets with lethal precision."
+    }
+   }
+  ],
   "class": "ASSASSIN",
   "domains": [
    "BLADE",
@@ -1591,6 +1724,13 @@
   "name": {
    "en-US": "Poisoners Guild"
   },
+  "description": [
+   {
+    "paragraph": {
+     "en-US": "Play the Poisoners Guild if you want to debilitate your targets with punishing afflictions."
+    }
+   }
+  ],
   "class": "ASSASSIN",
   "domains": [
    "BLADE",
@@ -1716,6 +1856,13 @@
   "name": {
    "en-US": "Juggernaut"
   },
+  "description": [
+   {
+    "paragraph": {
+     "en-US": "Play the Juggernaut if you want to pulverize your opponents with crushing blows."
+    }
+   }
+  ],
   "class": "BRAWLER",
   "domains": [
    "VALOR",
@@ -1811,6 +1958,13 @@
   "name": {
    "en-US": "Martial Artist"
   },
+  "description": [
+   {
+    "paragraph": {
+     "en-US": "Play the Martial Artist if you want to use a variety of fighting styles to eliminate your foes."
+    }
+   }
+  ],
   "class": "BRAWLER",
   "domains": [
    "VALOR",
@@ -1899,6 +2053,13 @@
   "name": {
    "en-US": "Pact of the Endless"
   },
+  "description": [
+   {
+    "paragraph": {
+     "en-US": "Play the Pact of the Endless if you want to stand strong against enemies and avoid death."
+    }
+   }
+  ],
   "class": "WARLOCK",
   "domains": [
    "DREAD",
@@ -1995,6 +2156,13 @@
   "name": {
    "en-US": "Pact of the Wrathful"
   },
+  "description": [
+   {
+    "paragraph": {
+     "en-US": "Play the Pact of the Wrathful if you want to destroy those who act against you."
+    }
+   }
+  ],
   "class": "WARLOCK",
   "domains": [
    "DREAD",
@@ -2091,6 +2259,13 @@
   "name": {
    "en-US": "Hedge"
   },
+  "description": [
+   {
+    "paragraph": {
+     "en-US": "Play the Hedge if you want to use your craft to empower yourself and your party."
+    }
+   }
+  ],
   "class": "WITCH",
   "domains": [
    "SAGE",
@@ -2175,6 +2350,13 @@
   "name": {
    "en-US": "Moon"
   },
+  "description": [
+   {
+    "paragraph": {
+     "en-US": "Play the Moon if you want to embody celestial power to amplify your magic."
+    }
+   }
+  ],
   "class": "WITCH",
   "domains": [
    "SAGE",

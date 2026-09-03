@@ -48,6 +48,28 @@
      "en-US": "Rally"
     }
    }
+  ],
+  "backgroundQuestions": [
+   {
+    "en-US": "Who from your community taught you to have such confidence in yourself?"
+   },
+   {
+    "en-US": "You were in love once. Who did you adore, and how did they hurt you?"
+   },
+   {
+    "en-US": "You’ve always looked up to another bard. Who are they, and why do you idolize them?"
+   }
+  ],
+  "connections": [
+   {
+    "en-US": "What made you realize we were going to be such good friends?"
+   },
+   {
+    "en-US": "What do I do that annoys you?"
+   },
+   {
+    "en-US": "Why do you grab my hand at night?"
+   }
   ]
  },
  {
@@ -110,6 +132,28 @@
     "name": {
      "en-US": "Wildtouch"
     }
+   }
+  ],
+  "backgroundQuestions": [
+   {
+    "en-US": "Why was the community you grew up in so reliant on nature and its creatures?"
+   },
+   {
+    "en-US": "Who was the first wild animal you bonded with? Why did your bond end?"
+   },
+   {
+    "en-US": "Who has been trying to hunt you down? What do they want from you?"
+   }
+  ],
+  "connections": [
+   {
+    "en-US": "What did you confide in me that makes me leap into danger for you every time?"
+   },
+   {
+    "en-US": "What animal do I say you remind me of?"
+   },
+   {
+    "en-US": "What affectionate nickname have you given me?"
    }
   ]
  },
@@ -180,6 +224,28 @@
      "en-US": "Unstoppable"
     }
    }
+  ],
+  "backgroundQuestions": [
+   {
+    "en-US": "Who from your community did you fail to protect, and why do you still think of them?"
+   },
+   {
+    "en-US": "You’ve been tasked with protecting something important and delivering it somewhere dangerous. What is it, and where does it need to go?"
+   },
+   {
+    "en-US": "You consider an aspect of yourself to be a weakness. What is it, and how has it affected you?"
+   }
+  ],
+  "connections": [
+   {
+    "en-US": "How did I save your life the first time we met?"
+   },
+   {
+    "en-US": "What small gift did you give me that you notice I always carry with me?"
+   },
+   {
+    "en-US": "What lie have you told me about yourself that I absolutely believe?"
+   }
   ]
  },
  {
@@ -243,6 +309,28 @@
     "name": {
      "en-US": "Ranger’s Focus"
     }
+   }
+  ],
+  "backgroundQuestions": [
+   {
+    "en-US": "A terrible creature hurt your community, and you’ve vowed to hunt them down. What are they, and what unique trail or sign do they leave behind?"
+   },
+   {
+    "en-US": "Your first kill almost killed you, too. What was it, and what part of you was never the same after that event?"
+   },
+   {
+    "en-US": "You’ve traveled many dangerous lands, but what is the one place you refuse to go?"
+   }
+  ],
+  "connections": [
+   {
+    "en-US": "What friendly competition do we have?"
+   },
+   {
+    "en-US": "Why do you act differently when we’re alone than when others are around?"
+   },
+   {
+    "en-US": "What threat have you asked me to watch for, and why are you worried about it?"
    }
   ]
  },
@@ -323,6 +411,28 @@
      "en-US": "Sneak Attack"
     }
    }
+  ],
+  "backgroundQuestions": [
+   {
+    "en-US": "What did you get caught doing that got you exiled from your home community?"
+   },
+   {
+    "en-US": "You used to have a different life, but you’ve tried to leave it behind. Who from your past is still chasing you?"
+   },
+   {
+    "en-US": "Who from your past were you most sad to say goodbye to?"
+   }
+  ],
+  "connections": [
+   {
+    "en-US": "What did I recently convince you to do that got us both in trouble?"
+   },
+   {
+    "en-US": "What have I discovered about your past that I hold secret from the others?"
+   },
+   {
+    "en-US": "Who do you know from my past, and how have they influenced your feelings about me?"
+   }
   ]
  },
  {
@@ -373,6 +483,28 @@
     "name": {
      "en-US": "Prayer Dice"
     }
+   }
+  ],
+  "backgroundQuestions": [
+   {
+    "en-US": "Which god did you devote yourself to? What incredible feat did they perform for you in a moment of desperation?"
+   },
+   {
+    "en-US": "How did your appearance change after taking your oath?"
+   },
+   {
+    "en-US": "In what strange or unique way do you communicate with your god?"
+   }
+  ],
+  "connections": [
+   {
+    "en-US": "What promise did you make me agree to, should you die on the battlefield?"
+   },
+   {
+    "en-US": "Why do you ask me so many questions about my god?"
+   },
+   {
+    "en-US": "You’ve told me to protect one member of our party above all others, even yourself. Who are they and why?"
    }
   ]
  },
@@ -459,6 +591,28 @@
      "en-US": "Channel Raw Power"
     }
    }
+  ],
+  "backgroundQuestions": [
+   {
+    "en-US": "What did you do that made the people in your community wary of you?"
+   },
+   {
+    "en-US": "What mentor taught you to control your untamed magic, and why are they no longer able to guide you?"
+   },
+   {
+    "en-US": "You have a deep fear you hide from everyone. What is it, and why does it scare you?"
+   }
+  ],
+  "connections": [
+   {
+    "en-US": "Why do you trust me so deeply?"
+   },
+   {
+    "en-US": "What did I do that makes you cautious around me?"
+   },
+   {
+    "en-US": "Why do we keep our shared past a secret?"
+   }
   ]
  },
  {
@@ -535,6 +689,28 @@
      "en-US": "Combat Training"
     }
    }
+  ],
+  "backgroundQuestions": [
+   {
+    "en-US": "Who taught you to fight, and why did they stay behind when you left home?"
+   },
+   {
+    "en-US": "Somebody defeated you in battle years ago and left you to die. Who was it, and how did they betray you?"
+   },
+   {
+    "en-US": "What legendary place have you always wanted to visit, and why is it so special?"
+   }
+  ],
+  "connections": [
+   {
+    "en-US": "We knew each other long before this party came together. How?"
+   },
+   {
+    "en-US": "What mundane task do you usually help me with off the battlefield?"
+   },
+   {
+    "en-US": "What fear am I helping you overcome?"
+   }
   ]
  },
  {
@@ -602,6 +778,28 @@
     "name": {
      "en-US": "Strange Patterns"
     }
+   }
+  ],
+  "backgroundQuestions": [
+   {
+    "en-US": "What responsibilities did your community once count on you for? How did you let them down?"
+   },
+   {
+    "en-US": "You’ve spent your life searching for a book or object of great significance. What is it, and why is it so important to you?"
+   },
+   {
+    "en-US": "You have a powerful rival. Who are they, and why are you so determined to defeat them?"
+   }
+  ],
+  "connections": [
+   {
+    "en-US": "What favor have I asked of you that you’re not sure you can fulfill?"
+   },
+   {
+    "en-US": "What weird hobby or strange fascination do we both share?"
+   },
+   {
+    "en-US": "What secret about yourself have you entrusted only to me?"
    }
   ]
  },
@@ -671,6 +869,28 @@
      }
     ]
    }
+  ],
+  "backgroundQuestions": [
+   {
+    "en-US": "You once killed someone you were close to. What happened, and how did it change you?"
+   },
+   {
+    "en-US": "What organization trained you in the art of killing, and how did you become a member?"
+   },
+   {
+    "en-US": "Throughout your career, one target has eluded you. Who are they, and how have they slipped through your fingers?"
+   }
+  ],
+  "connections": [
+   {
+    "en-US": "I’ve killed someone for you. Who were they?"
+   },
+   {
+    "en-US": "How did you save me when I was on the brink of death? What have I promised you as repayment?"
+   },
+   {
+    "en-US": "What secret about myself did I tell you, and how did it change your view of me?"
+   }
   ]
  },
  {
@@ -739,6 +959,28 @@
      }
     ]
    }
+  ],
+  "backgroundQuestions": [
+   {
+    "en-US": "Where did you spend time during your formative years that taught you, directly or indirectly, how to fight in the style you use?"
+   },
+   {
+    "en-US": "What organization has vowed to kill you on sight, and what did you do to invoke their ire?"
+   },
+   {
+    "en-US": "Who did you recently lose a fight to that you’re desperate for a rematch against?"
+   }
+  ],
+  "connections": [
+   {
+    "en-US": "What is one thing we’re both afraid of?"
+   },
+   {
+    "en-US": "What do I rely on you for during our travels? How do you feel about it?"
+   },
+   {
+    "en-US": "I still haven’t forgiven you for something you said to me. What was it, and why did you say it?"
+   }
   ]
  },
  {
@@ -806,6 +1048,28 @@
       }
      }
     ]
+   }
+  ],
+  "backgroundQuestions": [
+   {
+    "en-US": "Who from your community shunned you after you made a pact with your patron?"
+   },
+   {
+    "en-US": "What desperate situation led you to pledge your life to your patron?"
+   },
+   {
+    "en-US": "Your patron has given you one task you must accomplish above all else. What is it, and why does it worry you?"
+   }
+  ],
+  "connections": [
+   {
+    "en-US": "Why do you think I confide in you about what my patron says and does?"
+   },
+   {
+    "en-US": "Our relationship has changed since you saw me show tribute to my patron. What did you see, and how has it affected you?"
+   },
+   {
+    "en-US": "I once did something very foolish, and you’ve never let me live it down. What was it?"
    }
   ]
  },
@@ -882,6 +1146,28 @@
       ]
      }
     ]
+   }
+  ],
+  "backgroundQuestions": [
+   {
+    "en-US": "Who from your community feared your magical craft? What rumor did they spread about you, and what truth did it contain?"
+   },
+   {
+    "en-US": "You once used your power to help someone in a dire situation. Who were they, and why did they come to you?"
+   },
+   {
+    "en-US": "Your magic once opened a door best left closed. Who or what was on the other side?"
+   }
+  ],
+  "connections": [
+   {
+    "en-US": "What unique ritual or practice have I taught you that we now perform together?"
+   },
+   {
+    "en-US": "I once appeared to you in a dream and shared a vision of the future. What did I tell you?"
+   },
+   {
+    "en-US": "What do you typically come to me for advice about?"
    }
   ]
  }
