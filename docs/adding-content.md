@@ -539,6 +539,46 @@ Your entry **wins** over the one in `shared/effects.js` with the same key — a 
 version of that card. An override that declares nothing inherits the built-in entry, including the
 parts JSON can't express, and the breakdown labels it with your record's name.
 
+### adversaries.json / environments.json
+
+The SRD 2.0 bestiary is 264 adversaries and 47 environments, and **nothing in the app reads it.**
+It is catalogue data, like `items.json`, held out by two independent locks: neither file is listed
+in that folder's `source.json` `files`, and neither `adversaries` nor `environments` is a name the
+loader knows (§3).
+
+**These two files are not carried in this repo.** They are ~735KB that no page reads, so tracking
+them here would cost every clone and every checkout for nothing. The shape is documented anyway,
+because it is what a generator has to produce and what any consumer will find: drop the two files
+into `data/srd_2_0/` and they sit alongside the rest, still unread by the app until someone adds
+them to `CONTENT_FILES`.
+
+```json
+{ "id": "srd_2_0_adversary_acid_burrower", "name": { "en-US": "Acid Burrower" },
+  "tier": 1, "type": "SOLO",
+  "description": [{ "paragraph": { "en-US": "A horse-sized insect with digging claws and acidic blood." } }],
+  "motives": [{ "en-US": "Burrow" }, { "en-US": "drag away" }],
+  "difficulty": 14, "majorThreshold": 8, "severeThreshold": 15,
+  "hitPoints": 8, "stress": 3, "attackModifier": 3,
+  "attack": { "name": { "en-US": "Claws" }, "range": "VERY_CLOSE",
+              "damage": { "count": 1, "dice": "D12", "modifier": 2, "type": "PHYSICAL" } },
+  "experiences": [{ "name": { "en-US": "Tremor Sense" }, "modifier": 2 }],
+  "features": [{ "name": { "en-US": "Relentless" }, "featureType": "PASSIVE", "qualifier": "3",
+                 "description": [{ "paragraph": { "en-US": "…" } }] }] }
+```
+
+`range`, `damage.dice` and `damage.type` reuse the weapon vocabulary exactly, so a reader that
+knows `weapons.json` knows these. Adversary damage adds `count`, and a flat form with `dice` null
+(the book prints `2 phy`). `majorThreshold`/`severeThreshold` are null for a Minion, and `stress`
+is null for the one adversary whose printed Stress is `None`.
+
+An environment carries `impulses`, `potentialAdversaries` and, on each feature, the italic GM
+**`prompts`** the book prints under it. Its `difficulty` is null for the three whose Difficulty is
+printed `Special (see "Relative Strength")`, and `difficultyText` then holds what the page says.
+
+**Required: `id`, `name`** — but only by the loader's own minimum, which these files never reach.
+Nothing in this repo checks the rest, and nothing can: data the app never loads is data no page
+load and no test here can falsify. Whatever generates these files has to carry its own checks.
+
 ## 7. What JSON deliberately can't express
 
 `shared/effects.js` is JavaScript and can hold functions. `effects.json` can't, and these are
