@@ -479,8 +479,10 @@ What the app does with it:
 ### A die your class rolls
 
 A lot of classes own a value with a ladder: *"At level 1, your Rally Die is a d6… at level 5, your
-Rally Die increases to a d8."* Say so, and it prints on both sheets and in the CSV export, beside
-the Spellcast trait.
+Rally Die increases to a d8."* Say so, and it prints everywhere the app prints: the roster detail
+and the app's own sheet (beside the Spellcast trait), the stats card, the CSV's `class-tracks`
+column, and — since the template grew a box for it on 2026-09-05 — the official Daggerheart
+character sheet PDF, bottom left of page 1.
 
 ```json
 "myhomebrew_class_tinker:Escalating Gadget": {
@@ -509,7 +511,11 @@ the Spellcast trait.
   for a subclass's `value` to override its class's `byLevel`, no extra wiring.
 - **`note`** (optional) — a sentence under the value. A `byLevel` track writes its own if you
   don't ("Increases to d8 at level 5.").
-- Keep the `label` short: it prints on page 1 of the character sheet, in a row that doesn't wrap
+- Keep the `label` short, and it now has a measured reason rather than a stylistic one. The
+  official sheet's `class-tracks` box is **220 × 18pt**, which holds one line at 12pt or two at
+  7.5pt; each line is `Label: value`. A character with two tracks fills it exactly. A third line
+  doesn't fit at all — the export drops to its 6pt floor, truncates with an ellipsis and names the
+  field in its report. On the in-app sheet the same label sits in a row that doesn't wrap
   gracefully.
 
 What it can't do: take its value from a stat. There's no `{ "equalTo": … }` here — a track is a

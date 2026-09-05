@@ -6,15 +6,16 @@
 // enough to emit by hand. This file does the opposite job on the opposite kind of file: the
 // official character sheet is a two-page form somebody drew in Master PDF Editor
 // (data/sheet/sheet-template.pdf, a symlink into the private content repo), full of art, fonts
-// and 182 form widgets we could not begin to author. We do not want to author it. We want to put
-// 56 strings and 46 ticks into it — 56 of its 71 text fields, and 46 of its 111 checkboxes
+// and 183 form widgets we could not begin to author. We do not want to author it. We want to put
+// 57 strings and 46 ticks into it — 57 of its 72 text fields, and 46 of its 111 checkboxes
 // (sheet-fields.js's header says which boxes it leaves blank, and the two different reasons it
 // leaves them) — and hand back the same file.
 //
-// Every count in this header was measured in that template on 2026-08-31, after the page-2
-// normalisation that step 0 of the appearance work did: 469,823 bytes, 182 live widgets, 71 /Tx
-// and 111 /Btn. An earlier reading of the same file, before that pass, was 453,448 bytes; the
-// field counts did not move.
+// Every count in this header was measured in that template on 2026-09-05, after the save that
+// added `class-tracks`: 457,303 bytes, 183 live widgets, 72 /Tx and 111 /Btn. Two earlier readings
+// of the same file are quoted in places below — 469,823 bytes on 2026-09-01, after the page-2
+// normalisation, and 453,448 before it. Only the /Tx count has ever moved, and only by that one
+// field; the checkbox population is the same 111 it has always been.
 //
 // One thing does get DRAWN rather than filled, and it is not a field at all: an `overlays` option
 // appends a content stream to a page, under its annotations. shared/sheet-marks.js is the only

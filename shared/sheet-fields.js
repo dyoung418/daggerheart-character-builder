@@ -472,6 +472,32 @@ export function sheetFieldValues(character, db, { loadout = false } = {}) {
     mcFeatures ? `${s.multiclass.className}\n${mcFeatures}` : "",
   ].filter(Boolean).join("\n\n");
 
+  // The dice a class rolls — Rally Die, Unstoppable Die, Combo Die, Patron Die — one per line,
+  // "Rally Die: d8". Empty for most characters, and that empty string is this file's answer rather
+  // than an omission, for the reason the header at :21-26 gives.
+  //
+  // The template grew this box on 2026-09-05 and the app had nowhere to print these before it: a
+  // track's value is buried in feature prose that lands on page 2, or on no page at all when the
+  // browser can't draw the source's cards. sheet.js:189-195 and card-content.js already say it;
+  // this is the third printed surface, and the first official one.
+  //
+  // SPELLED THE WAY THE CSV SPELLS IT, and not by coincidence. csv-export.js:427-428 is the same
+  // expression over the same values under the same name the template gave this field, so the two
+  // exports agree by construction rather than by being kept level — the drift `primary-feature`
+  // avoids by sharing gear.js's formatter instead of growing a second one.
+  //
+  // NO `note`, and that is a size decision rather than an editorial one. A byLevel track writes
+  // itself one ("Increases to d8 at level 5."), and this box is 220 × 18pt: pdf-text.js's fitter
+  // puts ONE line at 12pt and TWO at 7.5pt, so a single Bard's note would spend the line a second
+  // track needs. The note prints on the in-app sheet and the stats card, which have the room.
+  //
+  // A THIRD LINE DOESN'T FIT, and it announces itself. Two is the SRD ceiling — a character has at
+  // most two classes and declaredTracks() keys by id with the last declaration winning, so nothing
+  // shipped can produce three. Homebrew can, and pdf-text.js hits its 6pt floor, truncates with an
+  // ellipsis and names the field in the export's report; the modal says so. That is the failure
+  // mode this box is allowed to have.
+  fields["class-tracks"] = (s.tracks || []).map((t) => `${t.label}: ${t.display}`).join("\n");
+
   // The potion, and nothing else — the same contents as the identically-named CSV column
   // (csv-export.js:450-453), because the potion is the whole of the app's inventory model. The
   // starting kit ("a torch, 50 feet of rope, basic supplies…") is a creation-time grant nothing

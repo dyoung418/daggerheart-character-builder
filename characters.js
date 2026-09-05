@@ -1327,9 +1327,10 @@ function openSheetPdfPicker(ch) {
 // Split out so the picker above is just markup: this is the half that can fail.
 async function runSheetPdf(ch, body, loadout, appearances) {
   // The choice is replaced by a line saying what's happening rather than left sitting there. The
-  // work is a fetch plus a rewrite of a 469,823-byte file (`stat` on data/sheet/sheet-template.pdf,
-  // 2026-09-01, after the page-2 normalisation; the other reading on record is 453,448 bytes,
-  // before it. This comment used to say "~185KB", which matches neither) and is usually a blink,
+  // work is a fetch plus a rewrite of a 457,303-byte file (`stat` on data/sheet/sheet-template.pdf,
+  // 2026-09-05, after the save that added `class-tracks`; the other readings on record are 469,823
+  // bytes and 453,448 bytes. This comment used to say "~185KB", which matches none of them) and is
+  // usually a blink,
   // but on a cold cache two buttons that still look unclicked invite a second click, and a second
   // click would export twice.
   body.innerHTML = "";

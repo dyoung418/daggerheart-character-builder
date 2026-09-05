@@ -6666,7 +6666,7 @@ const SHEET_TEXT_FIELDS = [
   "primary-weapon-name", "primary-trait-range", "primary-damage-and-type", "primary-burden", "primary-feature",
   "secondary-weapon-name", "secondary-trait-range", "secondary-damage-and-type", "secondary-burden", "secondary-feature",
   "armor-name", "armor-base-thresholds", "armor-base-score", "armor-feature",
-  "class-hope-feature", "class-features", "inventory-items",
+  "class-hope-feature", "class-features", "class-tracks", "inventory-items",
   "experience-name1", "experience-name2", "experience-name3", "experience-name4", "experience-name5",
   "experience-value1", "experience-value2", "experience-value3", "experience-value4", "experience-value5",
   // Page two. `name-pg2` rather than a second `name`: two live fields sharing a /T is a template
@@ -6708,7 +6708,7 @@ group("The sheet answers every box it has, including the ones it has nothing to 
 {
   const f = sheetFieldValues(formChar({ equipment: EQUIPPED }), CSV_DB);
 
-  eq("all 52 text fields come back, and every one of them as a string",
+  eq("every text field comes back, and every one of them as a string",
     SHEET_TEXT_FIELDS.filter((k) => typeof f[k] !== "string"), []);
   eq("the six trait marks come back as booleans", SHEET_MARK_FIELDS.filter((k) => typeof f[k] !== "boolean"), []);
   // The other half of the same contract, and the one a typo shows up in: a key the template
@@ -6889,6 +6889,45 @@ group("The class-features box holds classes, and only classes");
   const alone = sheetFieldValues(formChar({ equipment: EQUIPPED }), CSV_DB)["class-features"];
   check("a character with one class gets no second class's name in the box", !alone.includes("Sorcerer"));
   check("and no trailing blank line where the second half would have gone", alone === alone.trim());
+}
+
+group("The class-tracks box says which dice this character rolls, in the CSV's own words");
+{
+  // The same two-track fixture the CSV group uses (tests.js:3125-3133), deliberately: the point of
+  // this box is that the two exports say the same thing, and reaching for a second fixture would
+  // let them agree here while disagreeing about a character neither test names.
+  const trackDb = {
+    ...CSV_DB,
+    effects: {
+      "cls:Unstoppable": { track: { id: "rally_die", label: "Rally Die", byLevel: { 1: "d6", 5: "d8" } } },
+      "sub:foundation": { track: { id: "guard_die", label: "Guard Die", value: "d10" } },
+    },
+  };
+  const ch = formChar({ equipment: EQUIPPED });
+
+  eq("one line per track, `label: value`, at the rung the character is on",
+    sheetFieldValues(ch, trackDb)["class-tracks"].split("\n"), ["Rally Die: d6", "Guard Die: d10"]);
+
+  // The box is 220 x 18pt and pdf-text.js puts two lines in it at 7.5pt. The note a byLevel track
+  // writes itself is what would cost the second track its line, so its absence is asserted rather
+  // than left to be reintroduced by someone who reads the value as incomplete.
+  const filled = sheetFieldValues(ch, trackDb)["class-tracks"];
+  check("the auto-written note IS in the character's data, so it was findable",
+    derivedStats(ch, trackDb).tracks.some((t) => (t.note || "").includes("Increases to d8 at level 5.")));
+  check("and it is NOT in this box, because two lines is all the box holds",
+    !filled.includes("Increases to"));
+  eq("so the box is exactly two lines", filled.split("\n").length, 2);
+
+  // The other half of the header's rule: a field this map answers, it answers either way.
+  const none = sheetFieldValues(ch, CSV_DB);
+  eq("a class with no track answers with an empty string, not a missing key", none["class-tracks"], "");
+  check("and the key is still there, which is what tells fillForm to leave the box alone",
+    "class-tracks" in none);
+
+  // The agreement this box exists to keep. One expression, two exports, asserted against each
+  // other rather than against a literal either could drift from on its own.
+  eq("and the CSV column of the same name reads identically",
+    sheetFieldValues(ch, trackDb)["class-tracks"], exportRow(ch, {}, trackDb)["class-tracks"]);
 }
 
 group("Bare hands, bare skin, and an empty off hand");
