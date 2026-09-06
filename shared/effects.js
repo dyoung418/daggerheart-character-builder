@@ -551,10 +551,17 @@ export const EFFECT_SCALE_KEYS = [...TRAIT_KEYS, "spellcast", "proficiency", "le
 // (by loaded source name, else by peeling leading tokens), so this file still knows no source by
 // name. The full key is tried FIRST because a source's own effects are keyed however that source
 // likes: a folder that names its records after itself can still override one of its own.
+//
+// Tried HERE, explicitly. bareForms() yields the stripped form first and stops there when a loaded
+// source claimed the prefix, so a source's own key -- `homebrew_ancestry_oddfolk:Inscrutable`,
+// exactly the shape docs/adding-content.md prescribes -- was looked up only as
+// `ancestry_oddfolk:Inscrutable` and matched nothing. Every effects.json entry keyed by its own
+// record id was silently inert from the two-editions change until 2026-09-06, and no test noticed
+// because none set db.sourceNames beside an overlay.
 function lookup(db, ...keys) {
   const source = db?.effects;
   for (const key of keys) {
-    for (const form of bareForms(key, db?.sourceNames)) {
+    for (const form of new Set([key, ...bareForms(key, db?.sourceNames)])) {
       // `key`, not `form`: the caller stores a player's answer to a choice under what comes back
       // (`ch.effectChoices[key]`), and that answer belongs to the CARD the player put in their
       // loadout. Which spelling of the catalogue happened to match is this function's business.

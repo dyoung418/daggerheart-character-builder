@@ -1893,6 +1893,57 @@ group("A source can declare a trait penalty in JSON");
   eq("and the attack roll drops with it", ch.primaryAttack.total, -1);
 }
 
+group("A source's effects match its own record ids, prefix and all");
+{
+  // THE REGRESSION THIS GUARDS. docs/adding-content.md keys an ancestry effect
+  // `<ancestryId>:<Feature Name>`, and a source's ids carry the folder's name -- so a loaded source
+  // named `hb` writes `hb_ancestry_oddfolk:Inscrutable`. The lookup strips loaded source names
+  // before matching, and used to try ONLY the stripped form, so a source's entry for its own
+  // record could never be found. Every test above leaves sourceNames unset, which is why none
+  // of them saw it: with nothing to strip, the full key was tried by accident.
+  const oddfolk = {
+    id: "hb_ancestry_oddfolk", name: { "en-US": "Oddfolk" },
+    features: [{ name: { "en-US": "Inscrutable" } }, { name: { "en-US": "Homebody" } }],
+  };
+  const db = {
+    ...SRC_DB,
+    ancestries: [...(SRC_DB.ancestries || []), oddfolk],
+    sourceNames: ["srd_2_0", "hb"],
+    effects: {
+      ...SRC_DB.effects,
+      "hb_ancestry_oddfolk:Inscrutable": { traits: { instinct: 1 } },
+      "hb_ancestry_oddfolk:Homebody": { excluded: ["Homebody happens at a rest, so it isn't counted here"] },
+    },
+  };
+  const ch = derivedStats(statChar({
+    traits: { agility: 0, strength: 0, finesse: 0, instinct: 0, presence: 0, knowledge: 0 },
+    heritage: { ancestryMode: "pure", ancestryIds: ["hb_ancestry_oddfolk"], chosenFeatures: [
+      { ancestryId: "hb_ancestry_oddfolk", featureName: "Inscrutable" },
+      { ancestryId: "hb_ancestry_oddfolk", featureName: "Homebody" },
+    ], communityId: null },
+  }), db);
+  eq("the source's trait bonus lands on the tile", ch.traits.instinct.total, 1);
+  eq("named for the ancestry and feature that granted it",
+    ch.traits.instinct.parts.map((p) => p.label), ["Assigned at creation", "Oddfolk — Inscrutable"]);
+  eq("and its excluded note reaches the sheet", ch.exclusions, ["Homebody happens at a rest, so it isn't counted here"]);
+
+  // The other direction is what the stripping exists for and must keep working: the SRD's own
+  // catalogue is keyed bare, and an SRD record's id carries the edition. Giant's Endurance is
+  // `ancestry_giant:Endurance` in EFFECTS and reaches a character as `srd_2_0_ancestry_giant`.
+  const giant = derivedStats(statChar({
+    heritage: { ancestryMode: "pure", ancestryIds: ["srd_2_0_ancestry_giant"], chosenFeatures: [
+      { ancestryId: "srd_2_0_ancestry_giant", featureName: "Endurance" }], communityId: null },
+  }), { ...SRC_DB, sourceNames: ["srd_2_0", "hb"] });
+  eq("an SRD id still finds the bare catalogue entry through its edition prefix", giant.hitPoints.total, 8);
+  // And a source overriding an SRD record by the SRD's own full id, as the docs promise, wins.
+  const revised = derivedStats(statChar({
+    heritage: { ancestryMode: "pure", ancestryIds: ["srd_2_0_ancestry_giant"], chosenFeatures: [
+      { ancestryId: "srd_2_0_ancestry_giant", featureName: "Endurance" }], communityId: null },
+  }), { ...SRC_DB, sourceNames: ["srd_2_0", "hb"],
+        effects: { ...SRC_DB.effects, "srd_2_0_ancestry_giant:Endurance": { hitPointSlots: 2 } } });
+  eq("a source's override keyed by the SRD's full id wins over the catalogue", revised.hitPoints.total, 9);
+}
+
 group("A source can declare a value the character's own stats decide");
 {
   // Armor Score equal to your Presence, on armour that also raises Presence. Trait modifiers are
