@@ -38,6 +38,10 @@ export const CONTENT_FILES = {
   weapons: "weapons",
   armors: "armors",
   consumables: "consumables",
+  // The Martial Artist's martial stances — a whole subsystem the SRD prints outside the subclass
+  // cards. Enumerated as data and picked through a `levelChoice` (shared/effects.js); never
+  // catalogued as an effect, because a stance is toggled at the table.
+  stances: "stances",
 };
 
 // The edition loaded when the manifest can't be read at all. The newest SRD, so a broken manifest
@@ -152,6 +156,14 @@ const REQUIRED = {
   "domain-cards": (r) => {
     if (!r.name?.["en-US"]) return "missing: name";
     if (typeof r.domain !== "string" || !r.domain) return "missing: domain";
+    return null;
+  },
+  // A new kind falls through to NAME_ONLY, which would accept a stance with no tier — and every
+  // surface groups stances by tier, so a missing one is a phantom group rather than a visible
+  // blank. `tier` is the one field beyond the name that has to be there.
+  stances: (r) => {
+    if (!r.name?.["en-US"]) return "missing: name";
+    if (!Number.isInteger(r.tier) || r.tier < 1 || r.tier > 4) return "tier must be a whole number 1–4";
     return null;
   },
 };
@@ -368,9 +380,30 @@ function validateAdvancementOption(option) {
   return null;
 }
 
+// "Pick one from a named catalogue each level up, accumulating, for free" — the Martial Artist's
+// stances, the Beastbound's companion options. `from` names a content collection; it isn't checked
+// to exist here, the same way advancementOption's `advances` track isn't — a homebrew levelChoice
+// may draw from a homebrew kind the loader learns about in the same pass.
+function validateLevelChoice(lc) {
+  if (!lc || typeof lc !== "object" || Array.isArray(lc)) return "levelChoice must be an object";
+  for (const key of Object.keys(lc)) {
+    if (!["id", "from", "tierGated", "atStart", "perLevel", "extraPicks", "prompt"].includes(key)) {
+      return `levelChoice: unknown key: ${key}`;
+    }
+  }
+  if (typeof lc.id !== "string" || !lc.id.trim()) return "levelChoice: missing id";
+  if (typeof lc.from !== "string" || !lc.from.trim()) return "levelChoice: `from` must name a collection";
+  if ("tierGated" in lc && typeof lc.tierGated !== "boolean") return "levelChoice: tierGated must be true or false";
+  for (const key of ["atStart", "perLevel", "extraPicks"]) {
+    if (key in lc && (!Number.isInteger(lc[key]) || lc[key] < 0)) return `levelChoice: ${key} must be a whole number ≥ 0`;
+  }
+  if ("prompt" in lc && typeof lc.prompt !== "string") return "levelChoice: prompt must be a sentence";
+  return null;
+}
+
 const ALLOWED_EFFECT_KEYS = new Set([
   ...EFFECT_STAT_KEYS, "permanent", "feature", "excluded", "choice", "unarmedProfile", "traits",
-  "scope", "advancementOption", "track",
+  "scope", "advancementOption", "track", "levelChoice",
 ]);
 
 /** null if the entry is usable, else why not. */
@@ -407,6 +440,10 @@ export function validateEffectEntry(entry) {
   }
   if ("track" in entry) {
     const bad = validateTrack(entry.track);
+    if (bad) return bad;
+  }
+  if ("levelChoice" in entry) {
+    const bad = validateLevelChoice(entry.levelChoice);
     if (bad) return bad;
   }
   if ("choice" in entry) return validateChoice(entry.choice);

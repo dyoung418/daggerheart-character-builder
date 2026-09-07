@@ -27,11 +27,14 @@ import {
   TRAIT_KEYS,
   collectEffects,
   declaredAdvancementOptions,
+  declaredLevelChoices,
   declaredTracks,
   effectValue,
+  knownStances,
   loadoutDomainCounts,
 } from "./effects.js";
 import { SPELLCAST_TRAIT, UNARMED, UNARMORED } from "./gear.js";
+import { FOCUS_MAX } from "./table-state.js";
 import { titleCase } from "./text.js";
 
 // Re-exported rather than restated: an effect's `traits` map is keyed by these, so the catalogue
@@ -500,6 +503,14 @@ export function derivedStats(ch, db) {
     // A second pass over the effects, and an empty array for almost every character — worth it
     // because a die a class rolls is a value the sheet had no way to state at all before.
     tracks: characterTracks(ch, db),
+    // The Martial Artist's known martial stances (name, tier, full text), sorted the SRD's way.
+    // Empty for every other character. Like `tracks`, this is enumerated content the app prints
+    // but never computes with — a stance is toggled at the table.
+    stances: knownStances(ch, db),
+    // The Focus track length: FOCUS_MAX for a character whose features declare the stances
+    // levelChoice (Stance Fighter, or a homebrew stance subclass), null for everyone else — and a
+    // null makes the play page skip the row, exactly as a null armorScore does.
+    focusSlots: declaredLevelChoices(ch, db).some((lc) => lc.id === "stances") ? FOCUS_MAX : null,
   };
 }
 

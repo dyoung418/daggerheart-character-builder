@@ -220,6 +220,41 @@ What the app does with it:
 - The card doesn't count against the loadout limit, and **every feature applies** — there's no
   choosing between them the way a mixed ancestry chooses.
 
+### stances.json
+
+The martial stances a Martial Artist knows — a whole subsystem the SRD prints outside the subclass
+cards. `data/srd_2_0/stances.json` ships the 16 SRD stances, so there is a worked example beside
+this one.
+
+```json
+{
+  "id": "srd_2_0_stance_anchored",
+  "name": { "en-US": "Anchored" },
+  "tier": 2,
+  "description": [{ "paragraph": { "en-US": "Gain a +2 bonus to your damage thresholds. …" } }]
+}
+```
+
+**Required: `id`, `name`, and an integer `tier` from 1 to 4** — every surface groups stances by
+tier, so a missing one would be a phantom group rather than a visible blank. Nothing else: a stance
+is name + tier + prose. It is never catalogued as an effect (it's toggled at the table), so its
+text is printed and never computed with.
+
+A stance is chosen through a `levelChoice` (§6), which a subclass feature declares. Two things
+happen once some loaded source provides stances *and* a subclass declares the levelChoice:
+
+- The creation wizard grows a "Martial Stances" picker under the subclass — `atStart` of them,
+  from Tier 1. Optional, like every other creation choice; the sheet nudges if it's left blank.
+- The level-up screen offers one more stance each level (`perLevel`), tier-gated to the character's
+  current tier. Free — it doesn't spend one of the level's two choice points. Mandatory to confirm
+  *unless* the pool is empty (only reachable with a small homebrew stance set).
+- A character with the feature also gets a **Focus** track: six slots on the play page and the
+  printed sheet, refilled once per rest by rolling d6s equal to Instinct and keeping the highest.
+
+**The exact stance allotment when a *multiclass* brings the feature in mid-career is a known rough
+edge:** the app grants `atStart` at that level and `perLevel` after, and a table that reads it as
+`atStart + perLevel` for that one level can add the extra pick through the level-up screen's Edit.
+
 ### weapons.json / armors.json / consumables.json
 
 ```json
@@ -348,6 +383,8 @@ Specialization entries too.
 - **`unarmedProfile`** — replaces the weapon a bare-handed character fights with (below).
 - **`advancementOption`** — an extra row on the level-up screen's advancement table (below).
 - **`track`** — a named value with a ladder, printed on the sheet: a Rally Die, a Combo Die (below).
+- **`levelChoice`** — "each level up, pick one from a named catalogue, for free" — a martial stance,
+  a companion option (below).
 
 Anything else is rejected and reported. `extraDomainCards` is not a stat: it changes how many cards
 the character gets to pick, and the level-up screen works it out by diffing before and after.
@@ -520,6 +557,40 @@ character sheet PDF, bottom left of page 1.
 
 What it can't do: take its value from a stat. There's no `{ "equalTo": … }` here — a track is a
 rung on a ladder you wrote, not a computed number.
+
+### A list you pick from every level
+
+The Martial Artist's stances and the Beastbound Ranger's companion options are the same shape:
+*"each time you level up, choose one more from this list, and keep it."* That's a `levelChoice`.
+
+```json
+"myhomebrew_subclass_stance_fighter:foundation": {
+  "feature": "Stance Fighter",
+  "levelChoice": {
+    "id": "stances",
+    "from": "stances",
+    "tierGated": true,
+    "atStart": 2,
+    "perLevel": 1,
+    "prompt": "Choose a martial stance from your tier or lower."
+  }
+}
+```
+
+- **`id`** names the choice; the character stores its picks under it. **`from`** is the content
+  collection they're drawn from (`stances`, or a kind your own source adds).
+- **`atStart`** picks are offered in the creation wizard; **`perLevel`** on every level-up after.
+  **`extraPicks`** is a one-off bump another feature adds (`{ "id": "stances", "from": "stances",
+  "extraPicks": 1 }` on a specialization feature = one more, once). Declare `atStart`/`perLevel`
+  once, on the feature that owns the subsystem; other features contribute `extraPicks` only.
+- **`tierGated`** filters the pool to records whose `tier` is at most the character's tier.
+- A record may be picked up to its own **`maxPicks`** times (default 1), so the same option can be
+  taken repeatedly if you say so.
+- **It's free** — it doesn't spend a level's advancement points, and it never touches the stats.
+  The app remembers *which* you picked and prints them; that's all. Picks show in the level history
+  and can be changed from there.
+- A `levelChoice` on a **subclass foundation** feature is the normal case; the feature that
+  declares it also gets the Focus track if `from` is `"stances"`.
 
 ### Two shapes of choice
 

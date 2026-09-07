@@ -13,7 +13,13 @@
 export const HOPE_MAX = 6;
 export const HOPE_START = 2;
 
-export const RESOURCE_KEYS = ["hp", "stress", "hope", "armor"];
+// The Martial Artist's Focus track: cap 6, starts empty, refilled once per rest (clear it, roll
+// d6s equal to Instinct, gain Focus equal to the highest). Only that subclass has it, so unlike
+// Hope the ROW LENGTH is derived — maxesFromSheet reads sheet.focusSlots, which is 6 for a
+// character with the Stance Fighter feature and null for everyone else (the row then doesn't draw).
+export const FOCUS_MAX = 6;
+
+export const RESOURCE_KEYS = ["hp", "stress", "hope", "armor", "focus"];
 
 // The SRD's three conditions, with the one line a player needs when one is on them.
 export const CONDITIONS = [
@@ -23,7 +29,7 @@ export const CONDITIONS = [
 ];
 
 export function defaultState() {
-  return { hp: 0, stress: 0, hope: HOPE_START, armor: 0, scars: 0, conditions: [], notes: "" };
+  return { hp: 0, stress: 0, hope: HOPE_START, armor: 0, focus: 0, scars: 0, conditions: [], notes: "" };
 }
 
 // Returns the new list, in catalogue order; an unknown id is ignored.
@@ -49,9 +55,10 @@ export function scarAt(scars, index, max) {
   return tapBox(scars, max - 1 - index);
 }
 
-// `maxes` is { hp, stress, hope, armor } from maxesFromSheet(); a null maximum (a draft with
-// no class or armor yet) means nothing can be marked there. Conditions and notes ride along
-// (known ids only, in catalogue order; notes as a string). Always returns a new object.
+// `maxes` is { hp, stress, hope, armor, focus } from maxesFromSheet(); a null maximum (a draft
+// with no class or armor yet, or focus for a non-Martial-Artist) means nothing can be marked
+// there. Conditions and notes ride along (known ids only, in catalogue order; notes as a string).
+// Always returns a new object.
 export function clampState(state, maxes) {
   const defaults = defaultState();
   const out = {};
@@ -82,6 +89,9 @@ export function maxesFromSheet(sheet) {
     stress: sheet.stress ?? null,
     hope: sheet.hopeSlots ?? null,
     armor: sheet.armorScore ?? null,
+    // 6 for a Martial Artist, null for everyone else — see FOCUS_MAX. A null here makes the play
+    // page skip the Focus row entirely, the same way a null armorScore does for Armor.
+    focus: sheet.focusSlots ?? null,
   };
 }
 

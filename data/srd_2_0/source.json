@@ -9,6 +9,7 @@
     "domain-cards",
     "weapons",
     "armors",
-    "consumables"
+    "consumables",
+    "stances"
   ]
 }

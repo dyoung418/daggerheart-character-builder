@@ -197,6 +197,8 @@ function renderDefenses(s) {
   box.appendChild(tickRow("HP", s.hitPoints, s.hitPointsNote));
   box.appendChild(tickRow("Stress", s.stress, s.stressNote));
   box.appendChild(tickRow("Hope", s.hopeSlots, `start with ${s.hopeStart}`));
+  // The Martial Artist's Focus track: cap 6, refilled once per rest. Only that subclass has it.
+  if (s.focusSlots != null) box.appendChild(tickRow("Focus", s.focusSlots, "roll d6s = Instinct, take the highest"));
 
   const th = el("div", "threshold-row");
   th.appendChild(el("span", null, `Major ${s.thresholds ? s.thresholds.major : "—"}`));
@@ -366,6 +368,15 @@ function renderPageTwo(s) {
     for (const f of w.features) feats.appendChild(featureBlock(f, w.name));
   }
   for (const f of s.armorFeatures) feats.appendChild(featureBlock(f, s.armorName));
+  // The Martial Artist's known stances, printed in full — the SRD keeps them on a separate sheet,
+  // so this is the one place the printed character sheet can carry them. featureBlock's shape, one
+  // per stance, labelled with the tier.
+  for (const stance of s.stances || []) {
+    feats.appendChild(featureBlock(
+      { name: stance.name, description: [{ type: "paragraph", text: stance.text }] },
+      `Martial Stance — Tier ${stance.tier ?? "?"}`,
+    ));
+  }
   page.appendChild(feats);
 
   // Free-text notes, not data-driven features, so they're wrapped in a single-paragraph

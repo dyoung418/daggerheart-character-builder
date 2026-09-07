@@ -178,6 +178,18 @@ export function normalizeImported(ch) {
   if (ch.creationDomainCardIds !== undefined && !Array.isArray(ch.creationDomainCardIds)) {
     delete ch.creationDomainCardIds;
   }
+  // levelChoice picks (stances, companion options). A hand-edited file could carry a non-object,
+  // or a choice whose value isn't a list of ids; drop what's malformed and let ensureLevelFields
+  // put back an empty object. The replay rebuilds levelChoiceIds from creationLevelChoices +
+  // levelUps anyway, so a wrong value is corrected on the next recompute — but not before
+  // characters.js has walked into it.
+  for (const field of ["creationLevelChoices", "levelChoiceIds"]) {
+    if (ch[field] === undefined) continue;
+    if (!isObject(ch[field])) { delete ch[field]; continue; }
+    for (const [k, v] of Object.entries(ch[field])) {
+      ch[field][k] = Array.isArray(v) ? v.filter((x) => typeof x === "string") : [];
+    }
+  }
   const level = Math.floor(Number(ch.level));
   ch.level = Number.isFinite(level) ? Math.min(MAX_LEVEL, Math.max(1, level)) : 1;
 

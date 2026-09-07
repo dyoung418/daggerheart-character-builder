@@ -477,6 +477,19 @@ function renderStatus(s, state, maxes, onTap, rest) {
   row.appendChild(statusNumber(t("proficiency"), s.proficiency));
   panel.appendChild(row);
 
+  // The Martial Artist's Focus track: only that subclass has one, so a null max means no row.
+  // "Refocus" is the once-per-rest refill — clear the track, roll d6s equal to Instinct, take the
+  // highest — and play.js rolls it, the same as the short rest's 1d4+tier.
+  if (maxes.focus != null) {
+    const focusWrap = el("div", "play-resources");
+    focusWrap.appendChild(pipBar("focus", "Focus", state.focus, maxes.focus, onTap));
+    const refocus = el("button", "btn-small");
+    refocus.textContent = "Refocus";
+    refocus.addEventListener("click", () => onTap("refocus", null));
+    focusWrap.appendChild(refocus);
+    panel.appendChild(focusWrap);
+  }
+
   const th = el("div", "dh-pill dh-thresholds");
   th.appendChild(el("span", "th-label", t("threshold.minor")));
   th.appendChild(el("span", "th-value", s.thresholds ? String(s.thresholds.major) : "—"));
@@ -611,6 +624,13 @@ function renderFeatures(s) {
   group(s.subclassName, s.subclassFeatures, (f) => f.source);
   group(t("features.ancestry"), s.ancestryFeatures, (f) => f.source);
   group(t("features.community"), s.communityFeatures, (f) => f.source);
+  // The Martial Artist's known stances — the subsystem the SRD keeps on its own sheet. Feature
+  // shape, one per stance, labelled with the tier.
+  group("Martial Stances", (s.stances || []).map((st) => ({
+    name: st.name,
+    source: `Tier ${st.tier ?? "?"}`,
+    description: [{ type: "paragraph", text: st.text }],
+  })), (f) => f.source);
   if (!panel.childNodes.length) panel.appendChild(el("p", "play-empty", t("features.none")));
   return panel;
 }
@@ -738,6 +758,16 @@ async function init() {
     }
     if (key === "rest-end") {
       rest = null;
+      refreshStatus();
+      return;
+    }
+    // Focus refill: clear the track, roll d6s equal to Instinct, keep the highest. Instinct ≤ 0
+    // rolls nothing and the track stays clear. Capped by clampState like every other resource.
+    if (key === "refocus") {
+      const instinct = sheet.traits.find((tr) => tr.key === "instinct")?.total ?? 0;
+      let best = 0;
+      for (let i = 0; i < instinct; i++) best = Math.max(best, 1 + Math.floor(Math.random() * 6));
+      commit({ ...state, focus: best });
       refreshStatus();
       return;
     }

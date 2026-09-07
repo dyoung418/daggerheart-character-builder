@@ -23,6 +23,7 @@ const COUNT_LABELS = {
   weapons: ["weapon", "weapons"],
   armors: ["armor", "armors"],
   consumables: ["consumable", "consumables"],
+  stances: ["stance", "stances"],
 };
 
 function countsText(counts) {

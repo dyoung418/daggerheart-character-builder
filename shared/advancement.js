@@ -75,7 +75,10 @@ const ADVANCEMENT_LABELS = {
 const TWO_POINT_OPTIONS = new Set(["proficiency", "multiclass"]);
 
 // Cost in "choice points": every level up grants 2 points; a normal option costs 1.
+// A `levelChoice` (a martial stance, a companion option) is FREE — "each time you level up, choose
+// an additional stance" happens alongside the two advancements, not instead of one.
 export function optionCost(key) {
+  if (key === "levelChoice") return 0;
   return TWO_POINT_OPTIONS.has(key) ? 2 : 1;
 }
 
@@ -367,6 +370,11 @@ function captureBaseline(ch) {
     multiclass: ch.multiclass ?? null,
     slotsUsed: JSON.parse(JSON.stringify(ch.advancementSlotsUsed)),
     domainCardIds: [...(ch.domainCardIds || [])],
+    // levelChoice picks (stances, later companion options) as they stood at the baseline. Empty
+    // `{}` for every character built here — the two starting stances live in creationLevelChoices
+    // and the replay reads those directly at level 1 — and the full multiset for one imported
+    // above level 1, whose per-level picks have no recorded entries to replay.
+    levelChoiceIds: JSON.parse(JSON.stringify(ch.levelChoiceIds || {})),
   };
 }
 
@@ -479,6 +487,13 @@ export function ensureLevelFields(ch) {
   // consult, so it can't do better — re-picking the starting cards in the wizard corrects it,
   // and everything written since records the real list.
   if (!ch.creationDomainCardIds) ch.creationDomainCardIds = (ch.domainCardIds || []).slice(0, 2);
+
+  // The stances (and, later, companion options) chosen at creation, and the full derived multiset.
+  // A character saved before this existed gets both empty; a Martial Artist built before stances
+  // shipped picks its two through the creation wizard or the level up screen's nudge. Kept apart
+  // like creationDomainCardIds so the wizard can edit the starting picks without touching the rest.
+  if (!ch.creationLevelChoices || typeof ch.creationLevelChoices !== "object") ch.creationLevelChoices = {};
+  if (!ch.levelChoiceIds || typeof ch.levelChoiceIds !== "object") ch.levelChoiceIds = {};
 
   if (!Array.isArray(ch.levelUps)) ch.levelUps = [];
   if (ch.baselineLevel === undefined) ch.baselineLevel = ch.level;

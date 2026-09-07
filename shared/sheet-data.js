@@ -212,6 +212,7 @@ export function deriveSheet(character, db) {
     traits: TRAIT_KEYS.map((key) => ({
       key,
       label: TRAIT_LABELS[key],
+      total: stats.traits[key].total,
       display: stats.traits[key].total === null ? "—" : signed(stats.traits[key].total),
     })),
 
@@ -226,6 +227,9 @@ export function deriveSheet(character, db) {
     // with no bonus in the SRD that moves either number, so there's nothing to derive.
     hopeSlots: 6,
     hopeStart: 2,
+    // The Martial Artist's Focus track: 6 slots, or null for a character without Stance Fighter.
+    // Unlike Hope this IS derived, because only one subclass has it. maxesFromSheet reads this.
+    focusSlots: stats.focusSlots ?? null,
     thresholds: stats.majorThreshold
       ? { major: stats.majorThreshold.total, severe: stats.severeThreshold.total }
       : null,
@@ -260,6 +264,12 @@ export function deriveSheet(character, db) {
     // and the Guardian's Unstoppable Die were prose inside a feature, and the feature text is on
     // page 2. Display-only, like everything else here — there's no "?" to open on paper.
     tracks: (stats.tracks || []).map((t) => ({ label: t.label, display: t.value, note: t.note })),
+
+    // The Martial Artist's known stances — the whole subsystem the SRD prints outside the subclass
+    // cards. Full text, not just the name: the sheet stands in for the book at the table. Empty
+    // for every other character. Read off `stats` so the drawing and the count are one fact, the
+    // way `tracks` is.
+    stances: stats.stances || [],
 
     // A second class, its domain and the foundation card it took. Its own field rather than
     // folded into className/subclassName, which the sheet labels with the first class's names.

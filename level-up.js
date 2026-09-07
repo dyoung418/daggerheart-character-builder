@@ -29,7 +29,7 @@ import {
   hitPointTotal,
   stressTotal,
 } from "./shared/derived-stats.js";
-import { blankAnswer, choiceFor } from "./shared/effects.js";
+import { blankAnswer, choiceFor, declaredLevelChoices } from "./shared/effects.js";
 import { loadContent } from "./shared/content-load.js";
 import { mountContentSettings } from "./shared/content-settings.js";
 import { visibleRecords } from "./shared/content-sources.js";
@@ -77,8 +77,10 @@ async function loadAllData() {
   // Transformations are here for exactly the same reason, and for no other: one is never an
   // option on this screen, but a transformation that grants a slot has to be counted before this
   // screen decides how many are left.
+  // Stances ARE an option on this screen: a Martial Artist picks one each level up, from the
+  // `levelChoice` their foundation feature declares, so the pool has to be loaded.
   content = await loadContent({
-    files: ["classes", "subclasses", "domain-cards", "ancestries", "transformations"],
+    files: ["classes", "subclasses", "domain-cards", "ancestries", "transformations", "stances"],
   });
   Object.assign(db, content.db);
 }
@@ -132,6 +134,9 @@ function usedWithPicks(slotsUsed, current) {
   const used = {};
   for (const [key, perTier] of Object.entries(slotsUsed || {})) used[key] = { ...perTier };
   for (const pick of current) {
+    // A levelChoice pick (a stance) marks no advancement slot — the same reason the replay skips
+    // it. Counting it here would make advancementOptions() draw it an orphan row on the grid.
+    if (pick.key === "levelChoice") continue;
     const perTier = (used[pick.key] ||= { 2: 0, 3: 0, 4: 0 });
     perTier[pick.slotTier] = (perTier[pick.slotTier] || 0) + slotsPerPick(pick.key);
   }
@@ -142,6 +147,71 @@ function usedWithPicks(slotsUsed, current) {
 // 8 are simply absent from it and those traits can be raised again.
 function traitMarkedBefore(key) {
   return !!context.traitMarks[key];
+}
+
+// ---------- levelChoice (martial stances) ----------
+//
+// "Each time you level up, choose an additional stance from your tier or lower." Free — it doesn't
+// spend one of the two advancement points — and it accumulates. The picks live in the level entry
+// as `{ key: "levelChoice", choiceId: "stances", recordId }`, and the replay in shared/history.js
+// gathers them into ch.levelChoiceIds.stances. The two starting stances a primary Martial Artist
+// takes were chosen in the creation wizard (ch.creationLevelChoices); this screen only ever grants
+// `perLevel`, EXCEPT at the level a multiclass first brings the feature in, where it grants the
+// `atStart` count instead (Q4's reading — 2 at that level, 1 per level after).
+
+function stancesChoiceHeldNow() {
+  return declaredLevelChoices(characterAtLevel(character, context), db).find((lc) => lc.id === "stances") || null;
+}
+
+// The pending multiclass pick's subclass, if it declares the stances levelChoice — i.e. the
+// character is multiclassing INTO a stance user this very level.
+function stancesFromPendingMulticlass() {
+  const mc = picksFor("multiclass").find((p) => p.subclassId);
+  if (!mc) return null;
+  const probe = { ...characterAtLevel(character, context), multiclass: { subclassId: mc.subclassId, tier: "foundation" } };
+  return declaredLevelChoices(probe, db).find((lc) => lc.id === "stances") || null;
+}
+
+function stancePicksOwed() {
+  const held = stancesChoiceHeldNow();
+  if (held) return held.perLevel;
+  const arriving = stancesFromPendingMulticlass();
+  return arriving ? arriving.atStart : 0;
+}
+
+// Stance ids the character knows at the START of this level, plus any picked on screen so far.
+function knownStanceIdsIncludingScreen(exceptPick) {
+  const before = context.levelChoiceIds?.stances || [];
+  const onScreen = picks.filter((p) => p.key === "levelChoice" && p.choiceId === "stances" && p !== exceptPick && p.recordId)
+    .map((p) => p.recordId);
+  return new Set([...before, ...onScreen]);
+}
+
+// The stances a levelChoice pick could still take: tier ≤ the working level's tier, not already
+// known, not chosen by a sibling pick this level.
+function stanceOptionsFor(pick, newLevel) {
+  const cap = tierForLevel(newLevel);
+  const taken = knownStanceIdsIncludingScreen(pick);
+  return (db.stances || [])
+    .filter((s) => (s.tier ?? 99) <= cap && !taken.has(s.id))
+    .sort((a, b) => (a.tier ?? 99) - (b.tier ?? 99) || a.name["en-US"].localeCompare(b.name["en-US"]));
+}
+
+// Reconcile the levelChoice/stances entries in `picks` with what this level owes. Adds blanks up
+// to the owed count, drops extras (newest first) — mirrors how the grid adds and removes picks.
+function syncStancePicks() {
+  const owed = stancePicksOwed();
+  const current = picksFor("levelChoice").filter((p) => p.choiceId === "stances");
+  while (current.length > owed) {
+    const drop = current.pop();
+    picks.splice(picks.indexOf(drop), 1);
+  }
+  while (current.length < owed) {
+    const pick = { key: "levelChoice", choiceId: "stances", recordId: null, optionLabel: null,
+      traits: [], experienceIds: [], cardId: null, target: null, classId: null, domain: null, subclassId: null };
+    picks.push(pick);
+    current.push(pick);
+  }
 }
 
 function traitsPickedThisLevel() {
@@ -278,6 +348,14 @@ function render() {
   for (const pick of picks) {
     const option = optionFor(options, pick.key);
     if (option && option.source !== "core") pick.optionLabel = option.label;
+  }
+  // The martial stance a Martial Artist picks each level is free and comes from a feature, not the
+  // grid, so nothing above added it to `picks`. Reconcile the count here, before the sub-pickers
+  // render, and drop a pick whose stance is above this level's tier (a level edited down since).
+  syncStancePicks();
+  for (const pick of picksFor("levelChoice").filter((p) => p.recordId && p.choiceId === "stances")) {
+    const stance = (db.stances || []).find((s) => s.id === pick.recordId);
+    if (!stance || (stance.tier ?? 99) > tierForLevel(newLevel)) { pick.recordId = null; pick.optionLabel = null; }
   }
 
   if (!isEditing() && character.level >= 10) {
@@ -461,6 +539,11 @@ function renderSubPickers(main, cls, newLevel) {
     if (pick.key === "domainCard") renderExtraCardPicker(main, pick, index, ordinal, cls, newLevel);
     if (pick.key === "subclass") renderSubclassPreview(main, pick, ordinal);
     if (pick.key === "multiclass") renderMulticlassPicker(main, pick);
+    if (pick.key === "levelChoice" && pick.choiceId === "stances") {
+      const idx = picksFor("levelChoice").filter((p) => p.choiceId === "stances").indexOf(pick);
+      const many = picksFor("levelChoice").filter((p) => p.choiceId === "stances").length > 1;
+      renderStanceSubPicker(main, pick, many ? ` (${ORDINALS[idx]})` : "", newLevel);
+    }
   });
 }
 
@@ -509,6 +592,37 @@ function renderExperienceSubPicker(main, pick, ordinal, newLevel) {
     row.querySelector("input").addEventListener("change", (e) => {
       if (e.target.checked) pick.experienceIds.push(exp.id);
       else pick.experienceIds = pick.experienceIds.filter((id) => id !== exp.id);
+      render();
+    });
+    list.appendChild(row);
+  }
+  main.appendChild(list);
+}
+
+function renderStanceSubPicker(main, pick, ordinal, newLevel) {
+  const lc = stancesChoiceHeldNow() || stancesFromPendingMulticlass();
+  subHeading(main, `${lc?.prompt || "Choose a martial stance."}${ordinal}`);
+  const opts = stanceOptionsFor(pick, newLevel);
+  const list = document.createElement("div");
+  list.className = "option-list";
+
+  if (opts.length === 0 && !pick.recordId) {
+    const note = document.createElement("p");
+    note.className = "hint";
+    note.textContent = "You already know every martial stance available at your tier — nothing to add this level.";
+    main.appendChild(note);
+    return;
+  }
+
+  for (const stance of opts) {
+    const checked = pick.recordId === stance.id;
+    const row = document.createElement("label");
+    row.className = "option-row";
+    row.innerHTML = `<input type="radio" name="stance-${escapeHtml(String(picks.indexOf(pick)))}" ${checked ? "checked" : ""}/> `
+      + `${escapeHtml(stance.name["en-US"])} <span class="hint">— Tier ${stance.tier}</span>`;
+    row.querySelector("input").addEventListener("change", () => {
+      pick.recordId = stance.id;
+      pick.optionLabel = stance.name["en-US"];
       render();
     });
     list.appendChild(row);
@@ -906,6 +1020,12 @@ function confirmBlockedReason(newLevel) {
     if (pick.key === "multiclass" && !(pick.classId && pick.domain && pick.subclassId)) {
       return "Choose a class to multiclass into, one of its domains, and one of its subclasses.";
     }
+    // A stance is mandatory to confirm — unless there is genuinely none left to pick at this tier,
+    // which the picker itself reports and only a small homebrew stance set can produce.
+    if (pick.key === "levelChoice" && pick.choiceId === "stances" && !pick.recordId
+        && stanceOptionsFor(pick, newLevel).length > 0) {
+      return "Choose a martial stance.";
+    }
   }
   // Taking the trait option twice needs four DIFFERENT unmarked traits.
   const allTraits = traitsPickedThisLevel();
@@ -942,6 +1062,9 @@ function currentEntry(level) {
       if (p.key === "traits") entry.traits = [...p.traits];
       if (p.key === "experience") entry.experienceIds = [...p.experienceIds];
       if (p.key === "domainCard") entry.cardId = p.cardId;
+      // A free levelChoice pick — a stance. No slotTier (it costs no advancement point), so the
+      // key drops out of JSON and history.js's replay skips the slot accounting for it.
+      if (p.key === "levelChoice") { entry.choiceId = p.choiceId; entry.recordId = p.recordId; }
       // Only written when it isn't your own subclass, so a level recorded for a single-subclass
       // character serialises byte for byte as it always did.
       if (p.key === "subclass" && p.target) entry.target = p.target;
@@ -1144,6 +1267,8 @@ function loadPicksFrom(entry) {
     classId: p.classId || null,
     domain: p.domain || null,
     subclassId: p.subclassId || null,
+    choiceId: p.choiceId || null,
+    recordId: p.recordId || null,
     optionLabel: p.optionLabel || null,
   }));
   mandatoryCardId = entry.mandatoryCardId || null;

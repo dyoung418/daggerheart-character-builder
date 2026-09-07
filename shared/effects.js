@@ -260,6 +260,24 @@ export const EFFECTS = {
     feature: "Scorpion\u2019s Poise",
     excluded: [`Scorpion's Poise's +2 Evasion applies only against a creature you've Marked for Death, so it isn't counted here`],
   },
+  // Martial Artist, Foundation — Stance Fighter. "Take the Martial Stances sheet and choose two
+  // martial stances from Tier 1. Each time you level up your character, choose an additional stance
+  // from your tier or lower." No stat moves — a stance is toggled at the table — so this is a
+  // `levelChoice`: the app remembers WHICH stances were picked and prints them, the same way it
+  // remembers a Combo Die pick without knowing d8 beats d6. `id` names the choice; `from` is the
+  // db collection its picks come from. The Beastbound Companion reuses this key (see the
+  // `levelChoice` note further down).
+  "subclass_martial_artist:foundation": {
+    feature: "Stance Fighter",
+    levelChoice: {
+      id: "stances",
+      from: "stances",
+      tierGated: true,
+      atStart: 2,
+      perLevel: 1,
+      prompt: "Choose a martial stance from your tier or lower.",
+    },
+  },
   // Martial Artist, Specialization — Keen Defenses, an Evasion bonus that costs a Focus and lasts
   // one attack.
   "subclass_martial_artist:specialization": {
@@ -782,6 +800,70 @@ export function declaredAdvancementOptions(ch, db) {
     });
   }
   return out;
+}
+
+// "At each level up, pick one from a named catalogue, and it accumulates" — a shape that is
+// neither an `advancementOption` (that costs one of the two choice points and marks a box on the
+// grid) nor a `track` (that has no choice, just a rung the level decides). The Martial Artist's
+// stances are the first, the Beastbound's companion level-ups the second: both let you choose from
+// a list every level, for free, and both accumulate.
+//
+// The picks land in `levelUps[].picks` as `{ key: "levelChoice", choiceId, recordId }` and the
+// replay in shared/history.js gathers them into `ch.levelChoiceIds[choiceId]`. What is NOT here is
+// any stat: a stance is toggled at the table (shared/effects.js's opening rule), so the app
+// enumerates and prints, exactly as it does for a Combo Die.
+//
+// `tierGated` filters the pool to `record.tier <= the character's tier`; `atStart` picks are
+// granted when the feature is first held (at creation, or at the level a multiclass takes it);
+// `perLevel` on every level up after; `extraPicks` is a one-off bump another feature adds (Expert
+// Training / Advanced Training for the companion). A record may be picked up to `record.maxPicks`
+// times (default 1), so `ch.levelChoiceIds[choiceId]` is a multiset.
+export function declaredLevelChoices(ch, db) {
+  const byId = new Map();
+  for (const entry of collectEffects(ch, db)) {
+    const lc = entry.effect.levelChoice;
+    if (!lc || !lc.id) continue;
+    if (entry.source === "domainCard" && !entry.effect.permanent) continue;
+    const prior = byId.get(lc.id) || { id: lc.id, from: lc.from, tierGated: !!lc.tierGated,
+      atStart: lc.atStart || 0, perLevel: lc.perLevel || 0, extraPicks: 0, prompt: lc.prompt || "",
+      key: entry.key, fromLabel: entry.label };
+    // A second feature declaring the same id contributes only its extra picks (Expert Training),
+    // never a second atStart/perLevel — those belong to the feature that owns the subsystem.
+    if (byId.has(lc.id)) prior.extraPicks += lc.extraPicks || 0;
+    else prior.extraPicks = lc.extraPicks || 0;
+    byId.set(lc.id, prior);
+  }
+  return [...byId.values()];
+}
+
+// The stance/option records a character has picked for one levelChoice, resolved against the db
+// and kept in pick order. An id the loaded sources no longer carry (a source switched off) stays
+// in the list as `{ id, record: null }` so the surfaces can still name it from the pick's own
+// label — the same promise advancementOptions() makes for a spent slot.
+export function resolveLevelChoice(ch, db, choiceId, collection) {
+  const ids = ch.levelChoiceIds?.[choiceId] || [];
+  const list = db?.[collection] || [];
+  return ids.map((id) => ({ id, record: list.find((r) => r.id === id) || null }));
+}
+
+// The martial stances a character knows, as flat `{ id, name, tier, text }` sorted by tier then
+// name (the SRD's own order), for every surface that prints them. `text` joins a stance's
+// paragraphs with a blank line, the way flattenFeatures does elsewhere. An orphan (source off)
+// keeps its id as the name and an empty tier/text — the surface still lists it.
+//
+// Empty for any character without the stances levelChoice, even one that carries stale
+// creationLevelChoices from a Martial Artist they later swapped away from: the surfaces ask "what
+// stances does this character have", and the answer for a Juggernaut is none.
+export function knownStances(ch, db) {
+  if (!declaredLevelChoices(ch, db).some((lc) => lc.id === "stances")) return [];
+  return resolveLevelChoice(ch, db, "stances", "stances")
+    .map(({ id, record }) => ({
+      id,
+      name: record?.name?.["en-US"] || id,
+      tier: record?.tier ?? null,
+      text: (record?.description || []).map((p) => p?.paragraph?.["en-US"] || "").filter(Boolean).join("\n\n"),
+    }))
+    .sort((a, b) => (a.tier ?? 99) - (b.tier ?? 99) || a.name.localeCompare(b.name));
 }
 
 // How many of each domain are in the loadout — the requirement the *-Touched cards check.

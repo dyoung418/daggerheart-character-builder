@@ -72,8 +72,11 @@ const {
   EFFECTS,
   blankAnswer,
   collectEffects,
+  declaredLevelChoices,
   ignoresBurden,
   isAnswered,
+  knownStances,
+  resolveLevelChoice,
   unresolvedChoices,
 } = await import(`../shared/effects.js${RUN}`);
 const {
@@ -129,6 +132,7 @@ const {
   buildTransferFile,
   importedName,
   mintCharacterId,
+  normalizeImported,
   parseTransferFile,
   planImport,
   serializeTransferFile,
@@ -4030,6 +4034,165 @@ group("A source can add a kind of record the SRD hasn't got");
     unresolvedReferences({}, { transformations: [] }), []);
 }
 
+// ---------- stances + the levelChoice mechanism ----------
+//
+// The Martial Artist's martial stances are a whole subsystem the SRD prints outside the subclass
+// cards. They ride a NEW mechanism, levelChoice: "each level up, pick one from a named catalogue,
+// free, and it accumulates". Everything here is synthetic — a homebrew subclass declaring the
+// levelChoice through db.effects — so the mechanism is tested, not the SRD's stance list.
+
+const STANCE = (slug, tier, text) => ({ id: `hb_stance_${slug}`, name: { "en-US": slug[0].toUpperCase() + slug.slice(1) }, tier, description: [para(text)] });
+const HB_STANCES = [
+  STANCE("favored", 1, "T1a"), STANCE("quick", 1, "T1b"), STANCE("reliable", 1, "T1c"),
+  STANCE("anchored", 2, "T2a"), STANCE("defensive", 2, "T2b"),
+  STANCE("scary", 3, "T3a"),
+  STANCE("honed", 4, "T4a"),
+];
+const STANCE_FIGHTER = {
+  feature: "Stance Fighter",
+  levelChoice: { id: "stances", from: "stances", tierGated: true, atStart: 2, perLevel: 1, prompt: "Choose a martial stance from your tier or lower." },
+};
+const LC_DB = {
+  classes: [{ id: "cls", name: "BRAWLER", domains: ["VALOR"], startingHitPoints: 6, startingEvasion: 10 }],
+  subclasses: [{ id: "hb_subclass_bruiser", name: { "en-US": "Bruiser" }, class: "BRAWLER", foundation: { features: [{ name: { "en-US": "Stance Fighter" } }] }, specialization: {}, mastery: {} }],
+  stances: HB_STANCES,
+  domainCards: [{ id: "c1", name: { "en-US": "C1" }, domain: "VALOR", level: 1 }],
+  effects: { "hb_subclass_bruiser:foundation": STANCE_FIGHTER },
+};
+function lcChar(over = {}) {
+  return ensureLevelFields({
+    id: "s", classId: "cls", subclassId: "hb_subclass_bruiser",
+    traits: { agility: 1, strength: 2, finesse: 0, instinct: 2, presence: 0, knowledge: -1 },
+    experiences: [], domainCardIds: ["c1"], creationDomainCardIds: ["c1"], domainVaultIds: [],
+    level: 1, proficiency: 1,
+    traitMarks: { agility: false, strength: false, finesse: false, instinct: false, presence: false, knowledge: false },
+    hitPointSlotsBonus: 0, stressSlotsBonus: 0, evasionBonus: 0, subclassTier: "foundation",
+    creationLevelChoices: { stances: ["hb_stance_reliable", "hb_stance_quick"] },
+    ...over,
+  });
+}
+const lcEntry = (level, ...stanceSlugs) => ({
+  level,
+  picks: [
+    { key: "hitPoint", slotTier: 2 }, { key: "stress", slotTier: 2 },
+    ...stanceSlugs.map((s) => ({ key: "levelChoice", choiceId: "stances", recordId: `hb_stance_${s}`, optionLabel: s })),
+  ],
+  mandatoryCardId: null, exchange: null,
+});
+
+group("The stances kind loads like any other, and demands a tier");
+{
+  eq("a stance with a name and a tier is fine", validateRecord("stances", { id: "x", name: { "en-US": "Quick" }, tier: 1 }), null);
+  eq("one with no tier is refused — every surface groups by it", validateRecord("stances", { id: "x", name: { "en-US": "Quick" } }), "tier must be a whole number 1–4");
+  eq("and a tier outside 1–4 is refused too", validateRecord("stances", { id: "x", name: { "en-US": "Q" }, tier: 5 }), "tier must be a whole number 1–4");
+  const { db, report } = mergeSources([source("hb", { stances: HB_STANCES.concat([{ id: "bad", name: { "en-US": "B" } }]) })]);
+  eq("the good records land", db.stances.length, 7);
+  eq("the panel names the one it dropped", report.sources[0].skipped, [{ file: "stances", id: "bad", reason: "tier must be a whole number 1–4" }]);
+  eq("and counts what the folder holds", report.sources[0].counts.stances, 7);
+}
+
+group("levelChoice is a real effect key, declarable from homebrew");
+{
+  eq("a well-formed levelChoice passes", validateEffectEntry(STANCE_FIGHTER), null);
+  eq("an unknown sub-key is caught", validateEffectEntry({ levelChoice: { id: "s", from: "s", nope: 1 } }), "levelChoice: unknown key: nope");
+  eq("a missing `from` is caught", validateEffectEntry({ levelChoice: { id: "s" } }), "levelChoice: `from` must name a collection");
+  eq("a negative count is caught", validateEffectEntry({ levelChoice: { id: "s", from: "s", perLevel: -1 } }), "levelChoice: perLevel must be a whole number ≥ 0");
+  eq("a character's features surface the levelChoice they declare",
+    declaredLevelChoices(lcChar(), LC_DB).map((lc) => `${lc.id}:${lc.atStart}/${lc.perLevel}`), ["stances:2/1"]);
+}
+
+group("Known stances are the creation picks plus one per level, replayed");
+{
+  const ch = lcChar();
+  ch.level = 3;
+  ch.levelUps = [lcEntry(2, "favored"), lcEntry(3, "anchored")];
+  recomputeCharacter(ch);
+  eq("levelChoiceIds gathers creation + every level, in pick order",
+    ch.levelChoiceIds.stances, ["hb_stance_reliable", "hb_stance_quick", "hb_stance_favored", "hb_stance_anchored"]);
+  eq("knownStances resolves and sorts them by tier then name",
+    knownStances(ch, LC_DB).map((s) => `${s.name} T${s.tier}`), ["Favored T1", "Quick T1", "Reliable T1", "Anchored T2"]);
+  eq("and it never touches advancementSlotsUsed — a stance is free", "levelChoice" in ch.advancementSlotsUsed, false);
+  eq("the history line names the stance", describeLevelUp(ch, ch.levelUps[1], LC_DB), ["+1 Hit Point slot", "+1 Stress slot", "Stance: anchored"]);
+
+  // Editing a past level: change the level-2 pick and the known set changes with it.
+  ch.levelUps[0] = lcEntry(2, "defensive");
+  recomputeCharacter(ch);
+  eq("re-running the replay picks up the edit",
+    knownStances(ch, LC_DB).map((s) => s.name).sort(), ["Anchored", "Defensive", "Quick", "Reliable"]);
+}
+
+group("A stance whose source is gone still shows, from what the pick recorded");
+{
+  const ch = lcChar();
+  ch.level = 2;
+  ch.levelUps = [lcEntry(2, "favored")];
+  recomputeCharacter(ch);
+  const gone = { ...LC_DB, stances: [] };
+  eq("resolveLevelChoice keeps the id with a null record",
+    resolveLevelChoice(ch, gone, "stances", "stances").map((x) => [x.id, x.record]),
+    [["hb_stance_reliable", null], ["hb_stance_quick", null], ["hb_stance_favored", null]]);
+  eq("and the history line still reads from the pick's own label",
+    describeLevelUp(ch, ch.levelUps[0], gone)[2], "Stance: favored");
+}
+
+group("A character imported above level 1 keeps its stances through the baseline");
+{
+  const imported = lcChar({ level: 5, baselineLevel: 5, creationLevelChoices: {}, levelChoiceIds: { stances: ["hb_stance_reliable", "hb_stance_anchored", "hb_stance_scary"] } });
+  recomputeCharacter(imported);
+  eq("the baseline snapshot carries them", imported.baseline.levelChoiceIds.stances, ["hb_stance_reliable", "hb_stance_anchored", "hb_stance_scary"]);
+  eq("and they survive a recompute with no levels to replay",
+    knownStances(imported, LC_DB).map((s) => s.name), ["Reliable", "Anchored", "Scary"]);
+
+  // A character saved before stances existed has neither field.
+  const legacy = lcChar();
+  delete legacy.creationLevelChoices;
+  delete legacy.levelChoiceIds;
+  eq("normalizeImported puts the two fields back without throwing",
+    (() => { normalizeImported(legacy); return [typeof legacy.creationLevelChoices, typeof legacy.levelChoiceIds]; })(),
+    ["object", "object"]);
+  eq("and a malformed value is dropped, not trusted",
+    (() => { const c = lcChar({ levelChoiceIds: "rotten" }); normalizeImported(c); return c.levelChoiceIds; })(), {});
+}
+
+group("Focus is a resource for a stance user and nothing for anyone else");
+{
+  eq("focusSlots is 6 when the stances levelChoice is declared", derivedStats(lcChar(), LC_DB).focusSlots, 6);
+  const plain = { ...LC_DB, effects: {} };
+  eq("and null when it isn't — the play page then draws no Focus row", derivedStats(lcChar(), plain).focusSlots, null);
+}
+
+group("levelChoiceIds is a multiset — a companion option can be taken more than once");
+{
+  const REPEAT_DB = {
+    ...LC_DB,
+    stances: [{ id: "hb_opt_vicious", name: { "en-US": "Vicious" }, tier: 1, maxPicks: 3, description: [para("x")] }],
+  };
+  const ch = lcChar({ creationLevelChoices: {} });
+  ch.level = 3;
+  ch.levelUps = [
+    { level: 2, picks: [{ key: "hitPoint", slotTier: 2 }, { key: "stress", slotTier: 2 }, { key: "levelChoice", choiceId: "stances", recordId: "hb_opt_vicious", optionLabel: "Vicious" }] },
+    { level: 3, picks: [{ key: "traits", slotTier: 2, traits: ["agility", "finesse"] }, { key: "levelChoice", choiceId: "stances", recordId: "hb_opt_vicious", optionLabel: "Vicious" }] },
+  ];
+  recomputeCharacter(ch);
+  eq("the same id lands twice", ch.levelChoiceIds.stances, ["hb_opt_vicious", "hb_opt_vicious"]);
+  eq("and resolveLevelChoice returns both", resolveLevelChoice(ch, REPEAT_DB, "stances", "stances").length, 2);
+}
+
+group("Stances reach the GM's CSV with their full text, one per line");
+{
+  const ch = lcChar();
+  ch.level = 2;
+  ch.levelUps = [lcEntry(2, "favored")];
+  recomputeCharacter(ch);
+  const col = CSV_COLUMNS.find((c) => c.header === "stances-known");
+  eq("the column exists", !!col, true);
+  eq("each line is 'Name: full text', sorted the SRD's way",
+    col.value(rowContext(ch, LC_DB, {})).split("\n"),
+    ["Favored: T1a", "Quick: T1b", "Reliable: T1c"]);
+  eq("a non-stance character exports an empty cell, not a missing column",
+    CSV_COLUMNS.find((c) => c.header === "stances-known").value(rowContext(lcChar({ subclassId: "sub" }), { ...LC_DB, effects: {} }, {})), "");
+}
+
 group("A transformation grants what it declares, and says what it doesn't");
 {
   const marked = tfChar({ transformationId: TF_GIFT.id });
@@ -7396,7 +7559,7 @@ group("The attack line, one clause of the rule at a time");
 group("Table state: boxes marked at the table (HP, Stress, Hope, Armor)");
 {
   eq("a new character starts with nothing marked but the two starting Hope, no conditions, no notes",
-    defaultState(), { hp: 0, stress: 0, hope: HOPE_START, armor: 0, scars: 0, conditions: [], notes: "" });
+    defaultState(), { hp: 0, stress: 0, hope: HOPE_START, armor: 0, focus: 0, scars: 0, conditions: [], notes: "" });
   eq("Hope starts at 2 and caps at 6, per the SRD", [HOPE_START, HOPE_MAX], [2, 6]);
 
   // Tapping is "fill up to here / clear from here on": one tap reaches any value.
@@ -7408,15 +7571,15 @@ group("Table state: boxes marked at the table (HP, Stress, Hope, Armor)");
 
   const maxes = { hp: 6, stress: 6, hope: HOPE_MAX, armor: 3 };
   eq("values within the maxima pass through untouched",
-    clampState({ hp: 2, stress: 1, hope: 4, armor: 3 }, maxes), { hp: 2, stress: 1, hope: 4, armor: 3, scars: 0, conditions: [], notes: "" });
+    clampState({ hp: 2, stress: 1, hope: 4, armor: 3 }, maxes), { hp: 2, stress: 1, hope: 4, armor: 3, focus: 0, scars: 0, conditions: [], notes: "" });
   eq("a value above its maximum (e.g. armor swapped for a lighter one) is pulled down to it",
-    clampState({ hp: 9, stress: 0, hope: 7, armor: 5 }, maxes), { hp: 6, stress: 0, hope: 6, armor: 3, scars: 0, conditions: [], notes: "" });
+    clampState({ hp: 9, stress: 0, hope: 7, armor: 5 }, maxes), { hp: 6, stress: 0, hope: 6, armor: 3, focus: 0, scars: 0, conditions: [], notes: "" });
 
   // Conditions and notes ride along in the same state object: a clamp must keep them, or the
   // first tap on an HP box would silently drop every condition marked.
   eq("conditions and notes survive a clamp",
     clampState({ hp: 1, stress: 0, hope: 2, armor: 0, conditions: ["hidden", "restrained"], notes: "owes Rya 2 gold" }, maxes),
-    { hp: 1, stress: 0, hope: 2, armor: 0, scars: 0, conditions: ["hidden", "restrained"], notes: "owes Rya 2 gold" });
+    { hp: 1, stress: 0, hope: 2, armor: 0, focus: 0, scars: 0, conditions: ["hidden", "restrained"], notes: "owes Rya 2 gold" });
   eq("unknown condition ids and non-string entries are dropped, duplicates collapsed",
     clampState({ conditions: ["vulnerable", "stunned", 3, "vulnerable"] }, maxes).conditions, ["vulnerable"]);
   eq("non-string notes fall back to empty", clampState({ notes: 42 }, maxes).notes, "");
@@ -7431,7 +7594,7 @@ group("Table state: boxes marked at the table (HP, Stress, Hope, Armor)");
     clampState({ hp: -1, stress: "x", hope: undefined, armor: null }, maxes), defaultState());
   eq("an unknown maximum (draft with no class yet) means nothing can be marked",
     clampState({ hp: 3, stress: 2, hope: 2, armor: 1 }, { hp: null, stress: 6, hope: 6, armor: null }),
-    { hp: 0, stress: 2, hope: 2, armor: 0, scars: 0, conditions: [], notes: "" });
+    { hp: 0, stress: 2, hope: 2, armor: 0, focus: 0, scars: 0, conditions: [], notes: "" });
   eq("a missing state altogether clamps to the defaults", clampState(undefined, maxes), defaultState());
   check("clampState returns a new object rather than mutating its input", (() => {
     const input = { hp: 9, stress: 0, hope: 2, armor: 0 };
@@ -7441,10 +7604,12 @@ group("Table state: boxes marked at the table (HP, Stress, Hope, Armor)");
 
   eq("the maxima come from the derived sheet: HP, Stress, Hope slots and Armor Score (= armor slots)",
     maxesFromSheet({ hitPoints: 7, stress: 6, hopeSlots: 6, armorScore: 3 }),
-    { hp: 7, stress: 6, hope: 6, armor: 3 });
+    { hp: 7, stress: 6, hope: 6, armor: 3, focus: null });
   eq("unknown sheet values stay null so the UI can show a dash",
     maxesFromSheet({ hitPoints: null, stress: 6, hopeSlots: 6, armorScore: null }),
-    { hp: null, stress: 6, hope: 6, armor: null });
+    { hp: null, stress: 6, hope: 6, armor: null, focus: null });
+  eq("focusSlots feeds the Focus row: 6 for a Martial Artist, null for everyone else",
+    [maxesFromSheet({ focusSlots: 6 }).focus, maxesFromSheet({}).focus], [6, null]);
 
   eq("ensureLevelFields backfills the table state on characters saved before it existed",
     ensureLevelFields(newCharacter()).state, defaultState());
@@ -7498,7 +7663,7 @@ group("Table state: boxes marked at the table (HP, Stress, Hope, Armor)");
 group("Downtime: the two moves a rest gives you (SRD p. 105)");
 {
   const maxes = { hp: 6, stress: 6, hope: HOPE_MAX, armor: 3 };
-  const beaten = { hp: 5, stress: 4, hope: 1, armor: 3, scars: 0, conditions: [], notes: "" };
+  const beaten = { hp: 5, stress: 4, hope: 1, armor: 3, focus: 0, scars: 0, conditions: [], notes: "" };
   const move = (kind, id) => findRestMove(kind, id);
 
   eq("a rest is two moves, and the same move twice is allowed", DOWNTIME_MOVES_PER_REST, 2);
@@ -7550,7 +7715,7 @@ group("Downtime: the two moves a rest gives you (SRD p. 105)");
   // survive as an impossible count just because a rest touched a different row.
   eq("a rest clamps the rest of the state too, like every other change",
     applyRestMove({ hp: 9, stress: 0, hope: 2, armor: 5 }, maxes, move("long", "clearAllStress")),
-    { hp: 6, stress: 0, hope: 2, armor: 3, scars: 0, conditions: [], notes: "" });
+    { hp: 6, stress: 0, hope: 2, armor: 3, focus: 0, scars: 0, conditions: [], notes: "" });
   check("applyRestMove returns a new object rather than mutating its input", (() => {
     const input = { hp: 5, stress: 0, hope: 2, armor: 0, scars: 0, conditions: [], notes: "" };
     applyRestMove(input, maxes, move("long", "tendToAllWounds"));
@@ -7562,7 +7727,7 @@ group("Downtime: the two moves a rest gives you (SRD p. 105)");
   eq("a rest leaves conditions and notes exactly where they are",
     applyRestMove({ ...beaten, conditions: ["hidden"], notes: "owes Rya 2 gold" }, maxes,
       move("long", "tendToAllWounds")),
-    { hp: 0, stress: 4, hope: 1, armor: 3, scars: 0, conditions: ["hidden"], notes: "owes Rya 2 gold" });
+    { hp: 0, stress: 4, hope: 1, armor: 3, focus: 0, scars: 0, conditions: ["hidden"], notes: "owes Rya 2 gold" });
 }
 
 // ---------- card-render.js ----------

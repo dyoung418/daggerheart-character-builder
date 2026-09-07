@@ -11,7 +11,7 @@ import { recomputeCharacter } from "./shared/history.js";
 import { derivedStats, spellcastTraitKeys } from "./shared/derived-stats.js";
 import { statLine } from "./shared/stat-line.js";
 import { titleCase } from "./shared/text.js";
-import { blankAnswer, collectEffects, effectFor, ignoresBurden } from "./shared/effects.js";
+import { blankAnswer, collectEffects, declaredLevelChoices, effectFor, ignoresBurden } from "./shared/effects.js";
 import { renderEffectChoice } from "./shared/effect-choice.js";
 import { loadContent } from "./shared/content-load.js";
 import { resolveRecordId } from "./shared/content-ids.js";
@@ -128,6 +128,10 @@ function blankCharacter(id) {
     ],
     domainCardIds: [],
     creationDomainCardIds: [],
+    // levelChoice picks made in the wizard — the two martial stances a Martial Artist starts with.
+    // Kept apart from the per-level picks (which live in levelUps) the way creationDomainCardIds is,
+    // so re-picking the starting stances here doesn't disturb the rest.
+    creationLevelChoices: {},
     connectionsNotes: "",
     level: 1,
     proficiency: 1,
@@ -495,7 +499,50 @@ function renderClassStep(panel) {
     }
     panel.appendChild(subGrid);
     makeGridChoosable(subGrid, { key: "subclass", label: "Subclass" });
+
+    renderStanceCreationPicker(panel);
   }
+}
+
+// The two martial stances a Martial Artist takes with the foundation card. A creation choice like
+// the ancestry ones: not a hard gate (isStepValid doesn't check it), just a nudge if left blank —
+// the level up screen and the character sheet both point back here. Tier 1 only, per the SRD.
+function renderStanceCreationPicker(panel) {
+  const lc = declaredLevelChoices(character, db).find((x) => x.id === "stances");
+  if (!lc || !lc.atStart) return;
+
+  character.creationLevelChoices ||= {};
+  const chosen = character.creationLevelChoices.stances ||= [];
+  const pool = (db.stances || []).filter((s) => (s.tier ?? 99) === 1)
+    .sort((a, b) => a.name["en-US"].localeCompare(b.name["en-US"]));
+  if (pool.length === 0) return;
+
+  const h = document.createElement("h3");
+  h.textContent = "Martial Stances";
+  panel.appendChild(h);
+  const hint = document.createElement("p");
+  hint.className = "hint";
+  hint.textContent = `${lc.prompt} You start knowing ${lc.atStart} from Tier 1; you'll choose another each time you level up.`;
+  panel.appendChild(hint);
+
+  const list = document.createElement("div");
+  list.className = "option-list";
+  for (const stance of pool) {
+    const picked = chosen.includes(stance.id);
+    const disabled = !picked && chosen.length >= lc.atStart;
+    const text = (stance.description || []).map((p) => p?.paragraph?.["en-US"] || "").filter(Boolean).join(" ");
+    const row = document.createElement("label");
+    row.className = "option-row";
+    row.innerHTML = `<input type="checkbox" ${picked ? "checked" : ""} ${disabled ? "disabled" : ""}/> `
+      + `<span><strong>${escapeHtml(stance.name["en-US"])}</strong> — ${escapeHtml(text)}</span>`;
+    row.querySelector("input").addEventListener("change", (e) => {
+      if (e.target.checked) chosen.push(stance.id);
+      else character.creationLevelChoices.stances = chosen.filter((id) => id !== stance.id);
+      onChange();
+    });
+    list.appendChild(row);
+  }
+  panel.appendChild(list);
 }
 
 function classNameKey(cls) {

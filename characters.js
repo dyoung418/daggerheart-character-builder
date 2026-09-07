@@ -28,7 +28,7 @@ import {
 import { advancementOptionsFor, derivedStats, spellcastTraitKeys } from "./shared/derived-stats.js";
 import { statLine } from "./shared/stat-line.js";
 import { titleCase } from "./shared/text.js";
-import { ignoresBurden, unresolvedChoices } from "./shared/effects.js";
+import { ignoresBurden, knownStances, unresolvedChoices } from "./shared/effects.js";
 import {
   UNARMED,
   UNARMORED,
@@ -61,6 +61,7 @@ import { escapeHtml } from "./shared/escape.js";
 // the pure modules underneath them, where tests/ can reach it.
 import { buildCardPdf } from "./card-pdf.js";
 import { buildSheetPdf, sheetTemplate } from "./sheet-pdf.js";
+import { buildStanceSidecarPdf, stanceSidecarTemplate } from "./stance-sidecar-pdf.js";
 
 const signed = (n) => (n > 0 ? `+${n}` : String(n));
 
@@ -81,6 +82,7 @@ let importResolutions = null; // incoming character id -> keep-both | overwrite 
 let importDropped = 0; // entries in the file that weren't characters
 let importUndo = null; // { characters, undoSlot } captured before the last commit
 let sheetTemplateInstalled = false; // whether data/sheet/ holds the official sheet — see init()
+let stanceSidecarInstalled = false; // and the Brawler Martial Arts Stance sidecar, the same way
 
 async function loadAllData() {
   content = await loadContent();
@@ -630,6 +632,16 @@ function renderDetail() {
     ));
   }
 
+  // The Martial Artist's stance sidecar — its own one-page form, filled the same way. Present only
+  // when the character has stances AND the (private, symlinked) template is installed.
+  if (stanceSidecarInstalled && knownStances(ch, db).length > 0) {
+    container.appendChild(button(
+      "Fill stance sidecar (PDF)",
+      "btn-ghost detail-print-link detail-print-link--spaced",
+      () => exportStanceSidecar(ch),
+    ));
+  }
+
   const portraitBtn = document.createElement("button");
   portraitBtn.type = "button";
   portraitBtn.className = "btn-ghost detail-print-link";
@@ -756,6 +768,24 @@ function renderDetail() {
 
   const stats = derivedStats(ch, db);
 
+  // The Martial Artist's known stances, in full — the subsystem the SRD prints outside the subclass
+  // cards, so like the class features box it is the one place they have to appear. Empty (and so
+  // absent) for every other character.
+  if ((stats.stances || []).length > 0) {
+    const box = document.createElement("div");
+    box.className = "class-detail detail-class-features";
+    const heading = document.createElement("h4");
+    heading.textContent = `Martial Stances known (${stats.stances.length})`;
+    box.appendChild(heading);
+    for (const stance of stats.stances) {
+      const p = document.createElement("p");
+      p.innerHTML = `<strong>${escapeHtml(stance.name)}</strong> `
+        + `<span class="hint">— Tier ${escapeHtml(String(stance.tier ?? "?"))}</span><br>${escapeHtml(stance.text)}`;
+      box.appendChild(p);
+    }
+    container.appendChild(box);
+  }
+
   const statsBox = document.createElement("div");
   statsBox.className = "derived-box";
   for (const [key, label] of Object.entries(TRAIT_LABELS)) {
@@ -816,6 +846,11 @@ function renderDetail() {
   // the Total row is skipped for a value that isn't a sum, exactly as it is for Spellcast.
   for (const track of stats.tracks || []) {
     statsBox2.appendChild(statLine(track.label, track.value, track));
+  }
+  // The Martial Artist's Focus track cap. Only that subclass has one, so null for everyone else and
+  // the row is simply absent — the same as an unequipped secondary weapon.
+  if (stats.focusSlots != null) {
+    statsBox2.appendChild(statLine("Focus slots", stats.focusSlots));
   }
   container.appendChild(statsBox2);
 
@@ -1462,6 +1497,40 @@ function sheetPdfFilename(ch) {
   return `daggerheart-sheet-${characterSlug(ch)}-${dateStamp()}.pdf`;
 }
 
+// The stance sidecar is all checkboxes — no format picker, no loadout question. A tiny modal, like
+// the card export's, only so a fill that couldn't place a stance (a homebrew one with no box; there
+// are none in the SRD) has somewhere to say so.
+async function exportStanceSidecar(ch) {
+  const body = document.createElement("div");
+  const line = document.createElement("p");
+  line.className = "hint";
+  line.textContent = "Filling the stance sidecar…";
+  body.appendChild(line);
+  openModal("Fill stance sidecar (PDF)", body);
+
+  const stats = derivedStats(ch, db);
+  let bytes, unplaced;
+  try {
+    ({ bytes, unplaced } = await buildStanceSidecarPdf(
+      { knownStanceIds: (stats.stances || []).map((s) => s.id), focus: ch.state?.focus || 0 },
+      db,
+    ));
+  } catch (err) {
+    showExportProblem(body, "The stance sidecar couldn't be filled, so nothing was saved. "
+      + (err && err.message ? err.message : String(err)));
+    return;
+  }
+
+  downloadFile(`daggerheart-stance-sidecar-${characterSlug(ch)}-${dateStamp()}.pdf`, bytes, "application/pdf");
+
+  if (unplaced && unplaced.length > 0) {
+    showExportProblem(body, `Filled and saved, but the official form has no box for: ${unplaced.join(", ")}. `
+      + "Those stances were left off.");
+    return;
+  }
+  closePopover();
+}
+
 // ---------- backup & transfer ----------
 //
 // The CSV above is for the GM. This file is for the player: the characters exactly as
@@ -1873,8 +1942,9 @@ async function init() {
   // costs next to nothing — the content load is a manifest plus a file per source, this is one
   // request — and the bytes are memoised in sheet-pdf.js, so the export itself reuses these rather
   // than fetching the template a second time.
-  const [, template] = await Promise.all([loadAllData(), sheetTemplate()]);
+  const [, template, stanceTemplate] = await Promise.all([loadAllData(), sheetTemplate(), stanceSidecarTemplate()]);
   sheetTemplateInstalled = template !== null;
+  stanceSidecarInstalled = stanceTemplate !== null;
   mountContentSettings(content);
   loadCharacters();
   // Returning from a level edit reopens the character with the history showing, so any

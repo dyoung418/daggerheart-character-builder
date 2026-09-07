@@ -428,6 +428,15 @@ export const CSV_COLUMNS = [
     value: (r) => (r.stats.tracks || []).map((t) => `${t.label}: ${t.value}`).join("\n"),
   },
 
+  // The Martial Artist's known martial stances, "Anchored: Gain a +2 bonus…" — one line per stance,
+  // full rules text and not just the name, because this feeds daggerheart-statblocks and a GM sheet
+  // is meant to stand in for the book. Empty for every other character. `class-tracks`' shape,
+  // scaled up: the whole sentence is the "label", there being nothing downstream to look one up.
+  {
+    header: "stances-known",
+    value: (r) => (r.stats.stances || []).map((s) => `${s.name}: ${s.text}`).join("\n"),
+  },
+
   ...weaponColumns("primary"),
   ...weaponColumns("secondary"),
 

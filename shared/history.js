@@ -50,6 +50,17 @@ function baselineCardIds(ch) {
   return [...(ch.baseline.domainCardIds || [])];
 }
 
+// The levelChoice picks made before the baseline — the `atStart` grant (the two stances a Martial
+// Artist takes with the foundation card), plus any per-level picks folded into the baseline for a
+// character imported above level 1. Same split as baselineCardIds: at level 1 the creation wizard's
+// list is the truth, so editing the starting stances flows straight through.
+function baselineLevelChoiceIds(ch) {
+  const src = ch.baselineLevel <= 1 ? ch.creationLevelChoices : ch.baseline?.levelChoiceIds;
+  const out = {};
+  for (const [choiceId, ids] of Object.entries(src || {})) out[choiceId] = [...(ids || [])];
+  return out;
+}
+
 function entriesFor(ch) {
   return [...(ch.levelUps || [])].sort((a, b) => a.level - b.level);
 }
@@ -72,6 +83,9 @@ function blankState(ch) {
     multiclass: b.multiclass ? { ...b.multiclass } : null,
     slotsUsed: JSON.parse(JSON.stringify(b.slotsUsed)),
     cardIds: baselineCardIds(ch),
+    // choiceId -> the ids picked for that levelChoice, in pick order, as a MULTISET (a companion
+    // option can be taken up to its maxPicks). Stances are all maxPicks 1.
+    levelChoiceIds: baselineLevelChoiceIds(ch),
     expBonus: {}, // experience id -> how many +1s it has picked up
   };
 }
@@ -92,8 +106,13 @@ function applyEntry(state, entry) {
   const extraCardIds = [];
 
   for (const pick of entry.picks || []) {
-    const perTier = (state.slotsUsed[pick.key] ||= { 2: 0, 3: 0, 4: 0 });
-    perTier[pick.slotTier] = (perTier[pick.slotTier] || 0) + slotsPerPick(pick.key);
+    // A levelChoice pick (a stance, a companion option) is free — it marks no advancement slot, so
+    // it must stay out of slotsUsed, or advancementOptions() would draw it an orphan row on the
+    // grid. It is the only pick key that doesn't cost a point.
+    if (pick.key !== "levelChoice") {
+      const perTier = (state.slotsUsed[pick.key] ||= { 2: 0, 3: 0, 4: 0 });
+      perTier[pick.slotTier] = (perTier[pick.slotTier] || 0) + slotsPerPick(pick.key);
+    }
 
     switch (pick.key) {
       case "traits":
@@ -132,6 +151,14 @@ function applyEntry(state, entry) {
         break;
       case "domainCard":
         if (pick.cardId) extraCardIds.push(pick.cardId);
+        break;
+      // A stance, or a companion level-up option. `choiceId` names which levelChoice, `recordId`
+      // the record picked. Accumulates as a multiset — editing an earlier level re-runs this whole
+      // replay, so a changed pick simply produces a different list.
+      case "levelChoice":
+        if (pick.choiceId && pick.recordId) {
+          (state.levelChoiceIds[pick.choiceId] ||= []).push(pick.recordId);
+        }
         break;
     }
   }
@@ -187,6 +214,7 @@ export function recomputeCharacter(ch) {
   ch.multiclass = state.multiclass;
   ch.advancementSlotsUsed = state.slotsUsed;
   ch.domainCardIds = state.cardIds;
+  ch.levelChoiceIds = state.levelChoiceIds;
 
   for (const exp of ch.experiences || []) {
     exp.modifier = exp.baseModifier + (state.expBonus[exp.id] || 0);
@@ -268,9 +296,11 @@ export function validateEntry(ch, entry, db) {
   // can't disagree about whether a row existed yet.
   const options = advancementOptionsFor(characterAtLevel(ch, state), db, { level, used: state.slotsUsed });
 
-  // Slots: what this level marks, on top of what every other level already marked.
+  // Slots: what this level marks, on top of what every other level already marked. A levelChoice
+  // pick (a stance) marks nothing — it's free and comes from a feature, not the grid.
   const marked = {};
   for (const pick of picks) {
+    if (pick.key === "levelChoice") continue;
     (marked[pick.key] ||= {})[pick.slotTier] = (marked[pick.key]?.[pick.slotTier] || 0) + slotsPerPick(pick.key);
   }
   for (const [key, perTier] of Object.entries(marked)) {
@@ -486,6 +516,10 @@ const SHORT_LABELS = {
   multiclass: "Multiclass",
 };
 
+// The word a levelChoice pick reads as in the history list — "Stance: Anchored". Falls back to the
+// choiceId for a homebrew levelChoice that named itself something else.
+const LEVEL_CHOICE_LABELS = { stances: "Stance", companionOptions: "Companion" };
+
 // A one-line summary of what was chosen at a level, for the history list.
 export function describeLevelUp(ch, entry, db) {
   const byId = cardsById(db);
@@ -509,6 +543,11 @@ export function describeLevelUp(ch, entry, db) {
       const sub = (db?.subclasses || []).find((s) => s.id === pick.subclassId);
       const detail = [sub?.name?.["en-US"], pick.domain && titleCase(pick.domain)].filter(Boolean).join(", ");
       parts.push(`${SHORT_LABELS.multiclass}: ${into ? titleCase(into.name) : pick.classId}${detail ? ` (${detail})` : ""}`);
+    } else if (pick.key === "levelChoice") {
+      // The pick carries its own label (the picker always stores it), so this stays readable with
+      // the source switched off — the same reason a declared advancement row stores optionLabel.
+      const heading = LEVEL_CHOICE_LABELS[pick.choiceId] || pick.choiceId || "Choice";
+      parts.push(`${heading}: ${pick.optionLabel || pick.recordId}`);
     } else {
       // A declared row's pick carries its own label, which is why this needs neither the content
       // nor the option table to stay readable — see the note on optionLabel in level-up.js.

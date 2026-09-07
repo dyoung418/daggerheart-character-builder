@@ -1,0 +1,226 @@
+[
+ {
+  "id": "srd_2_0_stance_favored",
+  "name": {
+   "en-US": "Favored"
+  },
+  "tier": 1,
+  "description": [
+   {
+    "paragraph": {
+     "en-US": "Gain a bonus to damage rolls equal to a trait of your choice."
+    }
+   }
+  ]
+ },
+ {
+  "id": "srd_2_0_stance_invigorating",
+  "name": {
+   "en-US": "Invigorating"
+  },
+  "tier": 1,
+  "description": [
+   {
+    "paragraph": {
+     "en-US": "On a successful attack, roll a d4. On a result of 4, gain a Focus."
+    }
+   }
+  ]
+ },
+ {
+  "id": "srd_2_0_stance_quick",
+  "name": {
+   "en-US": "Quick"
+  },
+  "tier": 1,
+  "description": [
+   {
+    "paragraph": {
+     "en-US": "When you make an attack, you can spend a Focus or mark a Stress to target another creature within range with that attack."
+    }
+   }
+  ]
+ },
+ {
+  "id": "srd_2_0_stance_reliable",
+  "name": {
+   "en-US": "Reliable"
+  },
+  "tier": 1,
+  "description": [
+   {
+    "paragraph": {
+     "en-US": "Gain a +1 bonus to your attack rolls."
+    }
+   }
+  ]
+ },
+ {
+  "id": "srd_2_0_stance_aggressive",
+  "name": {
+   "en-US": "Aggressive"
+  },
+  "tier": 2,
+  "description": [
+   {
+    "paragraph": {
+     "en-US": "Gain a −1 penalty to your Evasion. On a successful attack, roll an additional damage die and discard the lowest result."
+    }
+   }
+  ]
+ },
+ {
+  "id": "srd_2_0_stance_anchored",
+  "name": {
+   "en-US": "Anchored"
+  },
+  "tier": 2,
+  "description": [
+   {
+    "paragraph": {
+     "en-US": "Gain a +2 bonus to your damage thresholds. While in this stance, you can’t be moved against your will."
+    }
+   }
+  ]
+ },
+ {
+  "id": "srd_2_0_stance_defensive",
+  "name": {
+   "en-US": "Defensive"
+  },
+  "tier": 2,
+  "description": [
+   {
+    "paragraph": {
+     "en-US": "Attack rolls targeting you from within Melee range have disadvantage unless the attacker marks a Stress to negate the disadvantage."
+    }
+   }
+  ]
+ },
+ {
+  "id": "srd_2_0_stance_otherworldly",
+  "name": {
+   "en-US": "Otherworldly"
+  },
+  "tier": 2,
+  "description": [
+   {
+    "paragraph": {
+     "en-US": "On a successful attack, you can deal physical or magic damage."
+    }
+   }
+  ]
+ },
+ {
+  "id": "srd_2_0_stance_grappling",
+  "name": {
+   "en-US": "Grappling"
+  },
+  "tier": 3,
+  "description": [
+   {
+    "paragraph": {
+     "en-US": "On a successful attack within Melee range, you can spend a Focus or mark a Stress to temporarily Restrain the target or throw the target up to Close range."
+    }
+   }
+  ]
+ },
+ {
+  "id": "srd_2_0_stance_scary",
+  "name": {
+   "en-US": "Scary"
+  },
+  "tier": 3,
+  "description": [
+   {
+    "paragraph": {
+     "en-US": "On a successful attack, the target must mark a Stress."
+    }
+   }
+  ]
+ },
+ {
+  "id": "srd_2_0_stance_stable",
+  "name": {
+   "en-US": "Stable"
+  },
+  "tier": 3,
+  "description": [
+   {
+    "paragraph": {
+     "en-US": "You can spend a Focus instead of an Armor Slot to reduce damage."
+    }
+   }
+  ]
+ },
+ {
+  "id": "srd_2_0_stance_vigilant",
+  "name": {
+   "en-US": "Vigilant"
+  },
+  "tier": 3,
+  "description": [
+   {
+    "paragraph": {
+     "en-US": "When you are targeted by an attack, you can mark a Stress to gain a d6 bonus to your Evasion against the attack."
+    }
+   }
+  ]
+ },
+ {
+  "id": "srd_2_0_stance_crushing",
+  "name": {
+   "en-US": "Crushing"
+  },
+  "tier": 4,
+  "description": [
+   {
+    "paragraph": {
+     "en-US": "When you deal Severe damage, you can spend a Hope to force the target to mark an additional Hit Point."
+    }
+   }
+  ]
+ },
+ {
+  "id": "srd_2_0_stance_exacting",
+  "name": {
+   "en-US": "Exacting"
+  },
+  "tier": 4,
+  "description": [
+   {
+    "paragraph": {
+     "en-US": "When you roll a 1 on a damage die, you can treat it as the highest value on the die instead."
+    }
+   }
+  ]
+ },
+ {
+  "id": "srd_2_0_stance_honed",
+  "name": {
+   "en-US": "Honed"
+  },
+  "tier": 4,
+  "description": [
+   {
+    "paragraph": {
+     "en-US": "Spend a Focus before you make an attack roll to gain a +1 bonus to your Proficiency for that attack."
+    }
+   }
+  ]
+ },
+ {
+  "id": "srd_2_0_stance_isolating",
+  "name": {
+   "en-US": "Isolating"
+  },
+  "tier": 4,
+  "description": [
+   {
+    "paragraph": {
+     "en-US": "Gain advantage on attack rolls when there are no other creatures within Very Close range of you or your target."
+    }
+   }
+  ]
+ }
+]
