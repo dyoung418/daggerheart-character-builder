@@ -29,6 +29,7 @@ import { advancementOptionsFor, derivedStats, spellcastTraitKeys } from "./share
 import { statLine } from "./shared/stat-line.js";
 import { titleCase } from "./shared/text.js";
 import { ignoresBurden, knownStances, unresolvedChoices } from "./shared/effects.js";
+import { companionStats } from "./shared/companion-stats.js";
 import {
   UNARMED,
   UNARMORED,
@@ -814,6 +815,47 @@ function renderDetail() {
       p.innerHTML = `<strong>${escapeHtml(stance.name)}</strong> `
         + `<span class="hint">— Tier ${escapeHtml(String(stance.tier ?? "?"))}</span><br>${escapeHtml(stance.text)}`;
       box.appendChild(p);
+    }
+    container.appendChild(box);
+  }
+
+  // The Beastbound Ranger's companion — its stat line, Experiences and every level-up option
+  // taken. Its own panel, gated on companionStats().present (not derivedStats — the companion is a
+  // separate entity). Absent for everyone else.
+  const companion = companionStats(ch, db);
+  if (companion.present) {
+    const box = document.createElement("div");
+    box.className = "class-detail detail-class-features";
+    const heading = document.createElement("h4");
+    heading.textContent = companion.name ? `Ranger Companion — ${companion.name}` : "Ranger Companion";
+    box.appendChild(heading);
+    const stat = document.createElement("p");
+    stat.className = "hint";
+    stat.textContent = [
+      `Evasion ${companion.evasion}`,
+      `Stress ${companion.stressSlots} slots`,
+      companion.attackLine && `Attack: ${companion.attackLine}`,
+      companion.lightSlots && "Light in the Dark: +1 Hope slot",
+    ].filter(Boolean).join(" · ");
+    box.appendChild(stat);
+    if (companion.experiences.length) {
+      const exp = document.createElement("p");
+      exp.innerHTML = "<strong>Experiences:</strong> " + companion.experiences
+        .map((e) => `${escapeHtml(e.name || "(unnamed)")} <span class="hint">+${escapeHtml(String(e.modifier))}</span>`).join(", ");
+      box.appendChild(exp);
+    }
+    for (const opt of companion.options) {
+      const p = document.createElement("p");
+      p.innerHTML = `<strong>${escapeHtml(opt.name)}</strong>`
+        + (opt.count > 1 ? ` <span class="hint">×${escapeHtml(String(opt.count))}</span>` : "")
+        + `<br>${escapeHtml(opt.text)}`;
+      box.appendChild(p);
+    }
+    if (companion.orphanCount) {
+      box.appendChild(Object.assign(document.createElement("p"), {
+        className: "hint",
+        textContent: `${companion.orphanCount} companion option${companion.orphanCount === 1 ? "" : "s"} from a source that's switched off.`,
+      }));
     }
     container.appendChild(box);
   }

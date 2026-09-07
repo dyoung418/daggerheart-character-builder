@@ -7664,7 +7664,7 @@ group("The attack line, one clause of the rule at a time");
 group("Table state: boxes marked at the table (HP, Stress, Hope, Armor)");
 {
   eq("a new character starts with nothing marked but the two starting Hope, no conditions, no notes",
-    defaultState(), { hp: 0, stress: 0, hope: HOPE_START, armor: 0, focus: 0, scars: 0, conditions: [], notes: "" });
+    defaultState(), { hp: 0, stress: 0, hope: HOPE_START, armor: 0, focus: 0, companionStress: 0, lightSlot: 0, scars: 0, conditions: [], notes: "" });
   eq("Hope starts at 2 and caps at 6, per the SRD", [HOPE_START, HOPE_MAX], [2, 6]);
 
   // Tapping is "fill up to here / clear from here on": one tap reaches any value.
@@ -7676,15 +7676,15 @@ group("Table state: boxes marked at the table (HP, Stress, Hope, Armor)");
 
   const maxes = { hp: 6, stress: 6, hope: HOPE_MAX, armor: 3 };
   eq("values within the maxima pass through untouched",
-    clampState({ hp: 2, stress: 1, hope: 4, armor: 3 }, maxes), { hp: 2, stress: 1, hope: 4, armor: 3, focus: 0, scars: 0, conditions: [], notes: "" });
+    clampState({ hp: 2, stress: 1, hope: 4, armor: 3 }, maxes), { hp: 2, stress: 1, hope: 4, armor: 3, focus: 0, companionStress: 0, lightSlot: 0, scars: 0, conditions: [], notes: "" });
   eq("a value above its maximum (e.g. armor swapped for a lighter one) is pulled down to it",
-    clampState({ hp: 9, stress: 0, hope: 7, armor: 5 }, maxes), { hp: 6, stress: 0, hope: 6, armor: 3, focus: 0, scars: 0, conditions: [], notes: "" });
+    clampState({ hp: 9, stress: 0, hope: 7, armor: 5 }, maxes), { hp: 6, stress: 0, hope: 6, armor: 3, focus: 0, companionStress: 0, lightSlot: 0, scars: 0, conditions: [], notes: "" });
 
   // Conditions and notes ride along in the same state object: a clamp must keep them, or the
   // first tap on an HP box would silently drop every condition marked.
   eq("conditions and notes survive a clamp",
     clampState({ hp: 1, stress: 0, hope: 2, armor: 0, conditions: ["hidden", "restrained"], notes: "owes Rya 2 gold" }, maxes),
-    { hp: 1, stress: 0, hope: 2, armor: 0, focus: 0, scars: 0, conditions: ["hidden", "restrained"], notes: "owes Rya 2 gold" });
+    { hp: 1, stress: 0, hope: 2, armor: 0, focus: 0, companionStress: 0, lightSlot: 0, scars: 0, conditions: ["hidden", "restrained"], notes: "owes Rya 2 gold" });
   eq("unknown condition ids and non-string entries are dropped, duplicates collapsed",
     clampState({ conditions: ["vulnerable", "stunned", 3, "vulnerable"] }, maxes).conditions, ["vulnerable"]);
   eq("non-string notes fall back to empty", clampState({ notes: 42 }, maxes).notes, "");
@@ -7699,7 +7699,7 @@ group("Table state: boxes marked at the table (HP, Stress, Hope, Armor)");
     clampState({ hp: -1, stress: "x", hope: undefined, armor: null }, maxes), defaultState());
   eq("an unknown maximum (draft with no class yet) means nothing can be marked",
     clampState({ hp: 3, stress: 2, hope: 2, armor: 1 }, { hp: null, stress: 6, hope: 6, armor: null }),
-    { hp: 0, stress: 2, hope: 2, armor: 0, focus: 0, scars: 0, conditions: [], notes: "" });
+    { hp: 0, stress: 2, hope: 2, armor: 0, focus: 0, companionStress: 0, lightSlot: 0, scars: 0, conditions: [], notes: "" });
   eq("a missing state altogether clamps to the defaults", clampState(undefined, maxes), defaultState());
   check("clampState returns a new object rather than mutating its input", (() => {
     const input = { hp: 9, stress: 0, hope: 2, armor: 0 };
@@ -7709,10 +7709,10 @@ group("Table state: boxes marked at the table (HP, Stress, Hope, Armor)");
 
   eq("the maxima come from the derived sheet: HP, Stress, Hope slots and Armor Score (= armor slots)",
     maxesFromSheet({ hitPoints: 7, stress: 6, hopeSlots: 6, armorScore: 3 }),
-    { hp: 7, stress: 6, hope: 6, armor: 3, focus: null });
+    { hp: 7, stress: 6, hope: 6, armor: 3, focus: null, companionStress: null, lightSlot: null });
   eq("unknown sheet values stay null so the UI can show a dash",
     maxesFromSheet({ hitPoints: null, stress: 6, hopeSlots: 6, armorScore: null }),
-    { hp: null, stress: 6, hope: 6, armor: null, focus: null });
+    { hp: null, stress: 6, hope: 6, armor: null, focus: null, companionStress: null, lightSlot: null });
   eq("focusSlots feeds the Focus row: 6 for a Martial Artist, null for everyone else",
     [maxesFromSheet({ focusSlots: 6 }).focus, maxesFromSheet({}).focus], [6, null]);
 
@@ -7768,7 +7768,7 @@ group("Table state: boxes marked at the table (HP, Stress, Hope, Armor)");
 group("Downtime: the two moves a rest gives you (SRD p. 105)");
 {
   const maxes = { hp: 6, stress: 6, hope: HOPE_MAX, armor: 3 };
-  const beaten = { hp: 5, stress: 4, hope: 1, armor: 3, focus: 0, scars: 0, conditions: [], notes: "" };
+  const beaten = { hp: 5, stress: 4, hope: 1, armor: 3, focus: 0, companionStress: 0, lightSlot: 0, scars: 0, conditions: [], notes: "" };
   const move = (kind, id) => findRestMove(kind, id);
 
   eq("a rest is two moves, and the same move twice is allowed", DOWNTIME_MOVES_PER_REST, 2);
@@ -7820,7 +7820,7 @@ group("Downtime: the two moves a rest gives you (SRD p. 105)");
   // survive as an impossible count just because a rest touched a different row.
   eq("a rest clamps the rest of the state too, like every other change",
     applyRestMove({ hp: 9, stress: 0, hope: 2, armor: 5 }, maxes, move("long", "clearAllStress")),
-    { hp: 6, stress: 0, hope: 2, armor: 3, focus: 0, scars: 0, conditions: [], notes: "" });
+    { hp: 6, stress: 0, hope: 2, armor: 3, focus: 0, companionStress: 0, lightSlot: 0, scars: 0, conditions: [], notes: "" });
   check("applyRestMove returns a new object rather than mutating its input", (() => {
     const input = { hp: 5, stress: 0, hope: 2, armor: 0, scars: 0, conditions: [], notes: "" };
     applyRestMove(input, maxes, move("long", "tendToAllWounds"));
@@ -7832,7 +7832,7 @@ group("Downtime: the two moves a rest gives you (SRD p. 105)");
   eq("a rest leaves conditions and notes exactly where they are",
     applyRestMove({ ...beaten, conditions: ["hidden"], notes: "owes Rya 2 gold" }, maxes,
       move("long", "tendToAllWounds")),
-    { hp: 0, stress: 4, hope: 1, armor: 3, focus: 0, scars: 0, conditions: ["hidden"], notes: "owes Rya 2 gold" });
+    { hp: 0, stress: 4, hope: 1, armor: 3, focus: 0, companionStress: 0, lightSlot: 0, scars: 0, conditions: ["hidden"], notes: "owes Rya 2 gold" });
 }
 
 // ---------- card-render.js ----------

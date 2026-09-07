@@ -19,7 +19,15 @@ export const HOPE_START = 2;
 // character with the Stance Fighter feature and null for everyone else (the row then doesn't draw).
 export const FOCUS_MAX = 6;
 
-export const RESOURCE_KEYS = ["hp", "stress", "hope", "armor", "focus"];
+// The Beastbound Ranger's companion, two resources the character marks:
+//   companionStress — the companion's own Stress track (6 slots + one per Resilient level-up
+//     option). "When your companion would take any amount of damage, they mark a Stress."
+//   lightSlot — the single extra Hope slot the "Light in the Dark" companion option grants. It's
+//     a SEPARATE slot, not part of the character's six: a scar can't cross it out, and it doesn't
+//     stack with any other +Hope effect. So it's its own 0/1-length row, its max coming from
+//     companionStats().lightSlots (see shared/companion-stats.js's header).
+// Both rows draw only when their max is non-null, exactly like Focus and Armor.
+export const RESOURCE_KEYS = ["hp", "stress", "hope", "armor", "focus", "companionStress", "lightSlot"];
 
 // The SRD's three conditions, with the one line a player needs when one is on them.
 export const CONDITIONS = [
@@ -29,7 +37,8 @@ export const CONDITIONS = [
 ];
 
 export function defaultState() {
-  return { hp: 0, stress: 0, hope: HOPE_START, armor: 0, focus: 0, scars: 0, conditions: [], notes: "" };
+  return { hp: 0, stress: 0, hope: HOPE_START, armor: 0, focus: 0, companionStress: 0, lightSlot: 0,
+    scars: 0, conditions: [], notes: "" };
 }
 
 // Returns the new list, in catalogue order; an unknown id is ignored.
@@ -92,6 +101,9 @@ export function maxesFromSheet(sheet) {
     // 6 for a Martial Artist, null for everyone else — see FOCUS_MAX. A null here makes the play
     // page skip the Focus row entirely, the same way a null armorScore does for Armor.
     focus: sheet.focusSlots ?? null,
+    // The Beastbound companion's rows: null for everyone else, so neither draws.
+    companionStress: sheet.companionStressSlots ?? null,
+    lightSlot: sheet.companionLightSlots ?? null,
   };
 }
 

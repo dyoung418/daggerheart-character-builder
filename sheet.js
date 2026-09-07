@@ -377,6 +377,30 @@ function renderPageTwo(s) {
       `Martial Stance — Tier ${stance.tier ?? "?"}`,
     ));
   }
+  // The Beastbound Ranger's companion — the stat line, its Experiences, and each level-up option
+  // taken. The SRD keeps this on a separate sidecar sheet; this is the one place the printed
+  // character sheet can carry it.
+  if (s.companion) {
+    const c = s.companion;
+    const statText = [
+      c.name ? `Name: ${c.name}` : null,
+      `Evasion ${c.evasion}`,
+      `Stress ${c.stressSlots} slots`,
+      c.attackLine ? `Attack: ${c.attackLine}` : `Damage ${c.damageDieLabel}`,
+      c.experiences.length ? `Experiences: ${c.experiences.map((e) => `${e.name || "(unnamed)"} +${e.modifier}`).join(", ")}` : null,
+      c.lightSlots ? "Light in the Dark: one extra Hope slot (a scar can't cross it out)" : null,
+    ].filter(Boolean).join(" · ");
+    feats.appendChild(featureBlock(
+      { name: "Ranger Companion", description: [{ type: "paragraph", text: statText }] },
+    ));
+    for (const opt of c.options) {
+      feats.appendChild(featureBlock(
+        { name: opt.count > 1 ? `${opt.name} (×${opt.count})` : opt.name,
+          description: [{ type: "paragraph", text: opt.text }] },
+        "Companion level-up option",
+      ));
+    }
+  }
   page.appendChild(feats);
 
   // Free-text notes, not data-driven features, so they're wrapped in a single-paragraph

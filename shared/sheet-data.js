@@ -26,6 +26,7 @@
 import { activeDomainCardIds, SUBCLASS_TIER_LABELS, subclassTiersUpTo } from "./advancement.js";
 import { derivedStats, TRAIT_KEYS, TRAIT_LABELS } from "./derived-stats.js";
 import { unresolvedChoices } from "./effects.js";
+import { companionStats } from "./companion-stats.js";
 import { unresolvedReferences } from "./content-sources.js";
 import { UNARMED, UNARMORED, damageDice, weaponTraitText } from "./gear.js";
 import { titleCase } from "./text.js";
@@ -140,6 +141,9 @@ function weaponEntry(weapon, attackStat, proficiencyTotal) {
 
 export function deriveSheet(character, db) {
   const stats = derivedStats(character, db);
+  // The Beastbound Ranger's companion — a separate entity, so it comes from companionStats() and
+  // NOT derivedStats() (see that module's header). `present: false` for everyone else.
+  const companion = companionStats(character, db);
   // stats.exclusions (bonuses the character has that DON'T count towards a total — Rise Up,
   // a *-Touched card below its threshold, Armorer while unarmored) isn't surfaced below. On
   // screen it sits next to the total so a player can see why a bonus they own isn't in the
@@ -275,6 +279,25 @@ export function deriveSheet(character, db) {
     // prints outside the class cards. Full detail, same reason as stances. Empty for anyone
     // without the Beastform feature.
     beastforms: stats.beastforms || [],
+
+    // The Beastbound Ranger's companion. null for everyone else. companionStressSlots /
+    // companionLightSlots feed maxesFromSheet (table-state.js) — the play page's companion Stress
+    // row and Light in the Dark slot; `companion` is the display block for the printed sheet, the
+    // detail view and the sidecar.
+    companion: companion.present ? {
+      name: companion.name,
+      evasion: companion.evasion,
+      attackLine: companion.attackLine,
+      damageDieLabel: companion.damageDieLabel,
+      rangeLabel: companion.rangeLabel,
+      damageTypeLabel: companion.damageTypeLabel,
+      stressSlots: companion.stressSlots,
+      lightSlots: companion.lightSlots,
+      experiences: companion.experiences,
+      options: companion.options,
+    } : null,
+    companionStressSlots: companion.present ? companion.stressSlots : null,
+    companionLightSlots: companion.present && companion.lightSlots ? companion.lightSlots : null,
 
     // A second class, its domain and the foundation card it took. Its own field rather than
     // folded into className/subclassName, which the sheet labels with the first class's names.

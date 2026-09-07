@@ -490,6 +490,27 @@ function renderStatus(s, state, maxes, onTap, rest) {
     panel.appendChild(focusWrap);
   }
 
+  // The Beastbound Ranger's companion: its own Stress track, and the Light in the Dark extra Hope
+  // slot. Both null for everyone else, so neither row draws — the Focus / Armor precedent. The
+  // Stress track "clears with your downtime Stress clear" — noted here, not automated.
+  if (maxes.companionStress != null) {
+    const compWrap = el("div", "play-resources play-companion");
+    const label = s.companion?.name ? `${s.companion.name} — Stress` : "Companion Stress";
+    compWrap.appendChild(pipBar("companionStress", label, state.companionStress, maxes.companionStress, onTap));
+    if (s.companion) {
+      compWrap.appendChild(el("p", "dh-slot-note",
+        `Evasion ${s.companion.evasion} · Damage ${s.companion.attackLine || s.companion.damageDieLabel}`
+        + " · clears with your downtime Stress clear"));
+    }
+    panel.appendChild(compWrap);
+  }
+  if (maxes.lightSlot != null) {
+    const lightWrap = el("div", "play-resources play-companion");
+    lightWrap.appendChild(pipBar("lightSlot", "Light in the Dark", state.lightSlot, maxes.lightSlot, onTap));
+    lightWrap.appendChild(el("p", "dh-slot-note", "An extra Hope slot from your companion — a scar can't cross it out."));
+    panel.appendChild(lightWrap);
+  }
+
   const th = el("div", "dh-pill dh-thresholds");
   th.appendChild(el("span", "th-label", t("threshold.minor")));
   th.appendChild(el("span", "th-value", s.thresholds ? String(s.thresholds.major) : "—"));
@@ -645,6 +666,28 @@ function renderFeatures(s) {
       }));
     }
   }
+  // The Beastbound Ranger's companion — its stat line as a lead card, then one card per level-up
+  // option taken, with a count for the repeatable ones.
+  if (s.companion) {
+    panel.appendChild(sectionTitle(s.companion.name ? `Companion — ${s.companion.name}` : "Ranger Companion"));
+    panel.appendChild(itemCard({
+      name: s.companion.name || "Companion",
+      labels: [
+        `Evasion ${s.companion.evasion}`,
+        `Stress ${s.companion.stressSlots} slots`,
+        s.companion.attackLine && `Attack: ${s.companion.attackLine}`,
+        s.companion.experiences.length && `Experiences: ${s.companion.experiences.map((e) => `${e.name || "(unnamed)"} +${e.modifier}`).join(", ")}`,
+      ],
+    }));
+    for (const opt of s.companion.options) {
+      panel.appendChild(itemCard({
+        name: opt.count > 1 ? `${opt.name} (×${opt.count})` : opt.name,
+        labels: ["Companion level-up option"],
+        features: [{ name: opt.name, description: [{ type: "paragraph", text: opt.text }] }],
+      }));
+    }
+  }
+
   if (!panel.childNodes.length) panel.appendChild(el("p", "play-empty", t("features.none")));
   return panel;
 }

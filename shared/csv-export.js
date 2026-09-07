@@ -43,6 +43,7 @@ import {
   permanentSubject,
 } from "./derived-stats.js";
 import { titleCase } from "./text.js";
+import { companionStats } from "./companion-stats.js";
 import {
   UNARMED,
   UNARMORED,
@@ -90,6 +91,9 @@ export function rowContext(ch, db, loadout) {
     db,
     loadout,
     stats,
+    // The Beastbound Ranger's companion — from companionStats(), not derivedStats(), because the
+    // companion is a separate entity (see that module's header). `.present` false for everyone else.
+    companion: companionStats(ch, db),
     cls: find(db?.classes, ch.classId),
     sub,
     multiclass,
@@ -450,6 +454,31 @@ export const CSV_COLUMNS = [
       return [head, stat, feats].filter(Boolean).join(". ").replace(/\s*\n\s*/g, " ");
     }).join("\n"),
   },
+
+  // The Beastbound Ranger's companion. Empty for everyone else. Split into a few columns rather
+  // than one blob because a GM sheet lays the companion out as its own block: name, the stat line,
+  // its Experiences (one per line), the level-up options it's taken (one per line, with a count),
+  // and the extra Hope slot count. Feeds daggerheart-statblocks.
+  { header: "companion-name", value: (r) => (r.companion.present ? r.companion.name : "") },
+  { header: "companion-evasion", value: (r) => (r.companion.present ? r.companion.evasion : "") },
+  {
+    header: "companion-attack",
+    value: (r) => (r.companion.present ? r.companion.attackLine : ""),
+  },
+  {
+    header: "companion-experiences",
+    value: (r) => (r.companion.present
+      ? r.companion.experiences.map((e) => `${e.name || "(unnamed)"} +${e.modifier}`).join("\n") : ""),
+  },
+  {
+    header: "companion-options",
+    value: (r) => (r.companion.present
+      ? r.companion.options.map((o) => {
+        const head = o.count > 1 ? `${o.name} (×${o.count})` : o.name;
+        return `${head}: ${o.text}`.replace(/\s*\n\s*/g, " ");
+      }).join("\n") : ""),
+  },
+  { header: "companion-light-slots", value: (r) => (r.companion.present ? r.companion.lightSlots : "") },
 
   ...weaponColumns("primary"),
   ...weaponColumns("secondary"),
