@@ -302,6 +302,48 @@ detail view, the play page's Features tab, and the GM CSV (`beastform-options`).
 into `derivedStats()` — a Beastform is toggled at the table, so it's enumerated and printed, never
 computed with.
 
+### companion-options.json
+
+The Beastbound Ranger's companion level-up options — eight the SRD prints on the Ranger Companion
+sidecar, chosen one per character level. `data/srd_2_0/companion-options.json` ships all eight.
+
+```json
+{
+  "id": "srd_2_0_companion_option_vicious",
+  "name": { "en-US": "Vicious" },
+  "maxPicks": 3,
+  "description": [{ "paragraph": { "en-US": "Increase your companion's damage dice or range by one step…" } }]
+}
+```
+
+**Required: `id`, `name`.** `maxPicks` is optional (default 1); when present it must be a whole
+number ≥ 1 — the SRD's Intelligent, Vicious, Resilient and Aware can each be taken three times, and
+the level-up screen stops offering an option once it's been picked `maxPicks` times.
+
+A companion option is chosen through the same `levelChoice` (§6) the martial stances use, declared
+on a subclass feature with `id: "companionOptions"`. `character.companion` (name, Evasion, two
+Experiences, an attack) is created on a **Companion** step the creation wizard grows for a subclass
+that declares this levelChoice. The level-up screen then shows a "Your Companion" section — one
+option per level, plus the extra picks Expert Training (+1) and Advanced Training (+2) grant, plus
+a name field for the companion's new Experience at levels 2/5/8.
+
+Four options move a number, and the app computes it — in `shared/companion-stats.js`, NOT
+`derivedStats()`, because the companion is a separate entity:
+
+- **Aware** → +2 to the companion's Evasion, per pick
+- **Resilient** → +1 to the companion's Stress track, per pick
+- **Intelligent** → +1 to one Companion Experience the player names, per pick
+- **Light in the Dark** → one extra Hope slot the *character* marks — modelled as its own single
+  tappable slot on the play page, never part of the character's six (a scar can't cross it out)
+
+The other four (Creature Comfort, Armored, Bonded, Vicious) are printed reference only — Vicious
+steps the damage die or range, which the player records on the companion's own attack fields, the
+same way the app never computes a Combo Die's `d6`→`d8`.
+
+Surfaces: the character detail view, the play page (a companion Stress row, the Light in the Dark
+slot, and the options on the Features tab), the printed sheet, the GM CSV (`companion-*` columns),
+and a fillable Ranger Companion sidecar PDF when its (private) template is installed.
+
 ### weapons.json / armors.json / consumables.json
 
 ```json

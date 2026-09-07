@@ -63,6 +63,7 @@ import { escapeHtml } from "./shared/escape.js";
 import { buildCardPdf } from "./card-pdf.js";
 import { buildSheetPdf, sheetTemplate } from "./sheet-pdf.js";
 import { buildStanceSidecarPdf, stanceSidecarTemplate } from "./stance-sidecar-pdf.js";
+import { buildCompanionSidecarPdf, companionSidecarTemplate } from "./companion-sidecar-pdf.js";
 
 const signed = (n) => (n > 0 ? `+${n}` : String(n));
 
@@ -84,6 +85,7 @@ let importDropped = 0; // entries in the file that weren't characters
 let importUndo = null; // { characters, undoSlot } captured before the last commit
 let sheetTemplateInstalled = false; // whether data/sheet/ holds the official sheet — see init()
 let stanceSidecarInstalled = false; // and the Brawler Martial Arts Stance sidecar, the same way
+let companionSidecarInstalled = false; // and the Ranger Companion sidecar, the same way
 
 async function loadAllData() {
   content = await loadContent();
@@ -672,6 +674,15 @@ function renderDetail() {
       "Fill stance sidecar (PDF)",
       "btn-ghost detail-print-link detail-print-link--spaced",
       () => exportStanceSidecar(ch),
+    ));
+  }
+
+  // The Beastbound Ranger's companion sidecar — same terms again: a companion, and the template.
+  if (companionSidecarInstalled && companionStats(ch, db).present) {
+    container.appendChild(button(
+      "Fill companion sidecar (PDF)",
+      "btn-ghost detail-print-link detail-print-link--spaced",
+      () => exportCompanionSidecar(ch),
     ));
   }
 
@@ -1620,6 +1631,39 @@ async function exportStanceSidecar(ch) {
   closePopover();
 }
 
+// The Ranger Companion sidecar — text and checkboxes, filled the same way as the stance one. The
+// companion's derived state (Evasion, Stress slots, each option's count) comes from companionStats;
+// the marked Stress is character.state.
+async function exportCompanionSidecar(ch) {
+  const body = document.createElement("div");
+  const line = document.createElement("p");
+  line.className = "hint";
+  line.textContent = "Filling the companion sidecar…";
+  body.appendChild(line);
+  openModal("Fill companion sidecar (PDF)", body);
+
+  let bytes, unplaced;
+  try {
+    ({ bytes, unplaced } = await buildCompanionSidecarPdf({
+      companion: companionStats(ch, db),
+      companionStress: ch.state?.companionStress || 0,
+    }));
+  } catch (err) {
+    showExportProblem(body, "The companion sidecar couldn't be filled, so nothing was saved. "
+      + (err && err.message ? err.message : String(err)));
+    return;
+  }
+
+  downloadFile(`daggerheart-companion-sidecar-${characterSlug(ch)}-${dateStamp()}.pdf`, bytes, "application/pdf");
+
+  if (unplaced && unplaced.length > 0) {
+    showExportProblem(body, `Filled and saved, but the official form has no box for: ${unplaced.join(", ")}. `
+      + "Those companion options were left off.");
+    return;
+  }
+  closePopover();
+}
+
 // ---------- backup & transfer ----------
 //
 // The CSV above is for the GM. This file is for the player: the characters exactly as
@@ -2031,9 +2075,12 @@ async function init() {
   // costs next to nothing — the content load is a manifest plus a file per source, this is one
   // request — and the bytes are memoised in sheet-pdf.js, so the export itself reuses these rather
   // than fetching the template a second time.
-  const [, template, stanceTemplate] = await Promise.all([loadAllData(), sheetTemplate(), stanceSidecarTemplate()]);
+  const [, template, stanceTemplate, companionTemplate] = await Promise.all([
+    loadAllData(), sheetTemplate(), stanceSidecarTemplate(), companionSidecarTemplate(),
+  ]);
   sheetTemplateInstalled = template !== null;
   stanceSidecarInstalled = stanceTemplate !== null;
+  companionSidecarInstalled = companionTemplate !== null;
   mountContentSettings(content);
   loadCharacters();
   // Returning from a level edit reopens the character with the history showing, so any

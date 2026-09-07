@@ -121,6 +121,18 @@ const {
   visibleRecords,
 } = await import(`../shared/content-sources.js${RUN}`);
 const {
+  blankCompanion,
+  normalizeCompanion,
+} = await import(`../shared/companion.js${RUN}`);
+const {
+  companionStats,
+  hasCompanion,
+} = await import(`../shared/companion-stats.js${RUN}`);
+const {
+  companionSidecarFieldValues,
+  COMPANION_SIDECAR_FIELD_NAMES,
+} = await import(`../shared/companion-sidecar-fields.js${RUN}`);
+const {
   bareId,
   indexRecordIds,
   remapCharacterIds,
@@ -4296,6 +4308,198 @@ group("Beastform options reach the sheet, the derived stats and the GM's CSV");
   eq("one line per form, the whole entry, header first",
     lines[1], "Pack Predator (Tier 1) — Alpha, Beta. Strength +2 | Evasion +1. Melee Strength d8+2 phy. Advantage on: attack, track. Hobbling Strike: Make them Vulnerable.");
   eq("a non-Druid exports an empty cell", col.value(rowContext(bfChar({ classId: "hb_warrior" }), BF_DB, {})), "");
+}
+
+// ---------- Ranger companion (sub-project C) ----------
+//
+// The Beastbound Ranger's companion: a separate entity with eight level-up options (four
+// repeatable), its own stat line, and its own sidecar. Synthetic db — a homebrew subclass with a
+// companionOptions levelChoice and a few options — so the mechanism is what's tested.
+
+const CO = (name, maxPicks, text) => {
+  const r = { id: `hb_co_${name.toLowerCase().replace(/\s+/g, "_")}`, name: { "en-US": name }, description: [para(text)] };
+  if (maxPicks) r.maxPicks = maxPicks;
+  return r;
+};
+const HB_CO = [
+  CO("Aware", 3, "Your companion gains a permanent +2 bonus to their Evasion."),
+  CO("Resilient", 3, "Your companion gains an additional Stress slot."),
+  CO("Intelligent", 3, "Your companion gains a permanent +1 bonus to a Companion Experience of your choice."),
+  CO("Light in the Dark", null, "Use this as an additional Hope slot your character can mark."),
+  CO("Bonded", null, "When you mark your last Hit Point, your companion rushes to your side."),
+];
+const COMPANION_FEATURE = {
+  feature: "Companion",
+  levelChoice: { id: "companionOptions", from: "companionOptions", tierGated: false, atStart: 0, perLevel: 1, prompt: "Choose a level-up option for your companion." },
+};
+const CO_DB = {
+  classes: [{ id: "cls_ranger", name: "RANGER", domains: ["BONE"], startingHitPoints: 6, startingEvasion: 12 }],
+  subclasses: [{
+    id: "hb_beastbound", name: { "en-US": "Beastfriend" }, class: "RANGER",
+    foundation: { features: [{ name: { "en-US": "Companion" } }] },
+    specialization: { features: [{ name: { "en-US": "Expert Training" } }] },
+    mastery: { features: [{ name: { "en-US": "Advanced Training" } }] },
+  }],
+  companionOptions: HB_CO,
+  domainCards: [{ id: "c1", name: { "en-US": "C1" }, domain: "BONE", level: 1 }],
+  effects: {
+    "hb_beastbound:foundation": COMPANION_FEATURE,
+    "hb_beastbound:specialization": { feature: "Expert Training", levelChoice: { id: "companionOptions", from: "companionOptions", extraPicks: 1 } },
+    "hb_beastbound:mastery": { feature: "Advanced Training", levelChoice: { id: "companionOptions", from: "companionOptions", extraPicks: 2 } },
+  },
+};
+function coChar(over = {}) {
+  const ch = ensureLevelFields(newCharacter());
+  ch.classId = "cls_ranger";
+  ch.subclassId = "hb_beastbound";
+  ch.traits = { agility: 2, strength: 0, finesse: 1, instinct: 1, presence: 0, knowledge: -1 };
+  ch.domainCardIds = ["c1"];
+  ch.creationDomainCardIds = ["c1"];
+  ch.heritage = { ancestryMode: "pure", ancestryIds: [], chosenFeatures: [], communityId: null };
+  ch.equipment = { primaryWeaponId: null, secondaryWeaponId: null, armorId: null, potionChoice: null };
+  ch.background = { description: "", answers: "" };
+  ch.connectionsNotes = "";
+  const co = blankCompanion();
+  co.name = "Ember";
+  co.experiences[0].name = "Fetch";
+  co.experiences[1].name = "Guard";
+  ch.companion = co;
+  return Object.assign(ch, over);
+}
+const coEntry = (level, ...names) => ({
+  level,
+  picks: names.map((n) => ({ key: "levelChoice", choiceId: "companionOptions", recordId: `hb_co_${n.toLowerCase().replace(/\s+/g, "_")}`, optionLabel: n })),
+  mandatoryCardId: null, exchange: null,
+});
+
+group("The companion-options kind loads like any other, with an optional maxPicks");
+{
+  eq("name alone is fine", validateRecord("companion-options", { id: "x", name: { "en-US": "Aware" } }), null);
+  eq("a whole-number maxPicks is fine", validateRecord("companion-options", { id: "x", name: { "en-US": "Aware" }, maxPicks: 3 }), null);
+  eq("a fractional or zero maxPicks is refused", validateRecord("companion-options", { id: "x", name: { "en-US": "Aware" }, maxPicks: 0 }), "maxPicks must be a whole number ≥ 1");
+  const { db, report } = mergeSources([source("hb", { "companion-options": HB_CO })]);
+  eq("the records land under companionOptions", db.companionOptions.length, 5);
+  eq("and the panel counts them", report.sources[0].counts.companionOptions, 5);
+}
+
+group("A Beastbound's companionOptions levelChoice grows with the subclass");
+{
+  const at = (tier) => declaredLevelChoices(coChar({ subclassTier: tier }), CO_DB).find((lc) => lc.id === "companionOptions");
+  eq("foundation: 1 per level, no atStart, no extra", [at("foundation").perLevel, at("foundation").atStart, at("foundation").extraPicks], [1, 0, 0]);
+  eq("specialization adds Expert Training's one", at("specialization").extraPicks, 1);
+  eq("mastery adds Advanced Training's two on top", at("mastery").extraPicks, 3);
+  eq("a non-Beastbound has no companion, whatever character.companion says",
+    hasCompanion({ ...coChar(), subclassId: "sub", companion: blankCompanion() }, { ...CO_DB, effects: {} }), false);
+}
+
+group("Companion options replay as a multiset and reach companionStats");
+{
+  const ch = coChar();
+  ch.level = 4;
+  ch.levelUps = [coEntry(2, "Aware"), coEntry(3, "Aware"), coEntry(4, "Resilient")];
+  recomputeCharacter(ch);
+  eq("Aware landed twice, Resilient once", ch.levelChoiceIds.companionOptions, ["hb_co_aware", "hb_co_aware", "hb_co_resilient"]);
+  const s = companionStats(ch, CO_DB);
+  eq("present for a Beastbound with a companion", s.present, true);
+  eq("Evasion is base 10 plus 2 per Aware", s.evasion, 14);
+  eq("Stress is base 6 plus one per Resilient", s.stressSlots, 7);
+  eq("the options flatten with a count", s.options.map((o) => `${o.name} x${o.count}`), ["Aware x2", "Resilient x1"]);
+  eq("empty for a character with no companion object", companionStats(coChar({ companion: null }), CO_DB).present, false);
+}
+
+group("Intelligent folds a +1 onto the Companion Experience it names, through the replay");
+{
+  const ch = coChar();
+  ch.companion.experiences.push({ id: "comp_exp_lv2", name: "Tracker", baseModifier: 2, modifier: 2, sinceLevel: 2 });
+  ch.level = 2;
+  ch.levelUps = [{ level: 2, picks: [{ key: "levelChoice", choiceId: "companionOptions", recordId: "hb_co_intelligent", optionLabel: "Intelligent", experienceIds: ["comp_exp_lv2"] }] }];
+  recomputeCharacter(ch);
+  eq("the named Experience is +3, the others +2",
+    companionStats(ch, CO_DB).experiences.map((e) => `${e.name} +${e.modifier}`),
+    ["Fetch +2", "Guard +2", "Tracker +3"]);
+  // Edit that pick to name a different Experience: the bonus moves.
+  ch.levelUps[0].picks[0].experienceIds = ["comp_exp_1"];
+  ch.companion.experiences[0].id = "comp_exp_1";
+  recomputeCharacter(ch);
+  eq("re-pointing the pick moves the +1", companionStats(ch, CO_DB).experiences.find((e) => e.id === "comp_exp_1").modifier, 3);
+}
+
+group("An orphan companion option is kept and counted");
+{
+  const ch = coChar();
+  ch.level = 2;
+  ch.levelUps = [{ level: 2, picks: [{ key: "levelChoice", choiceId: "companionOptions", recordId: "hb_co_gone", optionLabel: "Gone" }] }];
+  recomputeCharacter(ch);
+  const s = companionStats(ch, CO_DB);
+  eq("it doesn't appear as a resolved option", s.options.length, 0);
+  eq("but it's counted as an orphan", s.orphanCount, 1);
+}
+
+group("normalizeCompanion defends every field, or nulls the companion out");
+{
+  eq("a non-object becomes null", normalizeCompanion("x"), null);
+  const fixed = normalizeCompanion({ name: 5, evasion: "abc", experiences: [{ name: "Only one" }], attack: { damageDie: "D20", range: "MELEE" } });
+  eq("name coerces to a string", fixed.name, "");
+  eq("evasion falls back to 10", fixed.evasion, 10);
+  eq("the Experience list is topped up to two", fixed.experiences.length, 2);
+  eq("an unknown damage die falls back to D6, a known range is kept", [fixed.attack.damageDie, fixed.attack.range], ["D6", "MELEE"]);
+}
+
+group("The companion reaches the sheet, the play maxima and the GM's CSV");
+{
+  const ch = coChar();
+  ch.level = 3;
+  ch.levelUps = [coEntry(2, "Light in the Dark"), coEntry(3, "Resilient")];
+  recomputeCharacter(ch);
+  const sheet = deriveSheet(ch, CO_DB);
+  eq("deriveSheet carries a companion block", sheet.companion?.name, "Ember");
+  eq("companionStressSlots feeds the play row", sheet.companionStressSlots, 7);
+  eq("companionLightSlots is the count, or null when zero",
+    [sheet.companionLightSlots, deriveSheet(coChar(), CO_DB).companionLightSlots], [1, null]);
+  const maxes = maxesFromSheet(sheet);
+  eq("maxesFromSheet exposes both rows", [maxes.companionStress, maxes.lightSlot], [7, 1]);
+  eq("and null for a non-Beastbound so neither row draws",
+    [maxesFromSheet(deriveSheet(coChar({ subclassId: "sub", companion: null }), { ...CO_DB, effects: {} })).companionStress], [null]);
+  const col = (h) => CSV_COLUMNS.find((c) => c.header === h).value(rowContext(ch, CO_DB, {}));
+  eq("the CSV names the companion", col("companion-name"), "Ember");
+  eq("its options, one per line with a count", col("companion-options").split("\n")[0].startsWith("Light in the Dark:"), true);
+  eq("a non-Beastbound exports empty companion cells", CSV_COLUMNS.find((c) => c.header === "companion-name").value(rowContext(coChar({ subclassId: "sub", companion: null }), { ...CO_DB, effects: {} }, {})), "");
+}
+
+group("clampState holds companionStress and lightSlot inside their maxima");
+{
+  const maxes = { hp: 10, stress: 8, hope: 6, armor: 3, focus: null, companionStress: 6, lightSlot: 1 };
+  const clamped = clampState({ companionStress: 20, lightSlot: 5 }, maxes);
+  eq("both are pulled down to the maximum", [clamped.companionStress, clamped.lightSlot], [6, 1]);
+  eq("a null max means nothing can be marked there",
+    clampState({ companionStress: 3 }, { ...maxes, companionStress: null }).companionStress, 0);
+}
+
+group("The companion sidecar's field values, and its field-name contract");
+{
+  const companion = {
+    present: true, name: "Ember", evasion: 14, attackName: "Talons", damageDieLabel: "d8", rangeLabel: "Close",
+    experiences: [{ name: "Fetch", modifier: 3 }, { name: "Guard", modifier: 2 }],
+    options: [{ name: "Aware", count: 2 }, { name: "Bonded", count: 1 }, { name: "My Homebrew Option", count: 1 }],
+    lightSlots: 0,
+  };
+  const { values, unplaced } = companionSidecarFieldValues({ companion, companionStress: 3 });
+  eq("the die radio ticks the matching box only", [values["companion-damage-die-d8"], values["companion-damage-die-d6"]], ["Yes", undefined]);
+  eq("Stress fills from the left", [values["companion-stress3"], values["companion-stress4"]], ["Yes", undefined]);
+  eq("a repeatable option fills its boxes from the left", [values["companion-aware1"], values["companion-aware2"], values["companion-aware3"]], ["Yes", "Yes", undefined]);
+  eq("a one-off option ticks its single box", values["companion-bonded"], "Yes");
+  eq("a homebrew option the form has no box for is reported unplaced", unplaced, ["My Homebrew Option"]);
+  eq("companion-hope-slot ticks only when Light in the Dark is held",
+    [values["companion-hope-slot"], companionSidecarFieldValues({ companion: { ...companion, lightSlots: 1 } }).values["companion-hope-slot"]], [undefined, "Yes"]);
+  eq("every field name emitted is one the module declares", Object.keys(values).every((k) => COMPANION_SIDECAR_FIELD_NAMES.has(k)), true);
+}
+
+group("levelChoice picks stay free — the +1 Proficiency gate depends on it");
+{
+  // markBlockedReason() (level-up.js, a page file the suite can't import) gates the cost-2 rows on
+  // budgetSpent() rather than picks.length precisely because a stance / companion pick is always
+  // present and costs zero. This is the fact it rests on.
+  eq("a levelChoice pick costs nothing", optionCost("levelChoice"), 0);
 }
 
 group("A transformation grants what it declares, and says what it doesn't");
