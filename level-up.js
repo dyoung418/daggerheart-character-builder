@@ -30,6 +30,7 @@ import {
   stressTotal,
 } from "./shared/derived-stats.js";
 import { blankAnswer, choiceFor, declaredLevelChoices } from "./shared/effects.js";
+import { companionStats } from "./shared/companion-stats.js";
 import { loadContent } from "./shared/content-load.js";
 import { mountContentSettings } from "./shared/content-settings.js";
 import { visibleRecords } from "./shared/content-sources.js";
@@ -59,6 +60,9 @@ let pendingChoices = {};
 // than written straight onto the character because at levels 2/5/8 the Experience doesn't
 // exist until confirm; when a past level is being edited it's seeded from the real one.
 let achievementExperienceName = "";
+// The same, for the Beastbound companion's Experience: "whenever you gain a new Experience, your
+// companion also gains one" (SRD p21), so a companion gains one at levels 2/5/8 too.
+let companionAchievementExperienceName = "";
 let exchange = null; // optional { outCardId, inCardId }: the swap allowed on every level up
 
 // With ?level=N the screen edits a level already taken instead of gaining a new one: same
@@ -215,6 +219,101 @@ function syncStancePicks() {
   }
 }
 
+// ---------- levelChoice (Beastbound companion options) ----------
+//
+// The same free-and-accumulating shape as the stances above, choiceId "companionOptions". Two
+// things it does that stances don't: the options are a MULTISET (Intelligent / Vicious / Resilient
+// / Aware can each be taken up to three times), and at the level a subclass reaches Specialization
+// or Mastery the feature grants extra picks (Expert Training +1, Advanced Training +2). The picks
+// still live in `picks` so currentEntry() and the replay see them; the UI is a boxed section
+// (renderCompanionSection), not one of the inline sub-pickers.
+
+// The Intelligent option raises one Companion Experience; its id can be the pending one the
+// achievement level is about to create, exactly like the character's own achievement Experience.
+function pendingCompanionExperienceId(newLevel) {
+  return `comp_exp_lv${newLevel}`;
+}
+
+function companionChoiceHeldNow() {
+  return declaredLevelChoices(characterAtLevel(character, context), db).find((lc) => lc.id === "companionOptions") || null;
+}
+
+function companionFromPendingMulticlass() {
+  const mc = picksFor("multiclass").find((p) => p.subclassId);
+  if (!mc) return null;
+  const probe = { ...characterAtLevel(character, context), multiclass: { subclassId: mc.subclassId, tier: "foundation" } };
+  return declaredLevelChoices(probe, db).find((lc) => lc.id === "companionOptions") || null;
+}
+
+// How many companion options this level owes: perLevel, plus any extra picks the subclass grants
+// *at this level* by reaching Specialization (Expert Training, +1) or Mastery (Advanced Training,
+// +2). The jump is the difference in `extraPicks` before and after this level's subclass picks.
+function companionPicksOwed() {
+  const held = companionChoiceHeldNow();
+  if (!held) {
+    const arriving = companionFromPendingMulticlass();
+    return arriving ? (arriving.atStart + arriving.perLevel) : 0;
+  }
+  const before = held.extraPicks || 0;
+  const afterTier = subclassTierAfterPicks();
+  const probe = { ...characterAtLevel(character, context), subclassTier: afterTier };
+  const after = declaredLevelChoices(probe, db).find((lc) => lc.id === "companionOptions")?.extraPicks || 0;
+  return held.perLevel + Math.max(0, after - before);
+}
+
+// recordId -> how many times it's been picked, from the ids known at the start of this level plus
+// any picked on screen (excluding one pick, so a row doesn't exclude its own current choice).
+function companionOptionCounts(exceptPick) {
+  const counts = {};
+  for (const id of context.levelChoiceIds?.companionOptions || []) counts[id] = (counts[id] || 0) + 1;
+  for (const p of picks) {
+    if (p.key === "levelChoice" && p.choiceId === "companionOptions" && p !== exceptPick && p.recordId) {
+      counts[p.recordId] = (counts[p.recordId] || 0) + 1;
+    }
+  }
+  return counts;
+}
+
+// The companion options a pick could still take: everything not already at its maxPicks, plus
+// whatever this pick currently holds. db.companionOptions is in SRD list order already.
+function companionOptionsFor(pick) {
+  const counts = companionOptionCounts(pick);
+  return (db.companionOptions || []).filter((opt) => {
+    if (pick.recordId === opt.id) return true;
+    const max = Number.isInteger(opt.maxPicks) && opt.maxPicks >= 1 ? opt.maxPicks : 1;
+    return (counts[opt.id] || 0) < max;
+  });
+}
+
+function syncCompanionPicks() {
+  const owed = companionPicksOwed();
+  const current = picksFor("levelChoice").filter((p) => p.choiceId === "companionOptions");
+  while (current.length > owed) {
+    const drop = current.pop();
+    picks.splice(picks.indexOf(drop), 1);
+  }
+  while (current.length < owed) {
+    const pick = { key: "levelChoice", choiceId: "companionOptions", recordId: null, optionLabel: null,
+      traits: [], experienceIds: [], cardId: null, target: null, classId: null, domain: null, subclassId: null };
+    picks.push(pick);
+    current.push(pick);
+  }
+}
+
+// The companion's Experiences a pick's Intelligent bonus can name: those the companion has at this
+// level, plus the pending one an achievement level is about to add.
+function companionExperiencesForPicking(newLevel) {
+  const companion = character.companion;
+  if (!companion) return [];
+  const list = (companion.experiences || [])
+    .filter((e) => (e.sinceLevel ?? 1) <= newLevel)
+    .map((e) => ({ id: e.id, name: e.name, pending: false }));
+  if (isLevelAchievement(newLevel) && !companion.experiences.some((e) => e.sinceLevel === newLevel)) {
+    list.push({ id: pendingCompanionExperienceId(newLevel), name: companionAchievementExperienceName, pending: true });
+  }
+  return list;
+}
+
 function traitsPickedThisLevel() {
   return picksFor("traits").flatMap((p) => p.traits);
 }
@@ -258,7 +357,10 @@ function markBlockedReason(option, tier) {
   // budget check with a message that doesn't explain why.
   const wholeLevel = picks.find((p) => optionCost(p.key) === 2);
   if (wholeLevel) return `${WHOLE_LEVEL_NAMES[wholeLevel.key]} uses both picks for this level.`;
-  if (option.cost === 2 && picks.length > 0) return `${WHOLE_LEVEL_NAMES[key]} needs both picks: clear the other one first.`;
+  // `budgetSpent()`, not `picks.length`: a stance or companion-option pick is always present for a
+  // Martial Artist / Beastbound Ranger and costs zero, so `picks.length > 0` blocked Proficiency on
+  // every one of their level-ups, edit or not. The budget test on the next line is the real gate.
+  if (option.cost === 2 && budgetSpent() > 0) return `${WHOLE_LEVEL_NAMES[key]} needs both picks: clear the other one first.`;
   if (budgetSpent() + option.cost > 2) return "No choice points left this level.";
   if (slotsTakenInTier(key, tier) + option.slotsPerPick > option.slots[tier]) return "No slots left in this tier.";
   // Blocked only when BOTH ladders are done: with a second subclass there's still somewhere to
@@ -358,6 +460,15 @@ function render() {
     const stance = (db.stances || []).find((s) => s.id === pick.recordId);
     if (!stance || (stance.tier ?? 99) > tierForLevel(newLevel)) { pick.recordId = null; pick.optionLabel = null; }
   }
+  // The Beastbound companion's option is free and comes from a feature too — reconcile the count,
+  // then drop a pick whose option this level can no longer take (its maxPicks is now exhausted by
+  // earlier levels because the target changed, or the source was switched off).
+  syncCompanionPicks();
+  for (const pick of picksFor("levelChoice").filter((p) => p.recordId && p.choiceId === "companionOptions")) {
+    const opt = (db.companionOptions || []).find((o) => o.id === pick.recordId);
+    const eligible = companionOptionsFor(pick).some((o) => o.id === pick.recordId);
+    if (!opt || !eligible) { pick.recordId = null; pick.optionLabel = null; pick.experienceIds = []; }
+  }
 
   if (!isEditing() && character.level >= 10) {
     main.innerHTML = `<p class="hint">${escapeHtml(character.name || "This character")} is already at the maximum level (10).</p>
@@ -394,6 +505,7 @@ function render() {
 
   renderAdvancementGrid(main, newLevel);
   renderSubPickers(main, cls, newLevel);
+  renderCompanionSection(main, newLevel);
   renderMandatoryCardStep(main, cls, newLevel);
   renderGrantedCardStep(main, cls, newLevel);
   renderExchangeSection(main, cls);
@@ -630,6 +742,105 @@ function renderStanceSubPicker(main, pick, ordinal, newLevel) {
     list.appendChild(row);
   }
   main.appendChild(list);
+}
+
+// The Beastbound companion's level-up option(s), as a section of their own rather than one of the
+// inline sub-pickers — the companion is a separate-but-tied entity and the choice should read that
+// way. The picks themselves are ordinary `levelChoice` entries in `picks`; this only draws them.
+function renderCompanionSection(main, newLevel) {
+  const owed = picksFor("levelChoice").filter((p) => p.choiceId === "companionOptions");
+  if (owed.length === 0) return;
+  const companion = character.companion;
+
+  const section = document.createElement("section");
+  section.className = "levelup-companion";
+
+  const head = document.createElement("h3");
+  head.textContent = companion?.name ? `Your Companion — ${companion.name}` : "Your Companion";
+  section.appendChild(head);
+
+  if (!companion) {
+    const warn = document.createElement("p");
+    warn.className = "hint";
+    warn.innerHTML = `This character has no companion recorded yet. <a href="create.html?id=${escapeHtml(character.id)}&step=companion">Set one up first</a>, then come back — the option below still saves.`;
+    section.appendChild(warn);
+  } else {
+    // Mini-stats as they'd stand with this level's picks applied.
+    const chosenIds = [
+      ...(context.levelChoiceIds?.companionOptions || []),
+      ...picks.filter((p) => p.key === "levelChoice" && p.choiceId === "companionOptions" && p.recordId).map((p) => p.recordId),
+    ];
+    const probe = { ...character, levelChoiceIds: { ...(character.levelChoiceIds || {}), companionOptions: chosenIds } };
+    const s = companionStats(probe, db);
+    const stat = document.createElement("p");
+    stat.className = "hint";
+    stat.textContent = `Evasion ${s.evasion} · Stress ${s.stressSlots} slots · Damage ${s.damageDieLabel}`
+      + (s.lightSlots ? " · Light in the Dark slot" : "");
+    section.appendChild(stat);
+  }
+
+  if (isLevelAchievement(newLevel) && companion) {
+    const row = document.createElement("div");
+    row.className = "field-row";
+    row.innerHTML = `<label>Name your companion's new Experience (+2) <input type="text" value="${escapeHtml(companionAchievementExperienceName)}" placeholder="e.g. Nose for Trouble" /></label>`;
+    const input = row.querySelector("input");
+    input.addEventListener("input", (e) => { companionAchievementExperienceName = e.target.value; });
+    input.addEventListener("change", render);
+    section.appendChild(row);
+  }
+
+  owed.forEach((pick, i) => {
+    const ordinal = owed.length > 1 ? ` (${ORDINALS[i]})` : "";
+    subHeading(section, `Choose a level-up option for your companion${ordinal}.`);
+    const opts = companionOptionsFor(pick);
+    if (opts.length === 0 && !pick.recordId) {
+      const note = document.createElement("p");
+      note.className = "hint";
+      note.textContent = "Every companion option is already at its maximum — nothing to add this level.";
+      section.appendChild(note);
+      return;
+    }
+    const counts = companionOptionCounts(pick);
+    const list = document.createElement("div");
+    list.className = "option-list";
+    for (const opt of opts) {
+      const name = opt.name["en-US"];
+      const max = Number.isInteger(opt.maxPicks) && opt.maxPicks >= 1 ? opt.maxPicks : 1;
+      const already = counts[opt.id] || 0;
+      const text = (opt.description || []).map((b) => b?.paragraph?.["en-US"] || "").filter(Boolean).join(" ");
+      const checked = pick.recordId === opt.id;
+      const tag = max > 1 ? ` <span class="hint">(${already + (checked ? 1 : 0)} of ${max})</span>` : "";
+      const row = document.createElement("label");
+      row.className = "option-row";
+      row.innerHTML = `<input type="radio" name="companion-opt-${escapeHtml(String(picks.indexOf(pick)))}" ${checked ? "checked" : ""}/> `
+        + `<span><strong>${escapeHtml(name)}</strong> — ${escapeHtml(text)}${tag}</span>`;
+      row.querySelector("input").addEventListener("change", () => {
+        pick.recordId = opt.id;
+        pick.optionLabel = name;
+        if (name !== "Intelligent") pick.experienceIds = [];
+        render();
+      });
+      list.appendChild(row);
+    }
+    section.appendChild(list);
+
+    // Intelligent raises one Companion Experience — ask which.
+    if (pick.optionLabel === "Intelligent" && companion) {
+      const choices = companionExperiencesForPicking(newLevel);
+      if (choices.length && !pick.experienceIds.length) pick.experienceIds = [choices[0].id];
+      const row = document.createElement("div");
+      row.className = "field-row";
+      const optionsHtml = choices.map((e) => {
+        const label = e.name?.trim() || (e.pending ? "(the new Experience from this level)" : "(unnamed)");
+        return `<option value="${escapeHtml(e.id)}" ${pick.experienceIds[0] === e.id ? "selected" : ""}>${escapeHtml(label)}</option>`;
+      }).join("");
+      row.innerHTML = `<label>Which Companion Experience gets the +1? <select>${optionsHtml}</select></label>`;
+      row.querySelector("select").addEventListener("change", (e) => { pick.experienceIds = [e.target.value]; render(); });
+      section.appendChild(row);
+    }
+  });
+
+  main.appendChild(section);
 }
 
 // A preview for a character with one subclass; a choice of which to upgrade for a character with
@@ -1028,6 +1239,11 @@ function confirmBlockedReason(newLevel) {
         && stanceOptionsFor(pick, newLevel).length > 0) {
       return "Choose a martial stance.";
     }
+    // A companion option, the same way — auto-waived only if every option is at its maximum.
+    if (pick.key === "levelChoice" && pick.choiceId === "companionOptions" && !pick.recordId
+        && companionOptionsFor(pick).length > 0) {
+      return "Choose a level-up option for your companion.";
+    }
   }
   // Taking the trait option twice needs four DIFFERENT unmarked traits.
   const allTraits = traitsPickedThisLevel();
@@ -1064,9 +1280,14 @@ function currentEntry(level) {
       if (p.key === "traits") entry.traits = [...p.traits];
       if (p.key === "experience") entry.experienceIds = [...p.experienceIds];
       if (p.key === "domainCard") entry.cardId = p.cardId;
-      // A free levelChoice pick — a stance. No slotTier (it costs no advancement point), so the
-      // key drops out of JSON and history.js's replay skips the slot accounting for it.
-      if (p.key === "levelChoice") { entry.choiceId = p.choiceId; entry.recordId = p.recordId; }
+      // A free levelChoice pick — a stance, or a companion option. No slotTier (it costs no
+      // advancement point), so the key drops out of JSON and history.js's replay skips the slot
+      // accounting for it. `experienceIds` carries the Intelligent companion option's target.
+      if (p.key === "levelChoice") {
+        entry.choiceId = p.choiceId;
+        entry.recordId = p.recordId;
+        if (p.experienceIds?.length) entry.experienceIds = [...p.experienceIds];
+      }
       // Only written when it isn't your own subclass, so a level recorded for a single-subclass
       // character serialises byte for byte as it always did.
       if (p.key === "subclass" && p.target) entry.target = p.target;
@@ -1193,6 +1414,10 @@ function commitAchievementExperienceName(level) {
   if (!isLevelAchievement(level)) return;
   const exp = character.experiences?.find((e) => e.id === pendingExperienceId(level));
   if (exp) exp.name = achievementExperienceName.trim();
+  // The companion gained one at the same level (SRD p21). It's created by applyLevelUp / the edit
+  // path with a stable id; the name rides alongside it, the same as the character's.
+  const compExp = character.companion?.experiences?.find((e) => e.id === pendingCompanionExperienceId(level));
+  if (compExp) compExp.name = companionAchievementExperienceName.trim();
 }
 
 function commitLevelEdit(newLevel) {
@@ -1241,6 +1466,17 @@ function applyLevelUp(newLevel) {
       modifier: 2,
       sinceLevel: newLevel,
     });
+    // "Whenever you gain a new Experience, your companion also gains one." (SRD p21.) Same id the
+    // Intelligent picker was already using, so a pick that targeted the pending one just works.
+    if (character.companion && !character.companion.experiences.some((e) => e.sinceLevel === newLevel)) {
+      character.companion.experiences.push({
+        id: pendingCompanionExperienceId(newLevel),
+        name: companionAchievementExperienceName.trim(),
+        baseModifier: 2,
+        modifier: 2,
+        sinceLevel: newLevel,
+      });
+    }
   }
 
   commitCardChoices();
@@ -1256,6 +1492,7 @@ function applyLevelUp(newLevel) {
   exchange = null;
   pendingChoices = {};
   achievementExperienceName = "";
+  companionAchievementExperienceName = "";
 
   render();
 }
@@ -1282,6 +1519,8 @@ function loadPicksFrom(entry) {
   pendingChoices = {};
   achievementExperienceName = character.experiences
     ?.find((e) => e.id === pendingExperienceId(entry.level))?.name || "";
+  companionAchievementExperienceName = character.companion?.experiences
+    ?.find((e) => e.id === pendingCompanionExperienceId(entry.level))?.name || "";
 }
 
 async function init() {

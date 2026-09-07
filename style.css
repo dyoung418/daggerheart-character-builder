@@ -731,6 +731,12 @@ h1, h2, h3, .btn-primary, .btn-ghost, .btn-small, .top-nav a {
 .confirm-blocked { margin: 0.35rem 0 0; text-align: right; }
 .sub-pick-heading { margin-bottom: 0.35rem; }
 
+/* The Beastbound companion's level-up option, boxed off so it reads as levelling a
+   separate-but-tied entity rather than as one more of the character's own picks. */
+.levelup-companion { margin: 1rem 0; padding: 0.75rem 0.9rem; background: var(--panel-alt); border: 1px solid var(--border-warm); border-radius: 8px; }
+.levelup-companion h3 { margin: 0 0 0.35rem; color: var(--accent-bright); }
+.levelup-companion > p.hint:first-of-type { margin-top: 0; }
+
 .problem-box { margin: 1rem 0; padding: 0.6rem 0.8rem; background: rgba(178, 59, 59, 0.12); border: 1px solid var(--c-valor); border-radius: 6px; font-size: 0.82rem; }
 .problem-box div { color: var(--text-dim); margin-top: 0.25rem; }
 

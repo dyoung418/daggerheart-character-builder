@@ -12,6 +12,7 @@ import { derivedStats, spellcastTraitKeys } from "./shared/derived-stats.js";
 import { statLine } from "./shared/stat-line.js";
 import { titleCase } from "./shared/text.js";
 import { blankAnswer, collectEffects, declaredLevelChoices, effectFor, ignoresBurden } from "./shared/effects.js";
+import { blankCompanion, COMPANION_DAMAGE_DICE, COMPANION_RANGES } from "./shared/companion.js";
 import { renderEffectChoice } from "./shared/effect-choice.js";
 import { loadContent } from "./shared/content-load.js";
 import { resolveRecordId } from "./shared/content-ids.js";
@@ -152,23 +153,35 @@ function blankCharacter(id) {
   };
 }
 
-// Which steps this character has. Everything in BASE_STEPS, plus the optional transformation
-// step when there is anything to say about it — a source that provides transformations, or a
-// character that already has one.
+// Whether this character's subclass gives it a companion — the Beastbound Ranger's, in the SRD,
+// but anything declaring the `companionOptions` levelChoice. Also true once `character.companion`
+// exists, so switching the subclass away doesn't strand a companion the player can no longer
+// reach and clear — the same guard buildSteps() makes for a transformation.
+function hasCompanionStep() {
+  return declaredLevelChoices(character, db).some((lc) => lc.id === "companionOptions")
+    || !!character.companion;
+}
+
+// Which steps this character has. Everything in BASE_STEPS, plus two optional steps when there's
+// anything to say about them: the transformation step when a source provides transformations (or
+// the character has one), and the companion step for a Beastbound Ranger (or a character that
+// already has a companion).
 //
-// The second half matters as much as the first: switching off the source a character's
-// transformation came from must not strand them with a choice they can no longer reach and
-// clear. Runs after the character is loaded for that reason.
+// The "or the character has one" halves matter as much as the first: switching off the source or
+// the subclass a choice came from must not strand the player with something they can no longer
+// reach and clear. Runs after the character is loaded for that reason.
 function buildSteps() {
-  const relevant = (db.transformations || []).length > 0 || !!character.transformationId;
-  if (!relevant) {
-    STEPS = BASE_STEPS;
-    return;
-  }
-  const at = BASE_STEPS.findIndex((s) => s.key === "heritage");
   STEPS = [...BASE_STEPS];
-  // Straight after the ancestry, which is where the rules put it.
-  STEPS.splice(at + 1, 0, { key: "transformation", label: "Transformation" });
+  if ((db.transformations || []).length > 0 || character.transformationId) {
+    // Straight after the ancestry, which is where the rules put it.
+    const at = STEPS.findIndex((s) => s.key === "heritage");
+    STEPS.splice(at + 1, 0, { key: "transformation", label: "Transformation" });
+  }
+  if (hasCompanionStep()) {
+    // Straight after the class/subclass it comes with.
+    const at = STEPS.findIndex((s) => s.key === "class");
+    STEPS.splice(at + 1, 0, { key: "companion", label: "Companion" });
+  }
 }
 
 // The equipment step outlives creation, so the sheet links straight to it, and so does the
@@ -227,6 +240,11 @@ function isStepValid(stepKey) {
     case "transformation":
       // Optional, so always satisfied. Having none is a complete answer, and the rules say so:
       // a GM hands these out, they aren't part of building a character.
+      return true;
+    case "companion":
+      // Optional-with-a-nudge, like every other creation choice (the stances, the ancestry
+      // "choose" features): a companion left half-filled is legal-but-incomplete, and the sheet
+      // and play page point back here.
       return true;
     case "traits":
       return TRAIT_KEYS.every((k) => character.traits[k] !== null);
@@ -295,6 +313,7 @@ function renderStepPanel() {
     class: renderClassStep,
     heritage: renderHeritageStep,
     transformation: renderTransformationStep,
+    companion: renderCompanionStep,
     traits: renderTraitsStep,
     derived: renderDerivedStep,
     equipment: renderEquipmentStep,
@@ -720,6 +739,110 @@ function clearTransformationRow() {
     onChange();
   });
   return row;
+}
+
+// --- Step 1a: Companion (Beastbound Ranger) ---
+//
+// SRD 2.0 p21: name the companion, write their Evasion (starts at 10), create two Experiences at
+// +2, and describe their attack (a d6, Melee, physical or magic, at level 1). Optional-with-a-nudge
+// like every other creation choice — a half-filled companion is legal, and the sheet points back
+// here. The eight level-up options are chosen on the level-up screen, not here.
+function renderCompanionStep(panel) {
+  const grantsCompanion = declaredLevelChoices(character, db).some((lc) => lc.id === "companionOptions");
+
+  if (!grantsCompanion) {
+    // Reachable only for a character who HAD a companion and swapped the subclass away. Not a dead
+    // end: give them the way out, the same as the transformation step does.
+    const note = document.createElement("p");
+    note.className = "hint";
+    note.textContent = "This character's subclass no longer gives them an animal companion. " +
+      "Remove the companion here, or go back to Step 1 and choose the Beastbound Ranger again.";
+    panel.appendChild(note);
+    if (character.companion) {
+      const row = document.createElement("div");
+      row.className = "field-row";
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "btn-ghost btn-small";
+      btn.textContent = "Remove companion";
+      btn.addEventListener("click", () => { character.companion = null; onChange(); });
+      row.appendChild(btn);
+      panel.appendChild(row);
+    }
+    return;
+  }
+
+  if (!character.companion) character.companion = blankCompanion();
+  const c = character.companion;
+
+  const info = document.createElement("p");
+  info.className = "hint";
+  info.textContent = "Your animal companion. Name them, set their Evasion (starts at 10), give them " +
+    "two Experiences at +2, and describe their attack. You'll choose a level-up option for them " +
+    "each time your character levels up.";
+  panel.appendChild(info);
+
+  const nameRow = document.createElement("div");
+  nameRow.className = "field-row";
+  nameRow.innerHTML = `<label>Companion name <input type="text" id="companion-name" value="${escapeHtml(c.name)}" placeholder="e.g. Ember" /></label>`;
+  nameRow.querySelector("input").addEventListener("input", (e) => { c.name = e.target.value; onTextChange(); });
+  panel.appendChild(nameRow);
+
+  const evRow = document.createElement("div");
+  evRow.className = "field-row";
+  evRow.innerHTML = `<label>Evasion <input type="number" id="companion-evasion" min="0" value="${escapeHtml(c.evasion)}" /></label>`;
+  evRow.querySelector("input").addEventListener("input", (e) => {
+    const n = parseInt(e.target.value, 10);
+    c.evasion = Number.isFinite(n) && n >= 0 ? n : 10;
+    onTextChange();
+  });
+  panel.appendChild(evRow);
+
+  const expHead = document.createElement("h3");
+  expHead.textContent = "Companion Experiences";
+  panel.appendChild(expHead);
+  c.experiences.forEach((exp, i) => {
+    const fromLevelUp = (exp.sinceLevel ?? 1) > 1;
+    const row = document.createElement("div");
+    row.className = "field-row";
+    const label = fromLevelUp ? `Gained at level ${exp.sinceLevel}` : `Experience ${i + 1}`;
+    row.innerHTML = `<label>${escapeHtml(label)} <input type="text" value="${escapeHtml(exp.name)}" placeholder="e.g. Nose for Trouble" /></label> <span class="exp-mod">+${escapeHtml(exp.modifier ?? 2)}</span>`;
+    row.querySelector("input").addEventListener("input", (e) => { exp.name = e.target.value; onTextChange(); });
+    panel.appendChild(row);
+  });
+
+  const atkHead = document.createElement("h3");
+  atkHead.textContent = "Attack & damage";
+  panel.appendChild(atkHead);
+
+  const atkNameRow = document.createElement("div");
+  atkNameRow.className = "field-row";
+  atkNameRow.innerHTML = `<label>Attack name <input type="text" value="${escapeHtml(c.attack.name)}" placeholder="e.g. Talons" /></label>`;
+  atkNameRow.querySelector("input").addEventListener("input", (e) => { c.attack.name = e.target.value; onTextChange(); });
+  panel.appendChild(atkNameRow);
+
+  const rangeRow = document.createElement("div");
+  rangeRow.className = "field-row";
+  const rangeOpts = COMPANION_RANGES.map((r) =>
+    `<option value="${r}" ${c.attack.range === r ? "selected" : ""}>${escapeHtml(titleCase(r.replace(/_/g, " ")))}</option>`).join("");
+  rangeRow.innerHTML = `<label>Range <select>${rangeOpts}</select></label>`;
+  rangeRow.querySelector("select").addEventListener("change", (e) => { c.attack.range = e.target.value; onChange(); });
+  panel.appendChild(rangeRow);
+
+  const dieRow = document.createElement("div");
+  dieRow.className = "field-row";
+  dieRow.innerHTML = "<span>Damage die</span> " + COMPANION_DAMAGE_DICE.map((d) =>
+    `<label class="inline"><input type="radio" name="companion-die" value="${d}" ${c.attack.damageDie === d ? "checked" : ""}/> ${d.toLowerCase()}</label>`).join(" ");
+  dieRow.querySelectorAll("input").forEach((r) => r.addEventListener("change", (e) => { c.attack.damageDie = e.target.value; onChange(); }));
+  panel.appendChild(dieRow);
+
+  const typeRow = document.createElement("div");
+  typeRow.className = "field-row";
+  typeRow.innerHTML = "<span>Damage type</span> " +
+    `<label class="inline"><input type="radio" name="companion-dmg-type" value="PHYSICAL" ${c.attack.damageType === "PHYSICAL" ? "checked" : ""}/> physical</label> ` +
+    `<label class="inline"><input type="radio" name="companion-dmg-type" value="MAGICAL" ${c.attack.damageType === "MAGICAL" ? "checked" : ""}/> magic</label>`;
+  typeRow.querySelectorAll("input").forEach((r) => r.addEventListener("change", (e) => { c.attack.damageType = e.target.value; onChange(); }));
+  panel.appendChild(typeRow);
 }
 
 // A transformation that says "choose" gets asked here, beside the card that asked it — the same
@@ -1159,6 +1282,13 @@ function renderConnectionsStep(panel) {
 // ---------- bootstrap ----------
 
 function renderAll() {
+  // The companion step appears the moment a Beastbound subclass is chosen and disappears if it's
+  // swapped away (with no companion saved), so the step list is rebuilt on every render. Track the
+  // current step by KEY across the rebuild so an inserted step doesn't shift the player sideways.
+  const currentKey = STEPS[currentStep]?.key;
+  buildSteps();
+  const at = STEPS.findIndex((s) => s.key === currentKey);
+  currentStep = at >= 0 ? at : Math.min(currentStep, STEPS.length - 1);
   renderStepNav();
   renderStepPanel();
   renderNavButtons();
