@@ -87,6 +87,9 @@ function blankState(ch) {
     // option can be taken up to its maxPicks). Stances are all maxPicks 1.
     levelChoiceIds: baselineLevelChoiceIds(ch),
     expBonus: {}, // experience id -> how many +1s it has picked up
+    // companion Experience id -> how many +1s from the Intelligent companion option. Kept apart
+    // from expBonus because it lands on ch.companion.experiences, not ch.experiences.
+    companionExpBonus: {},
   };
 }
 
@@ -154,10 +157,17 @@ function applyEntry(state, entry) {
         break;
       // A stance, or a companion level-up option. `choiceId` names which levelChoice, `recordId`
       // the record picked. Accumulates as a multiset — editing an earlier level re-runs this whole
-      // replay, so a changed pick simply produces a different list.
+      // replay, so a changed pick simply produces a different list. A companion Intelligent pick
+      // also carries `experienceIds` (the one Companion Experience it raises), folded onto the
+      // companion the same way an `experience` advancement is folded onto the character.
       case "levelChoice":
         if (pick.choiceId && pick.recordId) {
           (state.levelChoiceIds[pick.choiceId] ||= []).push(pick.recordId);
+        }
+        if (pick.choiceId === "companionOptions") {
+          for (const id of pick.experienceIds || []) {
+            state.companionExpBonus[id] = (state.companionExpBonus[id] || 0) + 1;
+          }
         }
         break;
     }
@@ -218,6 +228,13 @@ export function recomputeCharacter(ch) {
 
   for (const exp of ch.experiences || []) {
     exp.modifier = exp.baseModifier + (state.expBonus[exp.id] || 0);
+  }
+
+  // The companion's Experiences the same way: base (always +2) plus every Intelligent that named
+  // them. Done here so editing the level an Intelligent was taken at — or its target — moves the
+  // bonus, exactly like the character's own Experience advancements.
+  for (const exp of ch.companion?.experiences || []) {
+    exp.modifier = (exp.baseModifier ?? 2) + (state.companionExpBonus[exp.id] || 0);
   }
 
   // Cards can leave the collection through an exchange, so the vault has to drop anything

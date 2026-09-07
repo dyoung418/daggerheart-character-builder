@@ -1,0 +1,110 @@
+[
+ {
+  "id": "srd_2_0_companion_option_intelligent",
+  "name": {
+   "en-US": "Intelligent"
+  },
+  "maxPicks": 3,
+  "description": [
+   {
+    "paragraph": {
+     "en-US": "Your companion gains a permanent +1 bonus to a Companion Experience of your choice."
+    }
+   }
+  ]
+ },
+ {
+  "id": "srd_2_0_companion_option_light_in_the_dark",
+  "name": {
+   "en-US": "Light in the Dark"
+  },
+  "description": [
+   {
+    "paragraph": {
+     "en-US": "Use this as an additional Hope slot your character can mark."
+    }
+   }
+  ]
+ },
+ {
+  "id": "srd_2_0_companion_option_creature_comfort",
+  "name": {
+   "en-US": "Creature Comfort"
+  },
+  "description": [
+   {
+    "paragraph": {
+     "en-US": "Once per rest, when you take time during a quiet moment to give your companion love and attention, you can gain a Hope or you can both clear a Stress."
+    }
+   }
+  ]
+ },
+ {
+  "id": "srd_2_0_companion_option_armored",
+  "name": {
+   "en-US": "Armored"
+  },
+  "description": [
+   {
+    "paragraph": {
+     "en-US": "When your companion takes damage, you can mark one of your Armor Slots instead of marking one of their Stress."
+    }
+   }
+  ]
+ },
+ {
+  "id": "srd_2_0_companion_option_vicious",
+  "name": {
+   "en-US": "Vicious"
+  },
+  "maxPicks": 3,
+  "description": [
+   {
+    "paragraph": {
+     "en-US": "Increase your companion’s damage dice or range by one step (d6 to d8, Close to Far, etc.)."
+    }
+   }
+  ]
+ },
+ {
+  "id": "srd_2_0_companion_option_resilient",
+  "name": {
+   "en-US": "Resilient"
+  },
+  "maxPicks": 3,
+  "description": [
+   {
+    "paragraph": {
+     "en-US": "Your companion gains an additional Stress slot."
+    }
+   }
+  ]
+ },
+ {
+  "id": "srd_2_0_companion_option_bonded",
+  "name": {
+   "en-US": "Bonded"
+  },
+  "description": [
+   {
+    "paragraph": {
+     "en-US": "When you mark your last Hit Point, your companion rushes to your side to comfort you. Roll a number of d6s equal to the unmarked Stress slots they have and mark them. If any roll a 6, your companion helps you up. Clear your last Hit Point and return to the scene."
+    }
+   }
+  ]
+ },
+ {
+  "id": "srd_2_0_companion_option_aware",
+  "name": {
+   "en-US": "Aware"
+  },
+  "maxPicks": 3,
+  "description": [
+   {
+    "paragraph": {
+     "en-US": "Your companion gains a permanent +2 bonus to their Evasion."
+    }
+   }
+  ]
+ }
+]

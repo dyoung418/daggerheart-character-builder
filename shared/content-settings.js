@@ -25,6 +25,7 @@ const COUNT_LABELS = {
   consumables: ["consumable", "consumables"],
   stances: ["stance", "stances"],
   beastforms: ["Beastform option", "Beastform options"],
+  companionOptions: ["companion option", "companion options"],
 };
 
 function countsText(counts) {

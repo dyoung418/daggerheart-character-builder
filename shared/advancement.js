@@ -14,6 +14,7 @@
 
 import { defaultState } from "./table-state.js";
 import { sanitizePortrait } from "./portrait.js";
+import { ensureCompanionFields } from "./companion.js";
 
 // NEW slots that unlock starting at each tier (cumulative, not replaced: at tier 3
 // you have tier 2's slots plus the new tier 3 ones, and so on).
@@ -494,6 +495,14 @@ export function ensureLevelFields(ch) {
   // like creationDomainCardIds so the wizard can edit the starting picks without touching the rest.
   if (!ch.creationLevelChoices || typeof ch.creationLevelChoices !== "object") ch.creationLevelChoices = {};
   if (!ch.levelChoiceIds || typeof ch.levelChoiceIds !== "object") ch.levelChoiceIds = {};
+
+  // The Beastbound Ranger's companion, if there is one. Its presence is the subclass's business —
+  // this function synthesises nothing — but an existing one gets its Experience ids and the
+  // baseModifier/sinceLevel back-compat fields, the same backfill the character's own Experiences
+  // get below. A companion that arrived malformed is dropped (null), never repaired into a fiction.
+  if ("companion" in ch) {
+    ch.companion = ch.companion == null ? null : ensureCompanionFields(ch.companion);
+  }
 
   if (!Array.isArray(ch.levelUps)) ch.levelUps = [];
   if (ch.baselineLevel === undefined) ch.baselineLevel = ch.level;

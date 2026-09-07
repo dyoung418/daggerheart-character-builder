@@ -132,6 +132,12 @@ function blankCharacter(id) {
     // Kept apart from the per-level picks (which live in levelUps) the way creationDomainCardIds is,
     // so re-picking the starting stances here doesn't disturb the rest.
     creationLevelChoices: {},
+    // The Beastbound Ranger's animal companion: name, Evasion, two Experiences and an attack, all
+    // player-authored. null for everyone else — its shape is subclass-specific, the same reason a
+    // transformation doesn't live in `heritage`. The level-up options chosen for it ride the
+    // `companionOptions` levelChoice (levelChoiceIds), not this object; its marked Stress and Light
+    // in the Dark slot ride character.state, like the character's own HP and Stress.
+    companion: null,
     connectionsNotes: "",
     level: 1,
     proficiency: 1,

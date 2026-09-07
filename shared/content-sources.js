@@ -46,6 +46,11 @@ export const CONTENT_FILES = {
   // cards. Enumerated as data and shown as reference, filtered to a character's tier; never
   // catalogued as an effect, because a Beastform is toggled at the table (shared/effects.js).
   beastforms: "beastforms",
+  // The Beastbound Ranger's companion level-up options — 8 the SRD prints on the companion
+  // sidecar. Picked through the same `levelChoice` as stances (shared/effects.js); four of them
+  // (Light in the Dark, Aware, Resilient, Intelligent) feed shared/companion-stats.js, the rest
+  // are printed reference.
+  "companion-options": "companionOptions",
 };
 
 // The edition loaded when the manifest can't be read at all. The newest SRD, so a broken manifest
@@ -176,6 +181,17 @@ const REQUIRED = {
   beastforms: (r) => {
     if (!r.name?.["en-US"]) return "missing: name";
     if (!Number.isInteger(r.tier) || r.tier < 1 || r.tier > 4) return "tier must be a whole number 1–4";
+    return null;
+  },
+  // A companion option is name + prose, like a stance. `maxPicks` is optional (default 1); when
+  // present it must be a whole number ≥ 1, because shared/history.js's replay uses it to stop a
+  // repeatable option once it's been taken that many times — a 0 or a fraction would either
+  // freeze the option out or never exclude it.
+  "companion-options": (r) => {
+    if (!r.name?.["en-US"]) return "missing: name";
+    if ("maxPicks" in r && (!Number.isInteger(r.maxPicks) || r.maxPicks < 1)) {
+      return "maxPicks must be a whole number ≥ 1";
+    }
     return null;
   },
 };

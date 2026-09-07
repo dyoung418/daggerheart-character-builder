@@ -80,7 +80,8 @@ async function loadAllData() {
   // Stances ARE an option on this screen: a Martial Artist picks one each level up, from the
   // `levelChoice` their foundation feature declares, so the pool has to be loaded.
   content = await loadContent({
-    files: ["classes", "subclasses", "domain-cards", "ancestries", "transformations", "stances"],
+    files: ["classes", "subclasses", "domain-cards", "ancestries", "transformations", "stances",
+      "companion-options"],
   });
   Object.assign(db, content.db);
 }
@@ -1218,6 +1219,9 @@ function saveUndoSnapshot() {
       baselineLevel: character.baselineLevel,
       creationDomainCardIds: [...(character.creationDomainCardIds || [])],
       domainVaultIds: [...(character.domainVaultIds || [])],
+      // The companion's Experience list grows at levels 2/5/8 and its modifiers are rewritten by
+      // the replay, so an undo has to put the whole thing back.
+      companion: character.companion ? JSON.parse(JSON.stringify(character.companion)) : null,
     }));
   } catch {
     // storage full or unavailable: undo is a convenience, never block the edit for it

@@ -11,6 +11,7 @@
     "armors",
     "consumables",
     "stances",
-    "beastforms"
+    "beastforms",
+    "companion-options"
   ]
 }

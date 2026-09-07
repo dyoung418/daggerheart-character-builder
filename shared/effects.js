@@ -285,6 +285,37 @@ export const EFFECTS = {
     excluded: [`Keen Defenses' Evasion bonus costs a Focus and applies to one attack, so it isn't counted here`],
   },
 
+  // Beastbound Ranger, Foundation — Companion. "Take the Ranger Companion sheet. When you level up
+  // your character, choose a level-up option for your companion from this sheet as well." That's
+  // the same shape the Martial Artist's Stance Fighter has — pick one from a named catalogue every
+  // level, for free, accumulating — so it reuses the `levelChoice` key. The companion's own stat
+  // line lives in character.companion and its four options that move a number are derived in
+  // shared/companion-stats.js; nothing about the companion reaches THIS file's stat engine.
+  "subclass_beastbound:foundation": {
+    feature: "Companion",
+    levelChoice: {
+      id: "companionOptions",
+      from: "companionOptions",
+      tierGated: false,
+      atStart: 0,
+      perLevel: 1,
+      prompt: "Choose a level-up option for your companion.",
+    },
+  },
+  // Expert Training (Specialization) — "Choose an additional level-up option for your companion."
+  // A one-off bump, so `extraPicks` only; declaredLevelChoices sums these onto the foundation
+  // entry's atStart/perLevel without a second of either. `from` is repeated so the entry validates
+  // in isolation, though the merge ignores it after the first declaration.
+  "subclass_beastbound:specialization": {
+    feature: "Expert Training",
+    levelChoice: { id: "companionOptions", from: "companionOptions", extraPicks: 1 },
+  },
+  // Advanced Training (Mastery) — "Choose two additional level-up options for your companion."
+  "subclass_beastbound:mastery": {
+    feature: "Advanced Training",
+    levelChoice: { id: "companionOptions", from: "companionOptions", extraPicks: 2 },
+  },
+
   // ===================== Armor features =====================
 
   // "+1 to Evasion"

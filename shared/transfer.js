@@ -34,6 +34,7 @@
 // so everything here is reachable from tests/.
 
 import { ensureLevelFields } from "./advancement.js";
+import { normalizeCompanion } from "./companion.js";
 
 export const TRANSFER_FORMAT = "daggerheart-character-builder";
 export const TRANSFER_VERSION = 1;
@@ -190,6 +191,10 @@ export function normalizeImported(ch) {
       ch[field][k] = Array.isArray(v) ? v.filter((x) => typeof x === "string") : [];
     }
   }
+  // The Beastbound companion, if the file carries one: a hand-edited JSON could have any shape
+  // here. normalizeCompanion defends every field and returns a clean object or null; the replay
+  // then folds Intelligent's bonuses back onto its Experiences on the next recompute.
+  if ("companion" in ch) ch.companion = normalizeCompanion(ch.companion);
   const level = Math.floor(Number(ch.level));
   ch.level = Number.isFinite(level) ? Math.min(MAX_LEVEL, Math.max(1, level)) : 1;
 

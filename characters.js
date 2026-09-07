@@ -459,6 +459,10 @@ function removeLevel(ch, level) {
   saveUndo(ch);
   ch.levelUps = (ch.levelUps || []).filter((e) => e.level !== level);
   ch.experiences = (ch.experiences || []).filter((e) => e.sinceLevel < level);
+  // The companion's Experience list grows in step with the character's, so it shrinks the same way.
+  if (ch.companion?.experiences) {
+    ch.companion.experiences = ch.companion.experiences.filter((e) => (e.sinceLevel ?? 1) < level);
+  }
   ch.level = level - 1;
   recomputeCharacter(ch);
   ch.updatedAt = new Date().toISOString();
@@ -480,6 +484,7 @@ function saveUndo(ch) {
     baselineLevel: ch.baselineLevel,
     creationDomainCardIds: [...(ch.creationDomainCardIds || [])],
     domainVaultIds: [...(ch.domainVaultIds || [])],
+    companion: ch.companion ? JSON.parse(JSON.stringify(ch.companion)) : null,
   };
   try {
     localStorage.setItem(UNDO_STORAGE_KEY, JSON.stringify(snapshot));
@@ -509,6 +514,7 @@ function undoLastEdit(ch) {
   ch.baselineLevel = snap.baselineLevel;
   ch.creationDomainCardIds = snap.creationDomainCardIds;
   ch.domainVaultIds = snap.domainVaultIds;
+  if ("companion" in snap) ch.companion = snap.companion;
   recomputeCharacter(ch);
   ch.updatedAt = new Date().toISOString();
   localStorage.removeItem(UNDO_STORAGE_KEY);
