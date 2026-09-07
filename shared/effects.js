@@ -866,6 +866,67 @@ export function knownStances(ch, db) {
     .sort((a, b) => (a.tier ?? 99) - (b.tier ?? 99) || a.name.localeCompare(b.name));
 }
 
+// "You can transform into a creature of your tier or lower from the Beastform list." — the
+// Druid's class feature. Its list is 24 categories the SRD prints outside the class cards, the
+// same as it prints the martial stances; like a stance, a Beastform is toggled at the table, so
+// the forms are enumerated and printed here, never catalogued as effects (the rule at the top of
+// this file). Every one is the same for every Druid of a given tier — this is reference the sheet
+// and the play page carry so a Druid can use the feature without the book, not per-character state.
+const BF_RANGE = { MELEE: "Melee", VERY_CLOSE: "Very Close", CLOSE: "Close", FAR: "Far", VERY_FAR: "Very Far" };
+
+function beastformAttackLine(attack) {
+  if (!attack) return "";
+  const d = attack.damage || {};
+  const dice = String(d.dice || "").toLowerCase() + (d.modifier ? `+${d.modifier}` : "");
+  const type = d.type === "MAGICAL" ? "mag" : "phy";
+  return [BF_RANGE[attack.range] || titleCase(attack.range || ""), titleCase(attack.trait || ""), dice, type]
+    .filter(Boolean).join(" ");
+}
+
+// The Druid's class feature, from either class — multiclassing hands the second class's features
+// over, the same reason ignoresBurden() checks both ids.
+function hasBeastform(ch, db) {
+  const ids = [ch?.classId, ch?.multiclass?.classId].filter(Boolean);
+  return (db?.classes || [])
+    .filter((c) => ids.includes(c.id))
+    .some((c) => (c.classFeatures || []).some((f) => f.name?.["en-US"] === "Beastform"));
+}
+
+// The Beastform options a character can take right now: the whole list filtered to their tier,
+// sorted by tier then name (the SRD's order). Empty for anyone without the Beastform feature.
+// Each form is flattened for the surfaces: `statLine`/`attackLine`/`advantages` are the printed
+// header ("" for an upgrade form, which has no statblock), `features` carries the prose blocks
+// (including the "Evolved" / "Hybrid Features" paragraph that stands in for the header there).
+export function beastformOptions(ch, db) {
+  if (!hasBeastform(ch, db)) return [];
+  const cap = tierForLevel(ch?.level || 1);
+  return (db?.beastforms || [])
+    .filter((f) => (f.tier ?? 99) <= cap)
+    .map((f) => ({
+      id: f.id,
+      name: f.name?.["en-US"] || f.id,
+      tier: f.tier ?? null,
+      variant: f.upgrade ? "upgrade" : f.hybrid ? "hybrid" : "standard",
+      examples: (f.examples || []).join(", "),
+      statLine: Number.isInteger(f.traitBonus)
+        ? `${titleCase(f.trait || "")} +${f.traitBonus} | Evasion +${f.evasionBonus ?? 0}` : "",
+      attackLine: beastformAttackLine(f.attack),
+      advantages: (f.advantages || []).join(", "),
+      features: (f.features || []).map((feat) => ({
+        name: feat.name?.["en-US"] || "",
+        text: (feat.description || []).map(descBlockText).filter(Boolean).join("\n"),
+      })),
+    }))
+    .sort((a, b) => (a.tier ?? 99) - (b.tier ?? 99) || a.name.localeCompare(b.name));
+}
+
+// A description block is either a paragraph or a bullet list; flatten either to a line of text.
+function descBlockText(block) {
+  if (block?.paragraph) return block.paragraph["en-US"] || "";
+  if (Array.isArray(block?.list)) return block.list.map((i) => `• ${i["en-US"] || ""}`).join("\n");
+  return "";
+}
+
 // How many of each domain are in the loadout — the requirement the *-Touched cards check.
 export function loadoutDomainCounts(ch, db) {
   const counts = {};

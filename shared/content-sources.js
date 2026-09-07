@@ -42,6 +42,10 @@ export const CONTENT_FILES = {
   // cards. Enumerated as data and picked through a `levelChoice` (shared/effects.js); never
   // catalogued as an effect, because a stance is toggled at the table.
   stances: "stances",
+  // The Druid's Beastform options — 24 creature categories the SRD prints outside the class
+  // cards. Enumerated as data and shown as reference, filtered to a character's tier; never
+  // catalogued as an effect, because a Beastform is toggled at the table (shared/effects.js).
+  beastforms: "beastforms",
 };
 
 // The edition loaded when the manifest can't be read at all. The newest SRD, so a broken manifest
@@ -162,6 +166,14 @@ const REQUIRED = {
   // surface groups stances by tier, so a missing one is a phantom group rather than a visible
   // blank. `tier` is the one field beyond the name that has to be there.
   stances: (r) => {
+    if (!r.name?.["en-US"]) return "missing: name";
+    if (!Number.isInteger(r.tier) || r.tier < 1 || r.tier > 4) return "tier must be a whole number 1–4";
+    return null;
+  },
+  // Every Beastform surface groups by tier too, so tier is load-bearing for the same reason.
+  // Nothing else here is: an upgrade form has no attack line, a hybrid has no advantages, and a
+  // renderer that reads those checks first.
+  beastforms: (r) => {
     if (!r.name?.["en-US"]) return "missing: name";
     if (!Number.isInteger(r.tier) || r.tier < 1 || r.tier > 4) return "tier must be a whole number 1–4";
     return null;

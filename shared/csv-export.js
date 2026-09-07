@@ -437,6 +437,20 @@ export const CSV_COLUMNS = [
     value: (r) => (r.stats.stances || []).map((s) => `${s.name}: ${s.text}`).join("\n"),
   },
 
+  // The Druid's Beastform options for this character's tier — one line per form, the whole entry
+  // (header, advantages, every feature) so the GM sheet carries the subsystem the SRD prints
+  // outside the class cards. Empty for anyone without the Beastform feature. Line wraps inside a
+  // feature (an upgrade form's bullets) are flattened to keep it one form per line.
+  {
+    header: "beastform-options",
+    value: (r) => (r.stats.beastforms || []).map((f) => {
+      const head = `${f.name} (Tier ${f.tier ?? "?"})${f.examples ? ` — ${f.examples}` : ""}`;
+      const stat = [f.statLine, f.attackLine, f.advantages && `Advantage on: ${f.advantages}`].filter(Boolean).join(". ");
+      const feats = (f.features || []).map((x) => `${x.name}: ${x.text}`).join(" ");
+      return [head, stat, feats].filter(Boolean).join(". ").replace(/\s*\n\s*/g, " ");
+    }).join("\n"),
+  },
+
   ...weaponColumns("primary"),
   ...weaponColumns("secondary"),
 

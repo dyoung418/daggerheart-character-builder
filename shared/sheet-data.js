@@ -271,6 +271,11 @@ export function deriveSheet(character, db) {
     // way `tracks` is.
     stances: stats.stances || [],
 
+    // The Druid's Beastform options for this character's tier — the other subsystem the SRD
+    // prints outside the class cards. Full detail, same reason as stances. Empty for anyone
+    // without the Beastform feature.
+    beastforms: stats.beastforms || [],
+
     // A second class, its domain and the foundation card it took. Its own field rather than
     // folded into className/subclassName, which the sheet labels with the first class's names.
     multiclass: character.multiclass && mcClass

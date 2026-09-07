@@ -24,6 +24,7 @@ const COUNT_LABELS = {
   armors: ["armor", "armors"],
   consumables: ["consumable", "consumables"],
   stances: ["stance", "stances"],
+  beastforms: ["Beastform option", "Beastform options"],
 };
 
 function countsText(counts) {

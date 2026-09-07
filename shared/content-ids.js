@@ -60,7 +60,7 @@ export function* bareForms(id, sourceNames) {
 }
 
 const COLLECTIONS = ["classes", "subclasses", "ancestries", "communities", "transformations",
-  "domainCards", "weapons", "armors", "consumables", "stances"];
+  "domainCards", "weapons", "armors", "consumables", "stances", "beastforms"];
 
 /**
  * An index of what's loaded: every id, and the bare form -> the single id that claims it.

@@ -25,6 +25,7 @@ import {
 import {
   EFFECT_STAT_KEYS,
   TRAIT_KEYS,
+  beastformOptions,
   collectEffects,
   declaredAdvancementOptions,
   declaredLevelChoices,
@@ -511,6 +512,10 @@ export function derivedStats(ch, db) {
     // levelChoice (Stance Fighter, or a homebrew stance subclass), null for everyone else — and a
     // null makes the play page skip the row, exactly as a null armorScore does.
     focusSlots: declaredLevelChoices(ch, db).some((lc) => lc.id === "stances") ? FOCUS_MAX : null,
+    // The Druid's Beastform options for this character's tier (name, tier, the printed header,
+    // features). Empty for anyone without the Beastform feature. Reference the surfaces print,
+    // never computed with — a Beastform is toggled at the table.
+    beastforms: beastformOptions(ch, db),
   };
 }
 

@@ -631,6 +631,20 @@ function renderFeatures(s) {
     source: `Tier ${st.tier ?? "?"}`,
     description: [{ type: "paragraph", text: st.text }],
   })), (f) => f.source);
+  // The Druid's Beastform options for this tier — one card per form, its header in the labels and
+  // its feature prose in the body, the way a weapon's features print.
+  if ((s.beastforms || []).length) {
+    panel.appendChild(sectionTitle("Beastform options"));
+    for (const form of s.beastforms) {
+      panel.appendChild(itemCard({
+        name: form.name,
+        labels: [`Tier ${form.tier ?? "?"}`, form.examples && `(${form.examples})`,
+          form.statLine, form.attackLine, form.advantages && `Advantage on: ${form.advantages}`],
+        features: (form.features || []).map((f) => ({ name: f.name, description: [{ type: "paragraph", text: f.text }] })),
+        withNames: true,
+      }));
+    }
+  }
   if (!panel.childNodes.length) panel.appendChild(el("p", "play-empty", t("features.none")));
   return panel;
 }

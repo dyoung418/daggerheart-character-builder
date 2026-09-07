@@ -255,6 +255,53 @@ happen once some loaded source provides stances *and* a subclass declares the le
 edge:** the app grants `atStart` at that level and `perLevel` after, and a table that reads it as
 `atStart + perLevel` for that one level can add the extra pick through the level-up screen's Edit.
 
+### beastforms.json
+
+The Druid's Beastform options — the other subsystem the SRD prints outside the class cards.
+`data/srd_2_0/beastforms.json` ships the 24 SRD forms (6 per tier), a worked example beside this
+one. Unlike stances, a Beastform is never a stored pick: it's transient, chosen at the table, so
+the app only ever *shows* the list, filtered to a character's tier.
+
+Three record shapes. **Standard** (the common case):
+
+```json
+{
+  "id": "srd_2_0_beastform_pack_predator",
+  "name": { "en-US": "Pack Predator" },
+  "tier": 1,
+  "examples": ["Coyote", "Hyena", "Wolf"],
+  "trait": "STRENGTH", "traitBonus": 2, "evasionBonus": 1,
+  "attack": { "range": "MELEE", "trait": "STRENGTH", "damage": { "dice": "D8", "modifier": 2, "type": "PHYSICAL" } },
+  "advantages": ["attack", "sprint", "track"],
+  "features": [{ "name": { "en-US": "Hobbling Strike" }, "description": [{ "paragraph": { "en-US": "…" } }] }]
+}
+```
+
+`attack.damage` is the weapon shape (`modifier` omitted when 0). `advantages` are free-form verb
+strings, not a controlled vocabulary. An **upgrade** form (the SRD's Legendary/Mythic Beast) drops
+the stat line and carries an `upgrade` object plus the rule as a feature:
+
+```json
+{ "id": "…_legendary_beast", "name": { "en-US": "Legendary Beast" }, "tier": 3, "examples": [],
+  "upgrade": { "basedOnTiers": [1], "damageBonus": 6, "traitBonus": 1, "evasionBonus": 2, "dieStep": false },
+  "features": [{ "name": { "en-US": "Evolved" }, "description": [
+    { "paragraph": { "en-US": "Pick a Tier 1 Beastform option and become a larger… " } },
+    { "list": [{ "en-US": "A +6 bonus to damage rolls" }, …] }] }] }
+```
+
+A **hybrid** form (Legendary/Mythic Hybrid) keeps the stat line, omits `advantages`, and adds a
+`hybrid` object (`extraStress`, `choose`, `fromTiers`, `advantagePicks`, `featurePicks`).
+
+**Required: `id`, `name`, and an integer `tier` from 1 to 4** — every surface groups by tier.
+Nothing else is enforced: an upgrade form legitimately has no `attack`, a hybrid no `advantages`,
+and each renderer checks before it reads.
+
+What the app does with it: any character with a class feature named **`Beastform`** (the Druid's,
+from either class if they multiclassed) sees the forms of their tier or lower on the character
+detail view, the play page's Features tab, and the GM CSV (`beastform-options`). It is never wired
+into `derivedStats()` — a Beastform is toggled at the table, so it's enumerated and printed, never
+computed with.
+
 ### weapons.json / armors.json / consumables.json
 
 ```json

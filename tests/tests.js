@@ -70,6 +70,7 @@ const {
 } = await import(`../shared/derived-stats.js${RUN}`);
 const {
   EFFECTS,
+  beastformOptions,
   blankAnswer,
   collectEffects,
   declaredLevelChoices,
@@ -4191,6 +4192,110 @@ group("Stances reach the GM's CSV with their full text, one per line");
     ["Favored: T1a", "Quick: T1b", "Reliable: T1c"]);
   eq("a non-stance character exports an empty cell, not a missing column",
     CSV_COLUMNS.find((c) => c.header === "stances-known").value(rowContext(lcChar({ subclassId: "sub" }), { ...LC_DB, effects: {} }, {})), "");
+}
+
+// ---------- Beastform options (sub-project B) ----------
+//
+// 24 creature categories the SRD prints outside the Druid's class cards. Reference the surfaces
+// print, filtered to a character's tier; never a pick and never an effect. Synthetic db here — a
+// homebrew class with a "Beastform" feature and a few forms — so the mechanism is what's tested.
+
+const BF_STD = (slug, tier, trait, tb, eb, dice, mod, adv, feats) => ({
+  id: `hb_beastform_${slug}`, name: { "en-US": slug.replace(/(^|_)(\w)/g, (_, s, c) => (s ? " " : "") + c.toUpperCase()) },
+  tier, examples: ["Alpha", "Beta"], trait, traitBonus: tb, evasionBonus: eb,
+  attack: { range: "MELEE", trait, damage: { dice, ...(mod ? { modifier: mod } : {}), type: "PHYSICAL" } },
+  advantages: adv, features: feats.map(([n, t]) => ({ name: { "en-US": n }, description: [para(t)] })),
+});
+const BF_FORMS = [
+  BF_STD("pack_predator", 1, "STRENGTH", 2, 1, "D8", 2, ["attack", "track"], [["Hobbling Strike", "Make them Vulnerable."]]),
+  BF_STD("agile_scout", 1, "AGILITY", 1, 2, "D4", 0, ["sneak"], [["Fragile", "You drop out on Major damage."]]),
+  BF_STD("great_predator", 3, "STRENGTH", 2, 2, "D12", 8, ["attack"], [["Carrier", "Carry two allies."]]),
+  { id: "hb_beastform_legendary_beast", name: { "en-US": "Legendary Beast" }, tier: 3, examples: [],
+    upgrade: { basedOnTiers: [1], damageBonus: 6, traitBonus: 1, evasionBonus: 2, dieStep: false },
+    features: [{ name: { "en-US": "Evolved" }, description: [para("Pick a Tier 1 form and get bigger."),
+      { list: [{ "en-US": "A +6 bonus to damage rolls" }] }] }] },
+  { id: "hb_beastform_legendary_hybrid", name: { "en-US": "Legendary Hybrid" }, tier: 3, examples: ["Griffon"],
+    trait: "STRENGTH", traitBonus: 2, evasionBonus: 3,
+    attack: { range: "MELEE", trait: "STRENGTH", damage: { dice: "D10", modifier: 8, type: "PHYSICAL" } },
+    hybrid: { extraStress: 1, choose: 2, fromTiers: [1, 2], advantagePicks: 4, featurePicks: 2 },
+    features: [{ name: { "en-US": "Hybrid Features" }, description: [para("Choose two sub-forms.")] }] },
+];
+const BF_DB = {
+  classes: [
+    { id: "hb_druid", name: "DRUID", domains: ["SAGE"], startingHitPoints: 6, startingEvasion: 10,
+      classFeatures: [{ name: { "en-US": "Beastform" }, description: [para("Transform into a creature of your tier or lower.")] }] },
+    { id: "hb_warrior", name: "WARRIOR", domains: ["BLADE"], startingHitPoints: 7, startingEvasion: 9, classFeatures: [] },
+  ],
+  subclasses: [{ id: "hb_warden", name: { "en-US": "Warden" }, class: "DRUID", foundation: {}, specialization: {}, mastery: {} }],
+  ancestries: [], communities: [],
+  beastforms: BF_FORMS,
+  domainCards: [{ id: "bfc", name: { "en-US": "C" }, domain: "SAGE", level: 1 }],
+  effects: {},
+};
+function bfChar(over = {}) {
+  const ch = ensureLevelFields(newCharacter());
+  ch.classId = "hb_druid";
+  ch.subclassId = "hb_warden";
+  ch.traits = { agility: 1, strength: 2, finesse: 0, instinct: 2, presence: 0, knowledge: 1 };
+  ch.domainCardIds = ["bfc"];
+  ch.creationDomainCardIds = ["bfc"];
+  ch.heritage = { ancestryMode: "pure", ancestryIds: [], chosenFeatures: [], communityId: null };
+  ch.equipment = { primaryWeaponId: null, secondaryWeaponId: null, armorId: null, potionChoice: null };
+  ch.background = { description: "", answers: "" };
+  ch.connectionsNotes = "";
+  return Object.assign(ch, over);
+}
+
+group("The beastforms kind loads like any other, and demands a tier");
+{
+  eq("a form with a name and a tier is fine", validateRecord("beastforms", { id: "x", name: { "en-US": "Wolf" }, tier: 1 }), null);
+  eq("no tier is refused — every surface groups by it", validateRecord("beastforms", { id: "x", name: { "en-US": "Wolf" } }), "tier must be a whole number 1–4");
+  eq("a tier past 4 is refused too", validateRecord("beastforms", { id: "x", name: { "en-US": "W" }, tier: 5 }), "tier must be a whole number 1–4");
+  const { db, report } = mergeSources([source("hb", { beastforms: BF_FORMS.concat([{ id: "bad", name: { "en-US": "B" } }]) })]);
+  eq("the good records land", db.beastforms.length, BF_FORMS.length);
+  eq("the panel names the one it dropped", report.sources[0].skipped, [{ file: "beastforms", id: "bad", reason: "tier must be a whole number 1–4" }]);
+  eq("and it counts as a Beastform option", report.sources[0].counts.beastforms, BF_FORMS.length);
+}
+
+group("Beastform options are the whole list for a Druid's tier, and nothing for anyone else");
+{
+  const t1 = beastformOptions(bfChar(), BF_DB);
+  eq("a Tier 1 Druid sees only the Tier 1 forms", t1.map((f) => f.name), ["Agile Scout", "Pack Predator"]);
+  const t3 = beastformOptions(bfChar({ level: 5 }), BF_DB);
+  eq("a Tier 3 Druid sees them all, sorted by tier then name",
+    t3.map((f) => f.name), ["Agile Scout", "Pack Predator", "Great Predator", "Legendary Beast", "Legendary Hybrid"]);
+  eq("a Warrior sees none", beastformOptions(bfChar({ classId: "hb_warrior" }), BF_DB), []);
+  eq("a Warrior who multiclassed into Druid sees them — the feature comes across",
+    beastformOptions(bfChar({ classId: "hb_warrior", multiclass: { classId: "hb_druid", subclassId: "hb_warden", tier: "foundation" } }), BF_DB).length, 2);
+}
+
+group("Each Beastform variant flattens to the header the surfaces print");
+{
+  const t3 = beastformOptions(bfChar({ level: 5 }), BF_DB);
+  const std = t3.find((f) => f.name === "Pack Predator");
+  eq("a standard form carries the stat line, attack line and advantage verbs",
+    [std.variant, std.statLine, std.attackLine, std.advantages],
+    ["standard", "Strength +2 | Evasion +1", "Melee Strength d8+2 phy", "attack, track"]);
+  const up = t3.find((f) => f.name === "Legendary Beast");
+  eq("an upgrade form has no header — its Evolved feature stands in, bullets and all",
+    [up.variant, up.statLine, up.attackLine, up.advantages, up.features[0].name, up.features[0].text.includes("• A +6 bonus to damage rolls")],
+    ["upgrade", "", "", "", "Evolved", true]);
+  const hy = t3.find((f) => f.name === "Legendary Hybrid");
+  eq("a hybrid form keeps its stat line but prints no advantage verbs",
+    [hy.variant, hy.statLine, hy.attackLine, hy.advantages], ["hybrid", "Strength +2 | Evasion +3", "Melee Strength d10+8 phy", ""]);
+}
+
+group("Beastform options reach the sheet, the derived stats and the GM's CSV");
+{
+  eq("derivedStats carries them for a Druid", derivedStats(bfChar(), BF_DB).beastforms.map((f) => f.name), ["Agile Scout", "Pack Predator"]);
+  eq("and an empty array for a Warrior", derivedStats(bfChar({ classId: "hb_warrior" }), BF_DB).beastforms, []);
+  eq("deriveSheet passes them through", deriveSheet(bfChar({ level: 5 }), BF_DB).beastforms.length, 5);
+  const col = CSV_COLUMNS.find((c) => c.header === "beastform-options");
+  eq("the CSV column exists", !!col, true);
+  const lines = col.value(rowContext(bfChar(), BF_DB, {})).split("\n");
+  eq("one line per form, the whole entry, header first",
+    lines[1], "Pack Predator (Tier 1) — Alpha, Beta. Strength +2 | Evasion +1. Melee Strength d8+2 phy. Advantage on: attack, track. Hobbling Strike: Make them Vulnerable.");
+  eq("a non-Druid exports an empty cell", col.value(rowContext(bfChar({ classId: "hb_warrior" }), BF_DB, {})), "");
 }
 
 group("A transformation grants what it declares, and says what it doesn't");

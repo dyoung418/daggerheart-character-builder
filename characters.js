@@ -516,6 +516,32 @@ function undoLastEdit(ch) {
   renderAll();
 }
 
+// One Beastform option, the way the SRD lays it out: name and examples, the stat header (absent
+// on an upgrade form), the advantage verbs, then the feature prose. Shared by the character-detail
+// list; the play page and the printable sheet render the same `stats.beastforms` their own way.
+function beastformBlock(form) {
+  const wrap = document.createElement("div");
+  wrap.className = "beastform-option";
+  const head = document.createElement("p");
+  head.innerHTML = `<strong>${escapeHtml(form.name)}</strong>`
+    + (form.examples ? ` <span class="hint">(${escapeHtml(form.examples)})</span>` : "")
+    + ` <span class="hint">— Tier ${escapeHtml(String(form.tier ?? "?"))}</span>`;
+  wrap.appendChild(head);
+  if (form.statLine || form.attackLine || form.advantages) {
+    const stat = document.createElement("p");
+    stat.className = "hint";
+    stat.textContent = [form.statLine, form.attackLine,
+      form.advantages && `Advantage on: ${form.advantages}`].filter(Boolean).join(" · ");
+    wrap.appendChild(stat);
+  }
+  for (const feat of form.features || []) {
+    const p = document.createElement("p");
+    p.innerHTML = `<strong>${escapeHtml(feat.name)}:</strong> ${escapeHtml(feat.text).replace(/\n/g, "<br>")}`;
+    wrap.appendChild(p);
+  }
+  return wrap;
+}
+
 function renderDetail() {
   const ch = characters.find((c) => c.id === openId);
   const container = document.getElementById("character-detail");
@@ -782,6 +808,21 @@ function renderDetail() {
       p.innerHTML = `<strong>${escapeHtml(stance.name)}</strong> `
         + `<span class="hint">— Tier ${escapeHtml(String(stance.tier ?? "?"))}</span><br>${escapeHtml(stance.text)}`;
       box.appendChild(p);
+    }
+    container.appendChild(box);
+  }
+
+  // The Druid's Beastform options for this character's tier — the other subsystem the SRD prints
+  // outside the class cards. Long (up to 24 forms at Tier 4), so it's collapsed by default; a
+  // Druid who wants it open at the table has the play page. Empty (absent) for everyone else.
+  if ((stats.beastforms || []).length > 0) {
+    const box = document.createElement("details");
+    box.className = "class-detail detail-class-features";
+    const summary = document.createElement("summary");
+    summary.textContent = `Beastform options for your tier (${stats.beastforms.length})`;
+    box.appendChild(summary);
+    for (const form of stats.beastforms) {
+      box.appendChild(beastformBlock(form));
     }
     container.appendChild(box);
   }
