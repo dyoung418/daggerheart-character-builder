@@ -616,10 +616,11 @@ function renderStanceSubPicker(main, pick, ordinal, newLevel) {
 
   for (const stance of opts) {
     const checked = pick.recordId === stance.id;
+    const text = (stance.description || []).map((p) => p?.paragraph?.["en-US"] || "").filter(Boolean).join(" ");
     const row = document.createElement("label");
     row.className = "option-row";
     row.innerHTML = `<input type="radio" name="stance-${escapeHtml(String(picks.indexOf(pick)))}" ${checked ? "checked" : ""}/> `
-      + `${escapeHtml(stance.name["en-US"])} <span class="hint">— Tier ${stance.tier}</span>`;
+      + `<span><strong>${escapeHtml(stance.name["en-US"])}</strong> — ${escapeHtml(text)} <span class="hint">(Tier ${stance.tier})</span></span>`;
     row.querySelector("input").addEventListener("change", () => {
       pick.recordId = stance.id;
       pick.optionLabel = stance.name["en-US"];
