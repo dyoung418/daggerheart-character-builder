@@ -9,13 +9,28 @@
 // options chosen for it ride the `companionOptions` levelChoice (character.levelChoiceIds); its
 // marked Stress and its Light in the Dark slot ride character.state, like the character's own HP.
 
+// The damage-die and range ladders the Vicious level-up option climbs, one step per pick. The
+// companion always STARTS at D6 / MELEE (SRD 2.0 p21, and the official sidecar: "Their damage
+// starts at d6 and their range starts at Melee") — the player has no choice at creation. Vicious
+// is the only thing that moves either.
 export const COMPANION_DAMAGE_DICE = ["D6", "D8", "D10", "D12"];
 export const COMPANION_RANGES = ["MELEE", "VERY_CLOSE", "CLOSE", "FAR", "VERY_FAR"];
 export const COMPANION_DAMAGE_TYPES = ["PHYSICAL", "MAGICAL"];
 
 export const COMPANION_BASE_EVASION = 10; // SRD 2.0 p21: "Fill in their Evasion, which starts at 10."
-export const COMPANION_BASE_STRESS = 6;
+// Three solid slots on the official companion sheet, then three dashed ones — base 3, and Resilient
+// (maxPicks 3) grows it to the 6 the sidecar form draws.
+export const COMPANION_BASE_STRESS = 3;
 export const COMPANION_EXPERIENCE_BASE = 2; // "Start with +2 in both Experiences."
+
+// Climb `ladder` `steps` rungs up from `base`, clamped to the top. `stepUp(COMPANION_DAMAGE_DICE,
+// "D6", 2)` -> "D10". A base the ladder doesn't contain is treated as rung 0.
+export function stepUp(ladder, base, steps) {
+  const start = ladder.indexOf(base);
+  const from = start < 0 ? 0 : start;
+  const n = Number.isInteger(steps) && steps > 0 ? steps : 0;
+  return ladder[Math.min(from + n, ladder.length - 1)];
+}
 
 let seq = 0;
 export function newCompanionExperienceId() {

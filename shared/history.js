@@ -21,6 +21,7 @@ import {
   tierForLevel,
 } from "./advancement.js";
 import { advancementOptionsFor, effectBonuses, hitPointTotal, stressTotal } from "./derived-stats.js";
+import { COMPANION_DAMAGE_DICE, COMPANION_RANGES, stepUp } from "./companion.js";
 import { titleCase } from "./text.js";
 
 // The character as it stood at some level, for the purpose of asking shared/effects.js what
@@ -90,6 +91,9 @@ function blankState(ch) {
     // companion Experience id -> how many +1s from the Intelligent companion option. Kept apart
     // from expBonus because it lands on ch.companion.experiences, not ch.experiences.
     companionExpBonus: {},
+    // Vicious companion options taken since the baseline, split by which step the player chose.
+    // The die and range then climb from the baseline's stored values (companionAttack below).
+    companionVicious: { die: 0, range: 0 },
   };
 }
 
@@ -168,6 +172,9 @@ function applyEntry(state, entry) {
           for (const id of pick.experienceIds || []) {
             state.companionExpBonus[id] = (state.companionExpBonus[id] || 0) + 1;
           }
+          // Vicious: one step up the damage-die OR the range ladder, the player's choice.
+          if (pick.optionStep === "die") state.companionVicious.die += 1;
+          else if (pick.optionStep === "range") state.companionVicious.range += 1;
         }
         break;
     }
@@ -235,6 +242,17 @@ export function recomputeCharacter(ch) {
   // bonus, exactly like the character's own Experience advancements.
   for (const exp of ch.companion?.experiences || []) {
     exp.modifier = (exp.baseModifier ?? 2) + (state.companionExpBonus[exp.id] || 0);
+  }
+  // The companion's attack die and range climb from the baseline's values (D6 / MELEE for one
+  // baselined at level 1) by one step per Vicious pick that chose that ladder. Written back onto
+  // the stored attack the way exp.modifier is — the sheet and play page read it without replaying.
+  if (ch.companion) {
+    const base = ch.baseline?.companionAttack || {};
+    ch.companion.attack = {
+      ...ch.companion.attack,
+      damageDie: stepUp(COMPANION_DAMAGE_DICE, base.damageDie || "D6", state.companionVicious.die),
+      range: stepUp(COMPANION_RANGES, base.range || "MELEE", state.companionVicious.range),
+    };
   }
 
   // Cards can leave the collection through an exchange, so the vault has to drop anything
@@ -564,7 +582,8 @@ export function describeLevelUp(ch, entry, db) {
       // The pick carries its own label (the picker always stores it), so this stays readable with
       // the source switched off — the same reason a declared advancement row stores optionLabel.
       const heading = LEVEL_CHOICE_LABELS[pick.choiceId] || pick.choiceId || "Choice";
-      parts.push(`${heading}: ${pick.optionLabel || pick.recordId}`);
+      const step = pick.optionStep === "die" ? " (damage die)" : pick.optionStep === "range" ? " (range)" : "";
+      parts.push(`${heading}: ${pick.optionLabel || pick.recordId}${step}`);
     } else {
       // A declared row's pick carries its own label, which is why this needs neither the content
       // nor the option table to stay readable — see the note on optionLabel in level-up.js.

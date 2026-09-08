@@ -327,18 +327,19 @@ that declares this levelChoice. The level-up screen then shows a "Your Companion
 option per level, plus the extra picks Expert Training (+1) and Advanced Training (+2) grant, plus
 a name field for the companion's new Experience at levels 2/5/8.
 
-Four options move a number, and the app computes it — in `shared/companion-stats.js`, NOT
-`derivedStats()`, because the companion is a separate entity:
+A companion always starts at Evasion 10, a d6 damage die, Melee range, and 3 Stress slots — none of
+those is a choice at level 1. Five options then move a number, computed in
+`shared/companion-stats.js` (Vicious in the level-up replay), NOT `derivedStats()`:
 
 - **Aware** → +2 to the companion's Evasion, per pick
-- **Resilient** → +1 to the companion's Stress track, per pick
+- **Resilient** → +1 to the companion's Stress track, per pick (3 → 6 over three picks)
 - **Intelligent** → +1 to one Companion Experience the player names, per pick
+- **Vicious** → steps the damage die (d6→d8→d10→d12) **or** the range (Melee→Very Close→…), the
+  player's choice on each pick — the level-up screen asks which, and the sheet shows the result
 - **Light in the Dark** → one extra Hope slot the *character* marks — modelled as its own single
   tappable slot on the play page, never part of the character's six (a scar can't cross it out)
 
-The other four (Creature Comfort, Armored, Bonded, Vicious) are printed reference only — Vicious
-steps the damage die or range, which the player records on the companion's own attack fields, the
-same way the app never computes a Combo Die's `d6`→`d8`.
+The other three (Creature Comfort, Armored, Bonded) are printed reference only.
 
 Surfaces: the character detail view, the play page (a companion Stress row, the Light in the Dark
 slot, and the options on the Features tab), the printed sheet, the GM CSV (`companion-*` columns),

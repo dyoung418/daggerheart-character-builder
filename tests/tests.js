@@ -4371,6 +4371,11 @@ const coEntry = (level, ...names) => ({
   picks: names.map((n) => ({ key: "levelChoice", choiceId: "companionOptions", recordId: `hb_co_${n.toLowerCase().replace(/\s+/g, "_")}`, optionLabel: n })),
   mandatoryCardId: null, exchange: null,
 });
+const coStep = (level, name, step) => ({
+  level,
+  picks: [{ key: "levelChoice", choiceId: "companionOptions", recordId: `hb_co_${name.toLowerCase().replace(/\s+/g, "_")}`, optionLabel: name, optionStep: step }],
+  mandatoryCardId: null, exchange: null,
+});
 
 group("The companion-options kind loads like any other, with an optional maxPicks");
 {
@@ -4402,9 +4407,37 @@ group("Companion options replay as a multiset and reach companionStats");
   const s = companionStats(ch, CO_DB);
   eq("present for a Beastbound with a companion", s.present, true);
   eq("Evasion is base 10 plus 2 per Aware", s.evasion, 14);
-  eq("Stress is base 6 plus one per Resilient", s.stressSlots, 7);
+  eq("Stress is base 3 plus one per Resilient", s.stressSlots, 4);
   eq("the options flatten with a count", s.options.map((o) => `${o.name} x${o.count}`), ["Aware x2", "Resilient x1"]);
   eq("empty for a character with no companion object", companionStats(coChar({ companion: null }), CO_DB).present, false);
+}
+
+group("Vicious steps the companion's damage die or range, the player's choice, one rung per pick");
+{
+  const ch = coChar();
+  ch.level = 4;
+  ch.levelUps = [
+    coStep(2, "Vicious", "die"),
+    coStep(3, "Vicious", "range"),
+    coStep(4, "Vicious", "die"),
+  ];
+  recomputeCharacter(ch);
+  eq("two die steps from d6, one range step from Melee",
+    [ch.companion.attack.damageDie, ch.companion.attack.range], ["D10", "VERY_CLOSE"]);
+  const s = companionStats(ch, CO_DB);
+  eq("companionStats reads them straight off the recomputed attack",
+    [s.damageDieLabel, s.rangeLabel], ["d10", "Very Close"]);
+  // Re-point the level-3 step to the die too: now three die steps, no range steps.
+  ch.levelUps[1] = coStep(3, "Vicious", "range");
+  ch.levelUps[1].picks[0].optionStep = "die";
+  recomputeCharacter(ch);
+  eq("editing a step re-runs the replay", ch.companion.attack.damageDie, "D12");
+  eq("and the die ladder clamps at d12", ch.companion.attack.range, "MELEE");
+  // A Vicious pick with no step recorded (an old save) moves neither.
+  ch.levelUps = [{ level: 2, picks: [{ key: "levelChoice", choiceId: "companionOptions", recordId: "hb_co_intelligent", optionLabel: "Intelligent" }, { key: "levelChoice", choiceId: "companionOptions", recordId: "hb_co_vicious", optionLabel: "Vicious" }] }];
+  ch.level = 2;
+  recomputeCharacter(ch);
+  eq("a stepless Vicious leaves d6 / Melee", [ch.companion.attack.damageDie, ch.companion.attack.range], ["D6", "MELEE"]);
 }
 
 group("Intelligent folds a +1 onto the Companion Experience it names, through the replay");
@@ -4453,11 +4486,11 @@ group("The companion reaches the sheet, the play maxima and the GM's CSV");
   recomputeCharacter(ch);
   const sheet = deriveSheet(ch, CO_DB);
   eq("deriveSheet carries a companion block", sheet.companion?.name, "Ember");
-  eq("companionStressSlots feeds the play row", sheet.companionStressSlots, 7);
+  eq("companionStressSlots feeds the play row (base 3 + 1 Resilient)", sheet.companionStressSlots, 4);
   eq("companionLightSlots is the count, or null when zero",
     [sheet.companionLightSlots, deriveSheet(coChar(), CO_DB).companionLightSlots], [1, null]);
   const maxes = maxesFromSheet(sheet);
-  eq("maxesFromSheet exposes both rows", [maxes.companionStress, maxes.lightSlot], [7, 1]);
+  eq("maxesFromSheet exposes both rows", [maxes.companionStress, maxes.lightSlot], [4, 1]);
   eq("and null for a non-Beastbound so neither row draws",
     [maxesFromSheet(deriveSheet(coChar({ subclassId: "sub", companion: null }), { ...CO_DB, effects: {} })).companionStress], [null]);
   const col = (h) => CSV_COLUMNS.find((c) => c.header === h).value(rowContext(ch, CO_DB, {}));

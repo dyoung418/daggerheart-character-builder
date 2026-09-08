@@ -12,7 +12,7 @@ import { derivedStats, spellcastTraitKeys } from "./shared/derived-stats.js";
 import { statLine } from "./shared/stat-line.js";
 import { titleCase } from "./shared/text.js";
 import { blankAnswer, collectEffects, declaredLevelChoices, effectFor, ignoresBurden } from "./shared/effects.js";
-import { blankCompanion, COMPANION_DAMAGE_DICE, COMPANION_RANGES } from "./shared/companion.js";
+import { blankCompanion } from "./shared/companion.js";
 import { renderEffectChoice } from "./shared/effect-choice.js";
 import { loadContent } from "./shared/content-load.js";
 import { resolveRecordId } from "./shared/content-ids.js";
@@ -777,9 +777,10 @@ function renderCompanionStep(panel) {
 
   const info = document.createElement("p");
   info.className = "hint";
-  info.textContent = "Your animal companion. Name them, set their Evasion (starts at 10), give them " +
-    "two Experiences at +2, and describe their attack. You'll choose a level-up option for them " +
-    "each time your character levels up.";
+  info.textContent = "Your animal companion. Name them, give them two Experiences at +2, and " +
+    "describe their attack. Their Evasion starts at 10, their damage die at d6 and their range at " +
+    "Melee — none of those are a choice at level 1. You'll pick a level-up option for them each " +
+    "time your character levels up.";
   panel.appendChild(info);
 
   const nameRow = document.createElement("div");
@@ -787,16 +788,6 @@ function renderCompanionStep(panel) {
   nameRow.innerHTML = `<label>Companion name <input type="text" id="companion-name" value="${escapeHtml(c.name)}" placeholder="e.g. Ember" /></label>`;
   nameRow.querySelector("input").addEventListener("input", (e) => { c.name = e.target.value; onTextChange(); });
   panel.appendChild(nameRow);
-
-  const evRow = document.createElement("div");
-  evRow.className = "field-row";
-  evRow.innerHTML = `<label>Evasion <input type="number" id="companion-evasion" min="0" value="${escapeHtml(c.evasion)}" /></label>`;
-  evRow.querySelector("input").addEventListener("input", (e) => {
-    const n = parseInt(e.target.value, 10);
-    c.evasion = Number.isFinite(n) && n >= 0 ? n : 10;
-    onTextChange();
-  });
-  panel.appendChild(evRow);
 
   const expHead = document.createElement("h3");
   expHead.textContent = "Companion Experiences";
@@ -821,20 +812,11 @@ function renderCompanionStep(panel) {
   atkNameRow.querySelector("input").addEventListener("input", (e) => { c.attack.name = e.target.value; onTextChange(); });
   panel.appendChild(atkNameRow);
 
-  const rangeRow = document.createElement("div");
-  rangeRow.className = "field-row";
-  const rangeOpts = COMPANION_RANGES.map((r) =>
-    `<option value="${r}" ${c.attack.range === r ? "selected" : ""}>${escapeHtml(titleCase(r.replace(/_/g, " ")))}</option>`).join("");
-  rangeRow.innerHTML = `<label>Range <select>${rangeOpts}</select></label>`;
-  rangeRow.querySelector("select").addEventListener("change", (e) => { c.attack.range = e.target.value; onChange(); });
-  panel.appendChild(rangeRow);
-
-  const dieRow = document.createElement("div");
-  dieRow.className = "field-row";
-  dieRow.innerHTML = "<span>Damage die</span> " + COMPANION_DAMAGE_DICE.map((d) =>
-    `<label class="inline"><input type="radio" name="companion-die" value="${d}" ${c.attack.damageDie === d ? "checked" : ""}/> ${d.toLowerCase()}</label>`).join(" ");
-  dieRow.querySelectorAll("input").forEach((r) => r.addEventListener("change", (e) => { c.attack.damageDie = e.target.value; onChange(); }));
-  panel.appendChild(dieRow);
+  const fixed = document.createElement("p");
+  fixed.className = "hint";
+  fixed.textContent = "Damage die d6 · Range Melee — both step up one rung each time you take the "
+    + "Vicious level-up option.";
+  panel.appendChild(fixed);
 
   const typeRow = document.createElement("div");
   typeRow.className = "field-row";

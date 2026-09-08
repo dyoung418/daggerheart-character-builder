@@ -31,6 +31,7 @@ import {
 } from "./shared/derived-stats.js";
 import { blankAnswer, choiceFor, declaredLevelChoices } from "./shared/effects.js";
 import { companionStats } from "./shared/companion-stats.js";
+import { COMPANION_DAMAGE_DICE, COMPANION_RANGES, stepUp } from "./shared/companion.js";
 import { loadContent } from "./shared/content-load.js";
 import { mountContentSettings } from "./shared/content-settings.js";
 import { visibleRecords } from "./shared/content-sources.js";
@@ -294,10 +295,34 @@ function syncCompanionPicks() {
   }
   while (current.length < owed) {
     const pick = { key: "levelChoice", choiceId: "companionOptions", recordId: null, optionLabel: null,
-      traits: [], experienceIds: [], cardId: null, target: null, classId: null, domain: null, subclassId: null };
+      optionStep: null, traits: [], experienceIds: [], cardId: null, target: null, classId: null,
+      domain: null, subclassId: null };
     picks.push(pick);
     current.push(pick);
   }
+}
+
+// "VERY_CLOSE" -> "Very Close". titleCase() splits on whitespace/hyphens, not the underscore.
+function companionRangeLabel(range) {
+  return String(range || "").toLowerCase().split("_").filter(Boolean)
+    .map((w) => w[0].toUpperCase() + w.slice(1)).join(" ");
+}
+
+// Vicious steps the damage die OR the range, one rung per pick. `viciousSteps` counts how many of
+// each the character has by the working level — the picks known at the start of it (from the
+// replay context) plus any chosen on screen — so the section can preview the resulting die/range.
+function companionViciousSteps() {
+  const steps = {
+    die: context.companionVicious?.die || 0,
+    range: context.companionVicious?.range || 0,
+  };
+  for (const p of picks) {
+    if (p.key === "levelChoice" && p.choiceId === "companionOptions" && p.optionLabel === "Vicious") {
+      if (p.optionStep === "die") steps.die += 1;
+      else if (p.optionStep === "range") steps.range += 1;
+    }
+  }
+  return steps;
 }
 
 // The companion's Experiences a pick's Intelligent bonus can name: those the companion has at this
@@ -467,7 +492,9 @@ function render() {
   for (const pick of picksFor("levelChoice").filter((p) => p.recordId && p.choiceId === "companionOptions")) {
     const opt = (db.companionOptions || []).find((o) => o.id === pick.recordId);
     const eligible = companionOptionsFor(pick).some((o) => o.id === pick.recordId);
-    if (!opt || !eligible) { pick.recordId = null; pick.optionLabel = null; pick.experienceIds = []; }
+    if (!opt || !eligible) { pick.recordId = null; pick.optionLabel = null; pick.experienceIds = []; pick.optionStep = null; }
+    // The die/range choice belongs to Vicious only; a pick switched to something else drops it.
+    if (pick.optionLabel !== "Vicious") pick.optionStep = null;
   }
 
   if (!isEditing() && character.level >= 10) {
@@ -765,16 +792,22 @@ function renderCompanionSection(main, newLevel) {
     warn.innerHTML = `This character has no companion recorded yet. <a href="create.html?id=${escapeHtml(character.id)}&step=companion">Set one up first</a>, then come back — the option below still saves.`;
     section.appendChild(warn);
   } else {
-    // Mini-stats as they'd stand with this level's picks applied.
+    // Mini-stats as they'd stand with this level's picks applied. Evasion / Stress / Light come
+    // from a probe fed the option ids; the die and range need the Vicious step choices, which the
+    // id list doesn't carry, so they're computed from companionViciousSteps() and the baseline.
     const chosenIds = [
       ...(context.levelChoiceIds?.companionOptions || []),
       ...picks.filter((p) => p.key === "levelChoice" && p.choiceId === "companionOptions" && p.recordId).map((p) => p.recordId),
     ];
     const probe = { ...character, levelChoiceIds: { ...(character.levelChoiceIds || {}), companionOptions: chosenIds } };
     const s = companionStats(probe, db);
+    const steps = companionViciousSteps();
+    const base = character.baseline?.companionAttack || {};
+    const die = stepUp(COMPANION_DAMAGE_DICE, base.damageDie || "D6", steps.die).toLowerCase();
+    const range = companionRangeLabel(stepUp(COMPANION_RANGES, base.range || "MELEE", steps.range));
     const stat = document.createElement("p");
     stat.className = "hint";
-    stat.textContent = `Evasion ${s.evasion} · Stress ${s.stressSlots} slots · Damage ${s.damageDieLabel}`
+    stat.textContent = `Evasion ${s.evasion} · Stress ${s.stressSlots} slots · Damage ${die} · Range ${range}`
       + (s.lightSlots ? " · Light in the Dark slot" : "");
     section.appendChild(stat);
   }
@@ -818,11 +851,36 @@ function renderCompanionSection(main, newLevel) {
         pick.recordId = opt.id;
         pick.optionLabel = name;
         if (name !== "Intelligent") pick.experienceIds = [];
+        if (name !== "Vicious") pick.optionStep = null;
         render();
       });
       list.appendChild(row);
     }
     section.appendChild(list);
+
+    // Vicious steps the damage die OR the range — ask which.
+    if (pick.optionLabel === "Vicious" && companion) {
+      const steps = companionViciousSteps();
+      const base = character.baseline?.companionAttack || {};
+      // What this pick would produce, shown on each choice so it reads as a concrete step.
+      const dieNow = stepUp(COMPANION_DAMAGE_DICE, base.damageDie || "D6", steps.die - (pick.optionStep === "die" ? 1 : 0));
+      const dieNext = stepUp(COMPANION_DAMAGE_DICE, base.damageDie || "D6", steps.die - (pick.optionStep === "die" ? 1 : 0) + 1);
+      const rangeNow = stepUp(COMPANION_RANGES, base.range || "MELEE", steps.range - (pick.optionStep === "range" ? 1 : 0));
+      const rangeNext = stepUp(COMPANION_RANGES, base.range || "MELEE", steps.range - (pick.optionStep === "range" ? 1 : 0) + 1);
+      subHeading(section, "Increase the damage die, or the range?");
+      const list2 = document.createElement("div");
+      list2.className = "option-list";
+      const opt2 = (value, label) => {
+        const r = document.createElement("label");
+        r.className = "option-row";
+        r.innerHTML = `<input type="radio" name="vicious-${escapeHtml(String(picks.indexOf(pick)))}" ${pick.optionStep === value ? "checked" : ""}/> ${escapeHtml(label)}`;
+        r.querySelector("input").addEventListener("change", () => { pick.optionStep = value; render(); });
+        list2.appendChild(r);
+      };
+      opt2("die", `Damage die — ${dieNow.toLowerCase()} → ${dieNext.toLowerCase()}`);
+      opt2("range", `Range — ${companionRangeLabel(rangeNow)} → ${companionRangeLabel(rangeNext)}`);
+      section.appendChild(list2);
+    }
 
     // Intelligent raises one Companion Experience — ask which.
     if (pick.optionLabel === "Intelligent" && companion) {
@@ -1244,6 +1302,11 @@ function confirmBlockedReason(newLevel) {
         && companionOptionsFor(pick).length > 0) {
       return "Choose a level-up option for your companion.";
     }
+    // Vicious needs its die-or-range choice before the level can confirm.
+    if (pick.key === "levelChoice" && pick.choiceId === "companionOptions"
+        && pick.optionLabel === "Vicious" && !pick.optionStep) {
+      return "Choose whether Vicious steps your companion's damage die or its range.";
+    }
   }
   // Taking the trait option twice needs four DIFFERENT unmarked traits.
   const allTraits = traitsPickedThisLevel();
@@ -1287,6 +1350,7 @@ function currentEntry(level) {
         entry.choiceId = p.choiceId;
         entry.recordId = p.recordId;
         if (p.experienceIds?.length) entry.experienceIds = [...p.experienceIds];
+        if (p.optionStep) entry.optionStep = p.optionStep;
       }
       // Only written when it isn't your own subclass, so a level recorded for a single-subclass
       // character serialises byte for byte as it always did.
@@ -1512,6 +1576,7 @@ function loadPicksFrom(entry) {
     choiceId: p.choiceId || null,
     recordId: p.recordId || null,
     optionLabel: p.optionLabel || null,
+    optionStep: p.optionStep || null,
   }));
   mandatoryCardId = entry.mandatoryCardId || null;
   grantedCardIds = [...(entry.grantedCardIds || [])];

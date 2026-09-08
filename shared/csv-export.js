@@ -461,6 +461,9 @@ export const CSV_COLUMNS = [
   // and the extra Hope slot count. Feeds daggerheart-statblocks.
   { header: "companion-name", value: (r) => (r.companion.present ? r.companion.name : "") },
   { header: "companion-evasion", value: (r) => (r.companion.present ? r.companion.evasion : "") },
+  // Base 3, up to 6 with Resilient — the number the "Roll d6s equal to unmarked Stress" options
+  // (Bonded) actually need.
+  { header: "companion-stress-slots", value: (r) => (r.companion.present ? r.companion.stressSlots : "") },
   {
     header: "companion-attack",
     value: (r) => (r.companion.present ? r.companion.attackLine : ""),

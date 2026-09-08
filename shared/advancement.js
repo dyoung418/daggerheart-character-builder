@@ -376,6 +376,10 @@ function captureBaseline(ch) {
     // and the replay reads those directly at level 1 — and the full multiset for one imported
     // above level 1, whose per-level picks have no recorded entries to replay.
     levelChoiceIds: JSON.parse(JSON.stringify(ch.levelChoiceIds || {})),
+    // The Beastbound companion's attack die and range as they stood at the baseline — D6 / MELEE
+    // for a character built here, and whatever Vicious had already stepped them to for one
+    // imported above level 1. The replay steps further from here. null when there's no companion.
+    companionAttack: ch.companion?.attack ? { ...ch.companion.attack } : null,
   };
 }
 
