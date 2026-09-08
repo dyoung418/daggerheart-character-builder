@@ -45,6 +45,7 @@ const {
 } = await import(`../shared/advancement.js${RUN}`);
 const {
   characterAtLevel,
+  describeAchievement,
   describeLevelUp,
   experiencesAtLevel,
   recomputeCharacter,
@@ -510,6 +511,36 @@ group("A declared row needs no new state in the replay");
   check("marking a once-per-tier row twice in one tier is an error", errors.length > 0);
   check("and no message says 'undefined'", !errors.some((e) => e.includes("undefined")));
   check("the message names the row", errors.some((e) => e.includes("Improve your gadget")));
+}
+
+group("The level history names the Experience a tier achievement grants");
+{
+  const ch = newCharacter();
+  record(ch, 2, [{ key: "hitPoint", slotTier: 2 }, { key: "stress", slotTier: 2 }], "c2");
+  record(ch, 3, [{ key: "evasion", slotTier: 2 }, { key: "stress", slotTier: 2 }], "c3");
+
+  eq("the level 2 row surfaces its new Experience, unnamed until it's named",
+    describeAchievement(ch, ch.levelUps[0]), ["New Experience (+2): (unnamed)"]);
+  eq("a non-achievement level adds no line",
+    describeAchievement(ch, ch.levelUps[1]), []);
+
+  // Naming it — what this level's Edit screen writes straight onto the Experience — flows through.
+  ch.experiences.find((e) => e.sinceLevel === 2).name = "  Sapphire Syndicate Assassin  ";
+  eq("once named it reads back, trimmed",
+    describeAchievement(ch, ch.levelUps[0]), ["New Experience (+2): Sapphire Syndicate Assassin"]);
+
+  // A Beastbound Ranger's companion gains one at the same level (SRD p21) — its own line, and the
+  // character's comes first. describeAchievement is pure over plain objects, so a literal is enough.
+  const ranger = {
+    experiences: [{ id: "exp_lv5", name: "Pathfinder", sinceLevel: 5 }],
+    companion: { experiences: [{ id: "comp_exp_lv5", name: "", sinceLevel: 5 }] },
+  };
+  eq("the companion's new Experience gets its own line, character's first",
+    describeAchievement(ranger, { level: 5 }),
+    ["New Experience (+2): Pathfinder", "Companion Experience (+2): (unnamed)"]);
+  eq("and a plain character with no companion just shows its own",
+    describeAchievement({ experiences: [{ id: "exp_lv8", name: "Veteran", sinceLevel: 8 }] }, { level: 8 }),
+    ["New Experience (+2): Veteran"]);
 }
 
 group("A slot stays marked when whatever declared it has gone");

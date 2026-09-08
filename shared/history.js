@@ -593,6 +593,25 @@ export function describeLevelUp(ch, entry, db) {
   return parts;
 }
 
+// The tier achievement at levels 2, 5 and 8 hands over a new Experience at +2. It's Step One on
+// the sheet — before any advancement is chosen — and it's never a recorded pick, so describeLevelUp
+// can't see it. The level up screen doesn't force a name, so left blank it then sits on the sheet
+// as "(unnamed) +2" with nothing anywhere to say which level it came from: Danny hit exactly that
+// and couldn't tell which level's Edit to open. This is the line that ties it back — the row's own
+// Edit button reaches the name field from there. The +1 Proficiency the achievement also grants is
+// identical on every character's 2/5/8 and tells a reader nothing new, so it's left out.
+export function describeAchievement(ch, entry) {
+  if (!isLevelAchievement(entry.level)) return [];
+  const lines = [];
+  const own = (ch.experiences || []).find((e) => e.sinceLevel === entry.level);
+  if (own) lines.push(`New Experience (+2): ${own.name?.trim() || "(unnamed)"}`);
+  // "Whenever you gain a new Experience, your companion also gains one." (SRD p21.) A Beastbound
+  // Ranger's companion, and only for the levels at or after the one it was created on.
+  const companion = (ch.companion?.experiences || []).find((e) => e.sinceLevel === entry.level);
+  if (companion) lines.push(`Companion Experience (+2): ${companion.name?.trim() || "(unnamed)"}`);
+  return lines;
+}
+
 export function describeCards(ch, entry, db) {
   const byId = cardsById(db);
   const lines = [];

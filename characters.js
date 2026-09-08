@@ -19,6 +19,7 @@ import {
 } from "./shared/advancement.js";
 import { encodePortrait } from "./shared/portrait.js";
 import {
+  describeAchievement,
   describeCards,
   describeLevelUp,
   recomputeCharacter,
@@ -339,10 +340,13 @@ function levelHistoryRow(ch, entry, problem, isLast) {
   const main = document.createElement("div");
   main.className = "level-row-main";
   const parts = describeLevelUp(ch, entry, db);
+  // The tier achievement happens first (Step One), so its lines come before the chosen picks' cards.
+  const achievement = describeAchievement(ch, entry);
   const cards = describeCards(ch, entry, db);
   const flag = problem && !problem.accepted ? "⚠ " : "";
   const accepted = entry.acceptedAsIs ? ` <span class="level-accepted">✓ kept as is</span>` : "";
   main.innerHTML = `<strong>L${escapeHtml(entry.level)}</strong> ${escapeHtml(flag)}${escapeHtml(parts.join(" · ") || "(nothing recorded)")}${accepted}` +
+    achievement.map((a) => `<div class="level-row-sub">${escapeHtml(a)}</div>`).join("") +
     cards.map((c) => `<div class="level-row-sub">${escapeHtml(c)}</div>`).join("");
   if (problem) {
     for (const err of problem.errors) {
