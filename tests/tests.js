@@ -8348,6 +8348,18 @@ group("Hope & Fear is in data/srd_2_0/, in the edition the SRD published");
   check("ids are unique", new Set(ids).size === ids.length);
   check("the whole of SRD 2.0 is here: 24 ancestries, 15 communities, 13 classes, 210 cards",
     ancestries.length === 24 && communities.length === 15 && classes.length === 13 && cards.length === 210);
+
+  // A DELIBERATE deviation from SRD 2.0 (see notes/projects/class-subsystems.md): the SRD prints
+  // the Focus rules in the Martial Stances rules text (p13), not on the Martial Artist's subclass
+  // card, so a player working from the card alone never sees them. This fork adds them as a second
+  // foundation feature named "Focus" so the rule reaches the CSV -> statblocks and every app
+  // surface. This canary goes red if a data refresh drops it.
+  const ma = subclasses.find((s) => s.id === "srd_2_0_subclass_martial_artist");
+  eq("the Martial Artist foundation carries both Stance Fighter and the added Focus feature",
+    ma.foundation.features.map((f) => f.name["en-US"]), ["Stance Fighter", "Focus"]);
+  check("the Focus feature text is the refocus rule",
+    /Clear your Focus track, then roll a number of d6s equal to your Instinct/.test(
+      ma.foundation.features[1].description[0].paragraph["en-US"]));
 }
 
 // ---------- report ----------

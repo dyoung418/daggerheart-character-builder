@@ -1988,6 +1988,23 @@
        }
       }
      ]
+    },
+    {
+     "name": {
+      "en-US": "Focus"
+     },
+     "description": [
+      {
+       "paragraph": {
+        "en-US": "Once per rest during a moment of calm, you can clear your mind and refocus your martial instincts. Clear your Focus track, then roll a number of d6s equal to your Instinct and gain Focus equal to the highest result rolled. You can hold a maximum of 6 Focus."
+       }
+      },
+      {
+       "paragraph": {
+        "en-US": "You can spend a Focus to shift into a known martial stance, gaining its effects until you take Severe damage, mark your last Hit Point, or shift into a different stance. Otherwise, you drop the stance and end its effects at the end of the scene."
+       }
+      }
+     ]
     }
    ]
   },
