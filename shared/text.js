@@ -25,3 +25,26 @@ export function titleCase(value) {
     .toLowerCase()
     .replace(/(^|[\s-])([^\s-])/g, (_, separator, letter) => separator + letter.toUpperCase());
 }
+
+// "2 cards", "1 card". The plainest possible rule, and deliberately so: it is only ever handed
+// English nouns this app writes itself ("card", "page", "box", "reference", "character"), never a
+// name out of data/ and never anything irregular.
+export const plural = (n, noun) => `${n} ${noun}${n === 1 ? "" : "s"}`;
+
+// A filename component out of something a person typed. The download attribute would carry a
+// character's name in full, but the filesystem it lands on may not, so it's reduced to [a-z0-9-].
+// Accents are folded rather than dropped: without the NFD pass Élodie saves as "lodie", which looks
+// like the export mangled it.
+//
+// One copy of the rule, shared by every export that names a file, so the same name can't slug two
+// ways in one download folder. `fallback` is what a name made entirely of punctuation — or no name
+// at all — comes out as; it is the caller's word because only the caller knows what was being
+// named.
+export function fileSlug(text, fallback) {
+  return String(text ?? "")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") || fallback;
+}
