@@ -97,11 +97,28 @@ function compareText(a, b) {
 // in a stack of twenty. The final id tiebreak is what makes it TOTAL: without it, two same-named
 // cards from two sources would fall back on the character's stored order, which changes every time
 // they move a card to the vault, so the same character would export two different decks.
-function compareDomainCards(a, b) {
+export function compareDomainCards(a, b) {
   return compareText(titleCase(a.domain), titleCase(b.domain))
     || (a.level || 0) - (b.level || 0)
     || compareText(name(a), name(b))
     || compareText(a.id, b.id);
+}
+
+/**
+ * The comparator a browsable list of `kind` should stack itself with.
+ *
+ * One real branch today, because domain cards are the only kind anything browses — but a list of
+ * cards belonging to no character has to sort itself somehow, and "somehow" is a per-kind answer
+ * (domain cards want domain/level/name; an ancestry browser would want plain name). Naming the
+ * choice here means the future ancestry or subclass browser adds a branch instead of inventing a
+ * second sort order next to this one, which is how the deck and the browser would drift apart.
+ *
+ * @param {string} kind a CardDescriptor kind.
+ * @returns {(a: object, b: object) => number} a comparator over RECORDS, not descriptors.
+ */
+export function comparatorFor(kind) {
+  if (kind === "domain") return compareDomainCards;
+  return (a, b) => compareText(name(a), name(b)) || compareText(a.id, b.id);
 }
 
 /**
@@ -118,7 +135,7 @@ export function cardSheet(character, db, { generated = [] } = {}) {
   // replace the one below it, and the earlier tiers' features are still in play.
   const sub = find(db?.subclasses, character?.subclassId);
   for (const tier of sub ? subclassTiersUpTo(character?.subclassTier) : []) {
-    cards.push(subclassCard(sub, tier, "class"));
+    cards.push(cardDescriptor({ kind: "subclass", record: sub, tier, origin: "class" }));
   }
 
   // The multiclass's own ladder, read from its own stored tier. A subclass upgrade at level-up can
@@ -126,20 +143,11 @@ export function cardSheet(character, db, { generated = [] } = {}) {
   // two loops must never share a variable, and there is a test that says so.
   const mcSub = find(db?.subclasses, character?.multiclass?.subclassId);
   for (const tier of mcSub ? subclassTiersUpTo(character?.multiclass?.tier || "foundation") : []) {
-    cards.push(subclassCard(mcSub, tier, "multiclass"));
+    cards.push(cardDescriptor({ kind: "subclass", record: mcSub, tier, origin: "multiclass" }));
   }
 
   const community = find(db?.communities, character?.heritage?.communityId);
-  if (community) {
-    cards.push({
-      kind: "community",
-      key: community.id,
-      title: name(community),
-      art: communityCardArtPath(community),
-      record: community,
-      fallback: fallback(name(community), "Community", community.features),
-    });
-  }
+  if (community) cards.push(cardDescriptor({ kind: "community", record: community }));
 
   // A mixed ancestry yields TWO full ancestry cards, in the order the character stores them. There
   // is no composite art to print — the mix is a pick of one feature from each — so the deck shows
@@ -148,29 +156,13 @@ export function cardSheet(character, db, { generated = [] } = {}) {
   for (const ancestryId of character?.heritage?.ancestryIds || []) {
     const ancestry = find(db?.ancestries, ancestryId);
     if (!ancestry) continue;
-    cards.push({
-      kind: "ancestry",
-      key: ancestry.id,
-      title: name(ancestry),
-      art: ancestryCardArtPath(ancestry),
-      record: ancestry,
-      fallback: fallback(name(ancestry), "Ancestry", ancestry.features),
-    });
+    cards.push(cardDescriptor({ kind: "ancestry", record: ancestry }));
   }
 
   // With the ancestry cards, which is where the rules put it: a transformation joins the loadout
   // "as if it were part of your character's ancestry". Usually null — the SRD ships none.
   const transformation = find(db?.transformations, character?.transformationId);
-  if (transformation) {
-    cards.push({
-      kind: "transformation",
-      key: transformation.id,
-      title: name(transformation),
-      art: transformationCardArtPath(transformation),
-      record: transformation,
-      fallback: fallback(name(transformation), "Transformation", transformation.features),
-    });
-  }
+  if (transformation) cards.push(cardDescriptor({ kind: "transformation", record: transformation }));
 
   // Every card owned, loadout AND vault: you print once and then own the paper, so a deck that
   // only held the current five would need reprinting every time the player swapped a card in.
@@ -178,17 +170,7 @@ export function cardSheet(character, db, { generated = [] } = {}) {
     .map((id) => find(db?.domainCards, id))
     .filter(Boolean)
     .sort(compareDomainCards)) {
-    cards.push({
-      kind: "domain",
-      key: card.id,
-      title: name(card),
-      art: domainCardArtPath(card),
-      record: card,
-      // The domain goes in the footer rather than the subtitle: the printed face carries it as a
-      // glyph, so the fallback would otherwise be the one card in the deck that can't say which
-      // pile it belongs to, and the subtitle is already spoken for by level/type/recall.
-      fallback: fallback(name(card), domainCardSubtitle(card), card.features, titleCase(card.domain)),
-    });
+    cards.push(cardDescriptor({ kind: "domain", record: card }));
   }
 
   return {
@@ -206,21 +188,86 @@ export function cardSheet(character, db, { generated = [] } = {}) {
   };
 }
 
-// Keyed by id AND tier, matching the art filename: one subclass contributes up to three cards and
-// they have to be told apart. Two different subclasses can never collide here — a multiclass is
-// into a different class — so the tier alone is enough to disambiguate.
-function subclassCard(subclass, tier, origin) {
-  const title = `${name(subclass)} (${SUBCLASS_TIER_LABELS[tier]})`;
-  return {
-    kind: "subclass",
-    key: `${subclass.id}-${tier}`,
-    title,
-    art: subclassCardArtPath(subclass, tier),
-    record: subclass,
-    tier,
-    origin,
-    // Only this tier's features. The card on the table has the others printed on their own cards,
-    // and repeating them would make a Mastery card a summary of the whole subclass.
-    fallback: fallback(title, "Subclass", subclass[tier]?.features),
-  };
+/**
+ * One record, one printable card. The whole of what a card kind IS, in one place.
+ *
+ * cardSheet() above is the statement of deck order and nothing else; this is the statement of what
+ * each card looks like, and it is deliberately free of `character` — a descriptor is a fact about a
+ * record, which is what lets a browser page print a deck of domain cards owned by nobody. A new
+ * card kind is a branch here plus a line of order up there, and nothing in card-pdf.js.
+ *
+ * KEY ORDER IS PART OF THE CONTRACT. The tests compare whole descriptors with JSON.stringify, so
+ * the keys are compared in insertion order — and the kinds do NOT agree: a subclass card carries
+ * `tier` and `origin` between `record` and `fallback`, the other four go straight from `record` to
+ * `fallback`. Adding a key in the middle of a branch is an observable change.
+ *
+ * @param {{kind: string, record: object, tier?: string, origin?: string}} entry
+ * @returns {CardDescriptor}
+ */
+export function cardDescriptor({ kind, record, tier, origin }) {
+  switch (kind) {
+    case "subclass": {
+      // Keyed by id AND tier, matching the art filename: one subclass contributes up to three cards
+      // and they have to be told apart. Two different subclasses can never collide here — a
+      // multiclass is into a different class — so the tier alone is enough to disambiguate.
+      const title = `${name(record)} (${SUBCLASS_TIER_LABELS[tier]})`;
+      return {
+        kind: "subclass",
+        key: `${record.id}-${tier}`,
+        title,
+        art: subclassCardArtPath(record, tier),
+        record,
+        tier,
+        origin,
+        // Only this tier's features. The card on the table has the others printed on their own
+        // cards, and repeating them would make a Mastery card a summary of the whole subclass.
+        fallback: fallback(title, "Subclass", record[tier]?.features),
+      };
+    }
+    case "community":
+      return {
+        kind: "community",
+        key: record.id,
+        title: name(record),
+        art: communityCardArtPath(record),
+        record,
+        fallback: fallback(name(record), "Community", record.features),
+      };
+    case "ancestry":
+      return {
+        kind: "ancestry",
+        key: record.id,
+        title: name(record),
+        art: ancestryCardArtPath(record),
+        record,
+        fallback: fallback(name(record), "Ancestry", record.features),
+      };
+    case "transformation":
+      return {
+        kind: "transformation",
+        key: record.id,
+        title: name(record),
+        art: transformationCardArtPath(record),
+        record,
+        fallback: fallback(name(record), "Transformation", record.features),
+      };
+    case "domain":
+      return {
+        kind: "domain",
+        key: record.id,
+        title: name(record),
+        art: domainCardArtPath(record),
+        record,
+        // The domain goes in the footer rather than the subtitle: the printed face carries it as a
+        // glyph, so the fallback would otherwise be the one card in the deck that can't say which
+        // pile it belongs to, and the subtitle is already spoken for by level/type/recall.
+        fallback: fallback(
+          name(record), domainCardSubtitle(record), record.features, titleCase(record.domain)),
+      };
+    default:
+      // Not a silent null: an unknown kind is a caller bug (a typo, or a kind whose branch was
+      // never added), and a dropped card is exactly the failure the missing-reference report above
+      // exists to make impossible to ship unnoticed.
+      throw new RangeError(`Unknown card kind: ${kind}`);
+  }
 }

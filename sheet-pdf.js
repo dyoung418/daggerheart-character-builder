@@ -99,7 +99,7 @@ export function sheetTemplate() {
  *   and shared/pdf-form.js's header for what each mode costs.
  * @returns {Promise<{bytes: Uint8Array, fellBack: (null|object), truncated: string[]}>}
  *
- * A RECORD, NOT BARE BYTES, following buildCardPdf (card-pdf.js:814) — and for its reason, not for
+ * A RECORD, NOT BARE BYTES, following buildDeckPdf (card-pdf.js:808) — and for its reason, not for
  * symmetry. Both exports can succeed and still lose something a user would want to know about, and
  * a caller handed only bytes has no way to find out: the card export names the cards that printed
  * as text, and this one names a document that fell back to the reader's own layout and each field

@@ -806,15 +806,18 @@ function generatedDescriptors(ctx, character, db) {
 }
 
 /**
- * The whole export: character in, PDF bytes out.
+ * Any deck of cards, drawn and tiled: descriptors in, PDF bytes out.
  *
- * @param {object} character a stored character; drafts are fine and print what they have.
- * @param {object} db the merged content database.
- * @param {{onProgress?: (done: number, total: number, title: string) => void}} opts
+ * Knows nothing about characters. A character's deck is buildCardPdf() below; a browsable list of
+ * domain cards belonging to nobody is the same function with a different `deck`.
+ *
+ * @param {(ctx: CanvasRenderingContext2D) => {cards: CardDescriptor[], missing?: Array}} deck
+ * @param {{onProgress?: (done: number, total: number, title: string) => void,
+ *   emptyMessage?: string}} opts
  * @returns {Promise<{bytes: Uint8Array, cardCount: number, pageCount: number,
  *   missing: Array<{kind: string, id: string}>, fellBack: string[]}>}
  */
-export async function buildCardPdf(character, db, opts = {}) {
+export async function buildDeckPdf(deck, opts = {}) {
   const onProgress = typeof opts.onProgress === "function" ? opts.onProgress : () => {};
 
   // ONE canvas, reused for every card. Twenty-two canvases would be twenty-two 660x924 RGBA
@@ -826,16 +829,23 @@ export async function buildCardPdf(character, db, opts = {}) {
   const ctx = canvas.getContext("2d");
   ctx.textBaseline = "top";
 
-  // The canvas exists before the deck does because paginateSections() needs its measureText: the
-  // generated cards can't be built until something can say how wide a word is.
-  const { cards, missing } = cardSheet(character, db, { generated: generatedDescriptors(ctx, character, db) });
+  // WHY `deck` IS A FUNCTION AND NOT AN ARRAY. The canvas has to exist before the deck does,
+  // because paginateSections() needs its measureText: a generated card can't be split into pages
+  // until something can say how wide a word is. Taking a function OF the measuring context makes
+  // that ordering impossible to get wrong at a call site, rather than merely documented at one — no
+  // caller can hand over cards it built before the thing that measures them existed. A caller with
+  // no generated cards simply ignores its `ctx` argument, which is an honest statement that its
+  // deck needed no measuring.
+  const { cards, missing = [] } = deck(ctx);
   if (!cards.length) {
-    // A guard, not a path anything takes today: the stats card is generated rather than owned, so
-    // even a draft with no class, no ancestry and no cards comes back with one card in the deck
-    // (dashes where the numbers aren't known yet, and empty slot boxes, which is a usable thing to
-    // print). Kept because buildPdf() would otherwise refuse the zero-page document with a message
-    // about PDFs rather than about the character.
-    throw new RangeError("This character has no cards to print yet.");
+    // A guard, not a path the CHARACTER export takes: the stats card is generated rather than
+    // owned, so even a draft with no class, no ancestry and no cards comes back with one card in
+    // the deck (dashes where the numbers aren't known yet, and empty slot boxes, which is a usable
+    // thing to print). Kept because buildPdf() would otherwise refuse the zero-page document with a
+    // message about PDFs rather than about the character. It stops being unreachable the moment a
+    // browser page prints a filtered list: filter a deck down to nothing and you land here, which
+    // is why the message is the caller's to supply.
+    throw new RangeError(opts.emptyMessage || "There are no cards to print.");
   }
 
   const images = [];
@@ -896,5 +906,23 @@ export async function buildCardPdf(character, db, opts = {}) {
     missing,
     fellBack,
   };
+}
+
+/**
+ * The whole export: character in, PDF bytes out.
+ *
+ * @param {object} character a stored character; drafts are fine and print what they have.
+ * @param {object} db the merged content database.
+ * @param {{onProgress?: (done: number, total: number, title: string) => void}} opts
+ * @returns {Promise<{bytes: Uint8Array, cardCount: number, pageCount: number,
+ *   missing: Array<{kind: string, id: string}>, fellBack: string[]}>}
+ */
+export async function buildCardPdf(character, db, opts = {}) {
+  // emptyMessage is passed explicitly rather than left to buildDeckPdf's default: the modal shows
+  // this string, and the character export's failure has always named the character.
+  return buildDeckPdf(
+    (ctx) => cardSheet(character, db, { generated: generatedDescriptors(ctx, character, db) }),
+    { ...opts, emptyMessage: "This character has no cards to print yet." },
+  );
 }
 
