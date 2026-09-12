@@ -1,17 +1,24 @@
-import { renderCardArt, domainCardArtPath } from "./shared/card-render.js";
+import { renderCardArt } from "./shared/card-render.js";
 import { escapeHtml } from "./shared/escape.js";
 import { loadContent } from "./shared/content-load.js";
 import { mountContentSettings } from "./shared/content-settings.js";
-import { visibleRecords } from "./shared/content-sources.js";
+// Which cards this page shows, in what order, and what a tile needs to draw one — all of it over
+// there, because app.js is imported by no test and that list is the page's one hard question.
+// TYPES is imported rather than restated because the chips and the filter that answers them have to
+// read the same vocabulary; SRD_DOMAINS is not imported at all, because the domain chips are
+// domainsInPlay()'s answer (the ten, plus whatever a loaded source brought with it) and this page
+// has no business holding a second copy of the ten.
+import {
+  TYPES,
+  blankFilters,
+  browseCards,
+  cardView,
+  domainCardsPdfFilename,
+  domainsInPlay,
+} from "./shared/card-browser.js";
+import { cardDescriptor } from "./shared/card-sheet.js";
+import { dateStamp, openProgressModal, runCardPdfExport } from "./shared/export-ui.js";
 
-// The ten SRD domains, in the order the book lists them — nine from the core SRD plus DREAD,
-// which arrived with the Hope & Fear release of the dataset and is SRD content like the rest.
-// Not the whole list: content sources may bring their own, so the chips are these plus whatever
-// else turns up in the cards actually loaded. A domain with no CSS rule of its own simply gets
-// the default card border, which is fine; a domain with no CHIP would be unfilterable, and
-// worse, ticking any other chip would hide its cards with no way to bring them back.
-const SRD_DOMAINS = ["ARCANA", "BLADE", "BONE", "CODEX", "DREAD", "GRACE", "MIDNIGHT", "SAGE", "SPLENDOR", "VALOR"];
-const TYPES = ["ABILITY", "SPELL", "GRIMOIRE"];
 const MAX_LOADOUT = 5;
 const STORAGE_KEY = "dh-card-builder-state-v1";
 
@@ -19,13 +26,7 @@ let content = null; // what loadContent() reported: which sources loaded, and wh
 
 const state = {
   cards: [],
-  filters: {
-    domains: new Set(),
-    types: new Set(),
-    levelMin: 1,
-    levelMax: 10,
-    search: "",
-  },
+  filters: blankFilters(),
   loadout: [], // array of card ids, max 5
   vault: [], // array of card ids
 };
@@ -48,41 +49,21 @@ function persist() {
 
 async function loadCards() {
   content = await loadContent({ files: ["domain-cards"] });
-  // The loadout and vault look cards up in this list by id, so it holds everything loaded. Only
-  // the grid is filtered (renderGrid), which is what keeps a saved loadout intact when the source
-  // one of its cards came from is switched off.
-  state.cards = content.db.domainCards.map((c) => ({
-    id: c.id,
-    name: c.name["en-US"],
-    domain: c.domain,
-    type: c.type,
-    level: c.level,
-    recallCost: c.recallCost,
-    features: c.features,
-    contentSource: c.contentSource,
-    art: domainCardArtPath(c),
-  }));
+  // The records WHOLE, exactly as loaded — not a copy with the handful of fields a tile happens to
+  // draw. A copy drops `supersededBy`, and visibleRecords() reads that field to decide which of two
+  // versions of one card is the live one; without it the browser showed all 399 records, i.e. every
+  // card shared by SRD 1.0 and 2.0 twice (189 duplicate names), instead of the 231 that are really
+  // in play. Flattening for display is cardView()'s job, per tile, at render time.
+  //
+  // The loadout and vault look cards up in this list by id, so it holds everything loaded. Only the
+  // grid is filtered (renderGrid), which is what keeps a saved loadout intact when the source one of
+  // its cards came from is switched off.
+  state.cards = content.db.domainCards;
 }
 
-/** The nine, plus any domain a loaded card brought with it. */
-function domainsInPlay() {
-  const extra = [...new Set(visibleCards().map((c) => c.domain))].filter((d) => !SRD_DOMAINS.includes(d));
-  return [...SRD_DOMAINS, ...extra.sort()];
-}
-
-const visibleCards = () => visibleRecords(state.cards, content.disabled);
-
-function cardMatchesFilters(card) {
-  const f = state.filters;
-  if (f.domains.size > 0 && !f.domains.has(card.domain)) return false;
-  if (f.types.size > 0 && !f.types.has(card.type)) return false;
-  if (card.level < f.levelMin || card.level > f.levelMax) return false;
-  if (f.search) {
-    const haystack = (card.name + " " + card.feature).toLowerCase();
-    if (!haystack.includes(f.search)) return false;
-  }
-  return true;
-}
+// The kinds this page browses. One today; a future ancestry or subclass browser adds an entry here
+// and nothing else — the sort, the filters and the PDF all key off `kind` already.
+const catalogue = () => [{ kind: "domain", records: state.cards }];
 
 function buildChipGroup(container, values, activeSet, onToggle) {
   container.innerHTML = "";
@@ -108,10 +89,17 @@ function renderGrid() {
   const resultCount = document.getElementById("result-count");
   grid.innerHTML = "";
 
-  const filtered = visibleCards().filter(cardMatchesFilters);
-  resultCount.textContent = `${filtered.length} cards`;
+  // The same call the export makes, so the number under the filters and the number of cards in the
+  // file are the same answer rather than two that agree today.
+  const shown = browseCards(catalogue(), content.disabled, state.filters);
+  resultCount.textContent = `${shown.length} cards`;
+  // Nothing to print is a disabled button, not an export that opens a modal to say so.
+  document.getElementById("export-cards-btn").disabled = shown.length === 0;
 
-  for (const card of filtered) {
+  for (const entry of shown) {
+    // The flat shape the tile draws from: the records in state.cards are raw, so `record.name` is
+    // still {"en-US": …} and interpolating one renders "[object Object]" without throwing.
+    const card = cardView(entry);
     const el = document.createElement("article");
     el.className = "card";
     el.appendChild(renderCardArt({ ...card, domainClass: card.domain.toLowerCase() }));
@@ -193,8 +181,18 @@ function updateButtonStates() {
   });
 }
 
+// Deliberately state.cards and not browseCards(): the panel looks a saved id up in the UNFILTERED,
+// UNSUPERSEDED list. Route it through the browse call and a card would drop out of your loadout the
+// moment you ticked a domain chip, or the moment the source it came from was switched off.
 function cardById(id) {
   return state.cards.find((c) => c.id === id);
+}
+
+// Raw records, so the name is still a locale map. Falls back to the bare id, which is what a
+// loadout entry whose content source is missing has left to show.
+function cardName(id) {
+  const record = cardById(id);
+  return record ? record.name["en-US"] : id;
 }
 
 function renderPanel() {
@@ -208,8 +206,7 @@ function renderPanel() {
     const li = document.createElement("li");
     const id = state.loadout[i];
     if (id) {
-      const card = cardById(id);
-      li.textContent = card ? card.name : id;
+      li.textContent = cardName(id);
       li.className = "slot-filled";
       li.addEventListener("click", () => toggleLoadout(id));
     } else {
@@ -221,10 +218,9 @@ function renderPanel() {
 
   vaultList.innerHTML = "";
   for (const id of state.vault) {
-    const card = cardById(id);
     const li = document.createElement("li");
     li.className = "slot-filled";
-    li.textContent = card ? card.name : id;
+    li.textContent = cardName(id);
     li.addEventListener("click", () => toggleVault(id));
     vaultList.appendChild(li);
   }
@@ -235,8 +231,56 @@ function renderAll() {
   renderPanel();
 }
 
+// ---------- the PDF export ----------
+//
+// The same nine-to-a-page deck the character export prints (characters.js:1244), built from the
+// browse list instead of from a character — which is the whole of the difference, because
+// card-sheet.js's descriptor is a fact about a record and knows nothing about who owns it.
+
+// Written once and used twice: buildDeckPdf() throws this when the deck is empty and
+// runCardPdfExport() shows it when a render comes back with no cards, and the reader should not be
+// able to tell which of those two happened by reading the modal.
+const NOTHING_TO_PRINT = "No cards match these filters, so there is nothing to print.";
+
+async function openCardsPdfModal() {
+  // Capture what is shown SYNCHRONOUSLY, before the modal opens: the render takes seconds and a
+  // filter change mid-flight must not shift the deck under it. The filters are copied for the same
+  // reason — the filename names the chosen domain, and state.filters.domains is a live Set.
+  const entries = browseCards(catalogue(), content.disabled, state.filters);
+  const filters = { ...state.filters, domains: new Set(state.filters.domains) };
+  const hint = "The cards this page is showing, in the order it shows them — nine to a US Letter " +
+    "page with crop marks.";
+  const { body, bar, line } = openProgressModal("Export cards (PDF)", hint, "Reading the cards…");
+  runCardPdfExport({
+    body,
+    bar,
+    line,
+    build: async (opts) => {
+      // Fetched on click, not on load: card-pdf.js drags card-content.js and its whole rules graph
+      // (~160KB) for the two GENERATED cards, and this deck has none — it is all domain cards. The
+      // first frame of the modal covers the fetch, and a failed one lands in the error box rather
+      // than as an unhandled rejection.
+      const { buildDeckPdf } = await import("./card-pdf.js");
+      // The `ctx` argument is ignored: nothing here needs measuring, because no card in this deck
+      // is generated from prose.
+      return buildDeckPdf(() => ({ cards: entries.map(cardDescriptor) }), {
+        ...opts,
+        emptyMessage: NOTHING_TO_PRINT,
+      });
+    },
+    // A thunk, not a string: the name carries today's date, so it is answered when the render
+    // finishes rather than when it starts.
+    filename: () => domainCardsPdfFilename(filters, dateStamp()),
+    empty: NOTHING_TO_PRINT,
+  });
+}
+
 function setupFilters() {
-  buildChipGroup(document.getElementById("domain-filters"), domainsInPlay(), state.filters.domains);
+  buildChipGroup(
+    document.getElementById("domain-filters"),
+    domainsInPlay(state.cards, content.disabled),
+    state.filters.domains,
+  );
   buildChipGroup(document.getElementById("type-filters"), TYPES, state.filters.types);
 
   document.getElementById("level-min").addEventListener("input", (e) => {
@@ -252,11 +296,9 @@ function setupFilters() {
     renderGrid();
   });
   document.getElementById("reset-filters").addEventListener("click", () => {
-    state.filters.domains.clear();
-    state.filters.types.clear();
-    state.filters.levelMin = 1;
-    state.filters.levelMax = 10;
-    state.filters.search = "";
+    // One statement of "no filters", shared with the page's opening state, rather than five
+    // assignments here that a sixth filter would quietly not be added to.
+    state.filters = blankFilters();
     document.getElementById("level-min").value = 1;
     document.getElementById("level-max").value = 10;
     document.getElementById("search").value = "";
@@ -275,6 +317,9 @@ async function init() {
   loadPersisted();
   await loadCards();
   mountContentSettings(content);
+  // Bound here rather than in setupFilters(), which Reset calls again: a second listener on this
+  // button would open two modals and render the deck twice.
+  document.getElementById("export-cards-btn").addEventListener("click", openCardsPdfModal);
   setupFilters();
   renderAll();
 }

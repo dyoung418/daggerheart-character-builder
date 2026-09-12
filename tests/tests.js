@@ -152,7 +152,7 @@ const {
   serializeTransferFile,
   transferFilename,
 } = await import(`../shared/transfer.js${RUN}`);
-const { titleCase } = await import(`../shared/text.js${RUN}`);
+const { fileSlug, plural, titleCase } = await import(`../shared/text.js${RUN}`);
 const {
   asciiBytes,
   buildPdf,
@@ -204,8 +204,20 @@ const {
   slotRect,
 } = await import(`../shared/card-layout.js${RUN}`);
 const {
+  cardDescriptor,
   cardSheet,
+  comparatorFor,
+  compareDomainCards,
 } = await import(`../shared/card-sheet.js${RUN}`);
+const {
+  blankFilters,
+  browseCards,
+  cardMatchesFilters,
+  cardSearchText,
+  cardView,
+  domainCardsPdfFilename,
+  domainsInPlay,
+} = await import(`../shared/card-browser.js${RUN}`);
 const {
   classCardContents,
   fallbackCardContent,
@@ -5187,6 +5199,212 @@ group("A transformation prints on the sheet and exports to the GM");
   eq("a bare draft prints whatever it has, and nothing else", cardSheet({}, db).cards, []);
   eq("a draft with only a community prints one card",
     keys(cardSheet({ heritage: { communityId: "core_community_highborne" } }, db)), ["core_community_highborne"]);
+}
+
+group("The browser shows one version of a card, and the version your sources chose");
+{
+  // ---------- shared/card-browser.js ----------
+  //
+  // What the card browser displays and what its PDF export prints are the same call, so these
+  // are the rules for both. The supersession half is not this module's own work — it is
+  // visibleRecords() — but it is asserted HERE because the page lost it once already: app.js
+  // used to copy each record field by field into a display object, and `supersededBy` wasn't on
+  // the list, so the grid showed every shared card twice (399 cards, 189 of them duplicates).
+  // A test on visibleRecords alone would have stayed green through all of it.
+  const browse = (records, disabled, filters) =>
+    browseCards([{ kind: "domain", records }], new Set(disabled || []), filters || blankFilters());
+
+  // Two editions printing one card under two ids — the real shape, since an id names the document
+  // it came from and only the NAME says these are the same card.
+  const { db: twoEditions } = mergeSources([
+    source("srd_1_0", { "domain-cards": [srcCard("srd_1_0_vitality", "Vitality")] }),
+    source("srd_2_0", { "domain-cards": [srcCard("srd_2_0_vitality", "Vitality")] }),
+  ]);
+  const editionIds = (off) => browse(twoEditions.domainCards, off).map((e) => e.record.id);
+
+  eq("both editions loaded: the later one, once", editionIds([]), ["srd_2_0_vitality"]);
+  // THE control. Dedupe-by-name passes the line above and fails this one: switching the winner
+  // off has to bring the earlier record back, because it is once again the only version there is.
+  eq("switch SRD 2.0 off and SRD 1.0 answers for the card", editionIds(["srd_2_0"]), ["srd_1_0_vitality"]);
+  eq("switch both off and the card is gone", editionIds(["srd_1_0", "srd_2_0"]), []);
+
+  // Outside the SRD the same rule runs the other way round: later in the manifest wins, whoever
+  // that is.
+  const { db: homebrewWins } = mergeSources([
+    source("srd_2_0", { "domain-cards": [srcCard("srd_2_0_hex", "Hex")] }),
+    source("homebrew", { "domain-cards": [srcCard("hb_hex", "Hex")] }),
+  ]);
+  eq("a homebrew source supersedes the SRD card it reprints",
+    browse(homebrewWins.domainCards).map((e) => e.record.id), ["hb_hex"]);
+  eq("switch the homebrew off and the SRD card is back",
+    browse(homebrewWins.domainCards, ["homebrew"]).map((e) => e.record.id), ["srd_2_0_hex"]);
+
+  // Every fixture in this file is untagged, and so is any db built by something that predates
+  // content sources. They must all still browse.
+  eq("a record with no source is always shown",
+    browse([srcCard("plain", "Plain")]).map((e) => e.record.id), ["plain"]);
+
+  // An entry, not a bare record: one subclass record will yield three card faces, and a bare
+  // record could not say which of them it is.
+  eq("a browse entry names its kind", browse([srcCard("k", "K")]).map((e) => e.kind), ["domain"]);
+}
+
+group("One order everywhere: the grid and the printed deck are the same stack");
+{
+  const card = (id, name, domain, level) => srcCard(id, name, { domain, level });
+  // Deliberately built in the wrong order, and deliberately adversarial: within BLADE level 1 the
+  // id order and the name order DISAGREE. Without the name step the comparator falls through to
+  // the id tiebreak and returns these two the other way round — which is the whole control, since
+  // an SRD id is its own name in snake_case and would have hidden the bug.
+  const shuffled = [
+    card("zz_aegis", "Aegis", "BLADE", 1),
+    card("blade_2", "Backstab", "BLADE", 2),
+    card("aa_zephyr", "Zephyr", "BLADE", 1),
+    card("arc_5", "Rune Ward", "ARCANA", 5),
+  ];
+  const order = (records) =>
+    browseCards([{ kind: "domain", records }], new Set(), blankFilters()).map((e) => e.record.id);
+
+  eq("domain first, then level, then name",
+    order(shuffled), ["arc_5", "zz_aegis", "aa_zephyr", "blade_2"]);
+  // Stacking them the other way round gives the same deck — the property the export needs, since
+  // a filter change reorders the input but must not reorder the file.
+  eq("the input order does not survive into the output",
+    order([...shuffled].reverse()), order(shuffled));
+  // And the descriptors the PDF is built from come out in that same order, which is the invariant
+  // stated as plainly as it can be.
+  eq("the deck's keys are the grid's ids, in the grid's order",
+    browseCards([{ kind: "domain", records: shuffled }], new Set(), blankFilters())
+      .map(cardDescriptor).map((d) => d.key),
+    order(shuffled));
+
+  eq("comparatorFor knows the domain comparator", comparatorFor("domain") === compareDomainCards, true);
+  // Not domain cards yet, but the hook a future ancestry or subclass browser hangs on: a total
+  // order, so a second kind cannot come out of the sort differently on two runs.
+  const byName = comparatorFor("ancestry");
+  eq("another kind sorts by name, and totally",
+    [{ id: "b", name: { "en-US": "Same" } }, { id: "a", name: { "en-US": "Same" } }].sort(byName).map((r) => r.id),
+    ["a", "b"]);
+}
+
+group("Filters answer about the card in front of them");
+{
+  const withFilters = (over) => ({ ...blankFilters(), ...over });
+  const entry = (record) => ({ kind: "domain", record });
+  const SPELL = srcCard("s", "Arcane Gust", { domain: "ARCANA", type: "SPELL", level: 4 });
+  const matches = (over) => cardMatchesFilters(entry(SPELL), withFilters(over));
+
+  eq("no filters shows everything", matches({}), true);
+  eq("its own domain keeps it", matches({ domains: new Set(["ARCANA"]) }), true);
+  eq("another domain drops it", matches({ domains: new Set(["BLADE"]) }), false);
+  eq("its own type keeps it", matches({ types: new Set(["SPELL"]) }), true);
+  eq("another type drops it", matches({ types: new Set(["ABILITY"]) }), false);
+  eq("a level window it sits in keeps it", matches({ levelMin: 3, levelMax: 5 }), true);
+  eq("a window below it drops it", matches({ levelMax: 3 }), false);
+  eq("a window above it drops it", matches({ levelMin: 5 }), false);
+  // The control for the conjunction: every axis but one agrees. An `||` where `&&` was meant
+  // passes every line above and fails this one.
+  eq("passing three filters and failing the fourth is a fail",
+    matches({ domains: new Set(["ARCANA"]), types: new Set(["SPELL"]), levelMin: 5 }), false);
+  // The chips start empty and the page opens showing everything, so an empty set cannot mean
+  // "no domains" — it means the question wasn't asked.
+  eq("an empty chip set is not a filter", matches({ domains: new Set(), types: new Set() }), true);
+}
+
+group("“Search by name or text” searches the text");
+{
+  const entry = (record) => ({ kind: "domain", record });
+  const WHIRLWIND = srcCard("w", "Whirlwind", {
+    features: [{
+      name: { "en-US": "Cutting Gale" },
+      description: [
+        { paragraph: { "en-US": "Targets within Close range become Vulnerable." } },
+        { list: [{ "en-US": "Spend a Hope to extend it." }] },
+      ],
+    }],
+  });
+  const finds = (search) => cardMatchesFilters(entry(WHIRLWIND), { ...blankFilters(), search });
+
+  eq("by name", finds("whirl"), true);
+  // The point of the fix: this box has always said "Search by name or text" and searched names.
+  eq("by a word only its rules text has", finds("vulnerable"), true);
+  eq("by a word only its feature's NAME has", finds("cutting gale"), true);
+  eq("by a word only a bullet has", finds("extend"), true);
+  eq("a word it does not contain finds nothing", finds("banish"), false);
+  // The bug this replaces, named so it cannot come back quietly: the haystack was
+  // `name + " " + card.feature`, and the record has `features`, so every card's haystack ended
+  // in the literal text "undefined" and typing it matched all 231 of them.
+  eq("searching for “undefined” matches nothing", finds("undefined"), false);
+  eq("the haystack is the name and the prose, lowercased",
+    cardSearchText(WHIRLWIND).includes("whirlwind") && cardSearchText(WHIRLWIND).includes("vulnerable"), true);
+}
+
+group("A browsed card knows its own face and its own file");
+{
+  const CARD = srcCard("hb_hex", "Hex", {
+    domain: "MIDNIGHT", type: "SPELL", level: 3, recallCost: 1,
+    contentSource: "homebrew",
+    features: [{ description: [{ paragraph: { "en-US": "Mark a Stress." } }] }],
+  });
+  const entry = { kind: "domain", record: CARD };
+
+  // The grid tile and the printed card read the same art path, because the tile asks the
+  // descriptor rather than looking it up a second way.
+  eq("the tile's art is the card's own source folder",
+    cardView(entry).art, "data/homebrew/card-art/domain/hb_hex.png");
+  eq("the tile is the flat shape the grid renders", cardView(entry), {
+    id: "hb_hex", name: "Hex", domain: "MIDNIGHT", type: "SPELL", level: 3, recallCost: 1,
+    features: CARD.features, art: "data/homebrew/card-art/domain/hb_hex.png",
+  });
+
+  // Key order is part of this contract: eq() is JSON.stringify equality and the deck group above
+  // compares whole descriptor literals.
+  eq("a domain descriptor's keys, in order",
+    Object.keys(cardDescriptor(entry)), ["kind", "key", "title", "art", "record", "fallback"]);
+
+  // A kind nobody taught it must not come back as a silent blank: a missing card in a printed
+  // deck is indistinguishable from a printer fault.
+  let threw = "";
+  try { cardDescriptor({ kind: "spaceship", record: CARD }); } catch (err) { threw = String(err); }
+  check("an unknown kind throws rather than printing a blank", threw.includes("spaceship"), threw || "(did not throw)");
+
+  eq("the ten SRD domains, plus whatever a source brought with it",
+    domainsInPlay([CARD, srcCard("v", "Blood Spike", { domain: "BLOOD" })], new Set()),
+    ["ARCANA", "BLADE", "BONE", "CODEX", "DREAD", "GRACE", "MIDNIGHT", "SAGE", "SPLENDOR", "VALOR", "BLOOD"]);
+}
+
+group("The export names the domain when you asked for exactly one");
+{
+  const filters = (...domains) => ({ ...blankFilters(), domains: new Set(domains) });
+  eq("one chip names it",
+    domainCardsPdfFilename(filters("DREAD"), "2026-09-12"), "daggerheart-domain-cards-dread-2026-09-12.pdf");
+  eq("no chips names none",
+    domainCardsPdfFilename(filters(), "2026-09-12"), "daggerheart-domain-cards-2026-09-12.pdf");
+  // The control: "join them all" and "name the first" both pass the line above and fail this one.
+  eq("two chips name neither",
+    domainCardsPdfFilename(filters("DREAD", "BLADE"), "2026-09-12"), "daggerheart-domain-cards-2026-09-12.pdf");
+  eq("a source's own domain is slugged, not pasted in",
+    domainCardsPdfFilename(filters("Old Ways"), "2026-09-12"), "daggerheart-domain-cards-old-ways-2026-09-12.pdf");
+  // Not the character export's stem: a character named Dread would otherwise take exactly this
+  // filename, in the same folder, on the same day.
+  eq("the stem is its own", domainCardsPdfFilename(filters("DREAD"), "2026-09-12").startsWith("daggerheart-domain-cards-"), true);
+}
+
+group("Two helpers every export leans on");
+{
+  // The zero case is the control: `n === 1` gets it right and `n > 1` gets it wrong, and the
+  // advice panel prints it whenever a filter matches nothing.
+  eq("none", plural(0, "card"), "0 cards");
+  eq("one", plural(1, "card"), "1 card");
+  eq("more", plural(2, "card"), "2 cards");
+  eq("a filename keeps only what a filesystem will", fileSlug("Élodie Fairwind!", "character"), "elodie-fairwind");
+  eq("an empty name falls back rather than producing a bare stamp", fileSlug("", "character"), "character");
+  eq("an accent folds to its letter rather than taking the letter with it", fileSlug("Ünd", "x"), "und");
+  // Recorded as it behaves, not as it ideally would: NFD separates a diacritic from its letter,
+  // but a ligature like Æ has no decomposition to strip, so it is dropped whole. Pre-existing —
+  // this rule is characterSlug's, moved verbatim — and changing it would rename files people
+  // already have, so it is documented here rather than quietly fixed.
+  eq("a ligature has no accent to fold, and goes", fileSlug("Æther", "x"), "ther");
 }
 
 {

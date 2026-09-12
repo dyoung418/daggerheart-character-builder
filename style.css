@@ -155,8 +155,27 @@ h1, h2, h3, .btn-primary, .btn-ghost, .btn-small, .top-nav a {
   font-size: 0.8rem;
 }
 .btn-ghost:hover { border-color: var(--accent); color: var(--accent-bright); }
+/* Dimmed rather than hidden: the export is part of what this page offers, and a button that
+   disappears when a filter matches nothing reads as a bug in the filter. */
+.btn-ghost:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn-ghost:disabled:hover { border-color: var(--border); color: var(--text-dim); }
 
-.result-count { color: var(--text-dim); font-size: 0.85rem; margin: 0 0 0.75rem; }
+/* The count and the export button on one line, count left, button right. The margin below the grid
+   lives here rather than on .result-count, which is now inside this row — left there it would sit
+   inside the flex line and put no gap between the row and the cards. */
+.result-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+/* .btn-ghost is width: 100% by default (it doubles as the sidebar's full-width Reset filters and
+   Clear all), so without this the export renders as a banner under the count instead of beside it.
+   Same override as .export-choices button and .detail-print-link. */
+.result-row button { width: auto; }
+
+.result-count { color: var(--text-dim); font-size: 0.85rem; margin: 0; }
 
 .card-grid {
   display: grid;
