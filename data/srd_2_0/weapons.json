@@ -4912,8 +4912,7 @@
    "modifier": 1,
    "type": "PHYSICAL"
   },
-  "burden": "ONE_HANDED",
-  "features": []
+  "burden": "ONE_HANDED"
  },
  {
   "id": "srd_2_0_weapon_scimitar",
@@ -4929,8 +4928,7 @@
    "modifier": 1,
    "type": "PHYSICAL"
   },
-  "burden": "ONE_HANDED",
-  "features": []
+  "burden": "ONE_HANDED"
  },
  {
   "id": "srd_2_0_weapon_twisted_dagger",
@@ -5004,8 +5002,7 @@
    "modifier": 1,
    "type": "PHYSICAL"
   },
-  "burden": "TWO_HANDED",
-  "features": []
+  "burden": "TWO_HANDED"
  },
  {
   "id": "srd_2_0_weapon_brightsword",
@@ -5021,8 +5018,7 @@
    "modifier": 3,
    "type": "MAGICAL"
   },
-  "burden": "TWO_HANDED",
-  "features": []
+  "burden": "TWO_HANDED"
  },
  {
   "id": "srd_2_0_weapon_shadowblade",
@@ -5216,8 +5212,7 @@
    "modifier": 4,
    "type": "PHYSICAL"
   },
-  "burden": "ONE_HANDED",
-  "features": []
+  "burden": "ONE_HANDED"
  },
  {
   "id": "srd_2_0_weapon_improved_scimitar",
@@ -5233,8 +5228,7 @@
    "modifier": 4,
    "type": "PHYSICAL"
   },
-  "burden": "ONE_HANDED",
-  "features": []
+  "burden": "ONE_HANDED"
  },
  {
   "id": "srd_2_0_weapon_improved_twisted_dagger",
@@ -5310,8 +5304,7 @@
    "modifier": 4,
    "type": "PHYSICAL"
   },
-  "burden": "TWO_HANDED",
-  "features": []
+  "burden": "TWO_HANDED"
  },
  {
   "id": "srd_2_0_weapon_war_pick",
@@ -5507,8 +5500,7 @@
    "modifier": 6,
    "type": "MAGICAL"
   },
-  "burden": "TWO_HANDED",
-  "features": []
+  "burden": "TWO_HANDED"
  },
  {
   "id": "srd_2_0_weapon_improved_shadowblade",
@@ -5734,8 +5726,7 @@
    "modifier": 6,
    "type": "MAGICAL"
   },
-  "burden": "TWO_HANDED",
-  "features": []
+  "burden": "TWO_HANDED"
  },
  {
   "id": "srd_2_0_weapon_fury_gem",
@@ -5871,8 +5862,7 @@
    "modifier": 7,
    "type": "PHYSICAL"
   },
-  "burden": "ONE_HANDED",
-  "features": []
+  "burden": "ONE_HANDED"
  },
  {
   "id": "srd_2_0_weapon_advanced_scimitar",
@@ -5888,8 +5878,7 @@
    "modifier": 7,
    "type": "PHYSICAL"
   },
-  "burden": "ONE_HANDED",
-  "features": []
+  "burden": "ONE_HANDED"
  },
  {
   "id": "srd_2_0_weapon_advanced_twisted_dagger",
@@ -5965,8 +5954,7 @@
    "modifier": 7,
    "type": "PHYSICAL"
   },
-  "burden": "TWO_HANDED",
-  "features": []
+  "burden": "TWO_HANDED"
  },
  {
   "id": "srd_2_0_weapon_blitz_hammer",
@@ -6162,8 +6150,7 @@
    "modifier": 9,
    "type": "MAGICAL"
   },
-  "burden": "TWO_HANDED",
-  "features": []
+  "burden": "TWO_HANDED"
  },
  {
   "id": "srd_2_0_weapon_advanced_shadowblade",
@@ -6539,8 +6526,7 @@
    "modifier": 10,
    "type": "PHYSICAL"
   },
-  "burden": "ONE_HANDED",
-  "features": []
+  "burden": "ONE_HANDED"
  },
  {
   "id": "srd_2_0_weapon_legendary_scimitar",
@@ -6556,8 +6542,7 @@
    "modifier": 10,
    "type": "PHYSICAL"
   },
-  "burden": "ONE_HANDED",
-  "features": []
+  "burden": "ONE_HANDED"
  },
  {
   "id": "srd_2_0_weapon_legendary_twisted_dagger",
@@ -6633,8 +6618,7 @@
    "modifier": 10,
    "type": "PHYSICAL"
   },
-  "burden": "TWO_HANDED",
-  "features": []
+  "burden": "TWO_HANDED"
  },
  {
   "id": "srd_2_0_weapon_severed_dragon_claw",
@@ -6830,8 +6814,7 @@
    "modifier": 12,
    "type": "MAGICAL"
   },
-  "burden": "TWO_HANDED",
-  "features": []
+  "burden": "TWO_HANDED"
  },
  {
   "id": "srd_2_0_weapon_legendary_shadowblade",

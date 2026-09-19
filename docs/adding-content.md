@@ -117,7 +117,6 @@ fine; it's title-cased for display. **Required: `id`, `name`, `domains`.**
   "name": { "en-US": "Beastbound" },
   "description": [{ "paragraph": { "en-US": "Play the Beastbound if you want to form a deep bond…" } }],
   "class": "RANGER",
-  "domains": ["BONE", "SAGE"],
   "spellcastTrait": "AGILITY",
   "foundation":     { "features": [{ "name": { "en-US": "Companion" }, "description": [ … ] }] },
   "specialization": { "features": [ … ] },
@@ -129,8 +128,8 @@ fine; it's title-cased for display. **Required: `id`, `name`, `domains`.**
 `STRENGTH`, `FINESSE`, `INSTINCT`, `PRESENCE`, `KNOWLEDGE`, or absent for a subclass that doesn't
 cast. `description` is the one-sentence pitch the book prints under the subclass name ("Play the
 Wayfinder if you want to hunt your prey and strike with deadly force."), shaped like a class's.
-All three tiers should be present even if a tier has one feature. (`domains` here is carried
-for consistency with the SRD's files; no page reads it.)
+All three tiers should be present even if a tier has one feature. A subclass has no `domains` of
+its own: it has its class's, and every page reads them from the class.
 **Required: `id`, `name`, `class`.**
 
 ### domain-cards.json
@@ -160,25 +159,15 @@ have a colour of its own, which affects only the border of a card with no art.
   "features": [{ "name": { "en-US": "Purposeful Design" }, "description": [ … ] }] }
 ```
 
-Communities add `"personalities": [{ "en-US": "Meticulous" }, …]`. #### `set` and `roll`, on items and consumables
+Communities add `"personalities": [{ "en-US": "Meticulous" }, …]`. #### `roll`, on items and consumables
 
 The SRD prints its loot as four numbered d12 tables — Core Set Items, Additional Items, Core Set
-Consumables, Additional Consumables — and a record's place in one of them is not recoverable from
-anything else it carries. Two optional fields keep it:
+Consumables, Additional Consumables — and **`roll`** is the number printed beside the entry, 1 to
+60: what you'd roll to get this. Which of the two tables an entry came from is not stored. It is
+the record's edition — whether SRD 1.0 printed that name — which is derivable, and a field that
+restated it (`set`, until 2026-09) was a second copy of one fact.
 
-- **`roll`** — the number printed beside the entry, 1 to 60. It's what you'd roll to get this.
-- **`set`** — which of the two tables it came from: `"core"` or `"hopeandfear"`. The SRD's own
-  words are "the Daggerheart Core Set" and "the Hope & Fear Expansion Set".
-
-`set` names a **printed product**, and is a different thing from `contentSource`, which the loader
-stamps on every record with the name of the folder it was read from (§5). An SRD 2.0 consumable
-from the Hope & Fear table is `contentSource: "srd_2_0"`, `set: "hopeandfear"` — both true, about
-different things. `set` is fixed by the book; `contentSource` changes if you rename a folder.
-
-The pair is unique within a file: exactly one record per `set` per `roll`.
-
-Nothing in the app reads either field today — they are catalogue metadata, like `items.json`
-itself, and they're here so the dataset can answer a question the app doesn't yet ask.
+Nothing in the app reads `roll` today — it is catalogue metadata, like `items.json` itself.
 
 **Required: `id`, `name`.**
 
@@ -358,7 +347,7 @@ and a fillable Ranger Companion sidecar PDF when its (private) template is insta
   "baseMajorThreshold": 5, "baseSevereThreshold": 11, "baseScore": 3, "features": [ … ] }
 
 { "id": "core_consumable_stride_potion", "name": { "en-US": "Stride Potion" },
-  "set": "core", "roll": 1, "features": [ … ] }
+  "roll": 1, "features": [ … ] }
 ```
 
 Enums are SCREAMING_SNAKE and are turned into words for the player.
@@ -389,7 +378,7 @@ weapon says; a character with two traits has nothing else it could name.
 
 Only fields whose absence would break a screen are checked; a record that fails is **skipped and
 named in the Content panel**, and the rest of the file still loads. Unknown fields are ignored, so a
-record may carry more than the app reads — `set` and `roll` above do. Don't invent one
+record may carry more than the app reads — `roll` above does. Don't invent one
 speculatively, though: an unread field is a claim nothing checks. Nothing checks that a domain, trait or tier is one the
 SRD uses; unknown ones are exactly what a new source is for.
 
@@ -734,7 +723,7 @@ into `data/srd_2_0/` and they sit alongside the rest, still unread by the app un
 them to `CONTENT_FILES`.
 
 ```json
-{ "id": "srd_2_0_adversary_acid_burrower", "name": { "en-US": "Acid Burrower" },
+{ "id": "srd_2_0_adversary_acid_burrower", "name": { "en-US": "ACID BURROWER" },
   "tier": 1, "type": "SOLO",
   "description": [{ "paragraph": { "en-US": "A horse-sized insect with digging claws and acidic blood." } }],
   "motives": [{ "en-US": "Burrow" }, { "en-US": "drag away" }],
@@ -752,8 +741,14 @@ knows `weapons.json` knows these. Adversary damage adds `count`, and a flat form
 (the book prints `2 phy`). `majorThreshold`/`severeThreshold` are null for a Minion, and `stress`
 is null for the one adversary whose printed Stress is `None`.
 
-An environment carries `impulses`, `potentialAdversaries` and, on each feature, the italic GM
-**`prompts`** the book prints under it. Its `difficulty` is null for the three whose Difficulty is
+`name` is in capitals in both files, as the book sets every stat-block heading.
+
+An environment carries `impulses` and **`potentialAdversaries`, one localized string exactly as
+printed** (`Beasts (Bear, Dire Wolf), Masked Thief`) — every book lists these its own way, so it
+is not parsed into groups and names. The italic questions the book prints for the GM under a
+feature are **the last paragraph of that feature's `description`**, not a field of their own. A
+record with no features has no `features` key rather than an empty list, in every kind. Its
+`difficulty` is null for the three whose Difficulty is
 printed `Special (see "Relative Strength")`, and `difficultyText` then holds what the page says.
 
 **Required: `id`, `name`** — but only by the loader's own minimum, which these files never reach.

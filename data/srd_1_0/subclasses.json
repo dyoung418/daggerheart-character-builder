@@ -5,10 +5,6 @@
    "en-US": "Beastbound"
   },
   "class": "RANGER",
-  "domains": [
-   "BONE",
-   "SAGE"
-  ],
   "spellcastTrait": "AGILITY",
   "foundation": {
    "features": [
@@ -94,10 +90,6 @@
    "en-US": "Call of the Brave"
   },
   "class": "WARRIOR",
-  "domains": [
-   "BLADE",
-   "BONE"
-  ],
   "foundation": {
    "features": [
     {
@@ -165,10 +157,6 @@
    "en-US": "Call of the Slayer"
   },
   "class": "WARRIOR",
-  "domains": [
-   "BLADE",
-   "BONE"
-  ],
   "foundation": {
    "features": [
     {
@@ -224,10 +212,6 @@
    "en-US": "Divine Wielder"
   },
   "class": "SERAPH",
-  "domains": [
-   "SPLENDOR",
-   "VALOR"
-  ],
   "spellcastTrait": "STRENGTH",
   "foundation": {
    "features": [
@@ -296,10 +280,6 @@
    "en-US": "Elemental Origin"
   },
   "class": "SORCERER",
-  "domains": [
-   "MIDNIGHT",
-   "ARCANA"
-  ],
   "spellcastTrait": "INSTINCT",
   "foundation": {
    "features": [
@@ -372,10 +352,6 @@
    "en-US": "Nightwalker"
   },
   "class": "ROGUE",
-  "domains": [
-   "MIDNIGHT",
-   "GRACE"
-  ],
   "spellcastTrait": "FINESSE",
   "foundation": {
    "features": [
@@ -456,10 +432,6 @@
    "en-US": "Primal Origin"
   },
   "class": "SORCERER",
-  "domains": [
-   "MIDNIGHT",
-   "ARCANA"
-  ],
   "spellcastTrait": "INSTINCT",
   "foundation": {
    "features": [
@@ -532,10 +504,6 @@
    "en-US": "School of Knowledge"
   },
   "class": "WIZARD",
-  "domains": [
-   "CODEX",
-   "SPLENDOR"
-  ],
   "spellcastTrait": "KNOWLEDGE",
   "foundation": {
    "features": [
@@ -628,10 +596,6 @@
    "en-US": "School of War"
   },
   "class": "WIZARD",
-  "domains": [
-   "CODEX",
-   "SPLENDOR"
-  ],
   "spellcastTrait": "KNOWLEDGE",
   "foundation": {
    "features": [
@@ -724,10 +688,6 @@
    "en-US": "Stalwart"
   },
   "class": "GUARDIAN",
-  "domains": [
-   "VALOR",
-   "BLADE"
-  ],
   "foundation": {
    "features": [
     {
@@ -819,10 +779,6 @@
    "en-US": "Syndicate"
   },
   "class": "ROGUE",
-  "domains": [
-   "MIDNIGHT",
-   "GRACE"
-  ],
   "spellcastTrait": "FINESSE",
   "foundation": {
    "features": [
@@ -921,10 +877,6 @@
    "en-US": "Troubadour"
   },
   "class": "BARD",
-  "domains": [
-   "GRACE",
-   "CODEX"
-  ],
   "spellcastTrait": "PRESENCE",
   "foundation": {
    "features": [
@@ -994,10 +946,6 @@
    "en-US": "Vengeance"
   },
   "class": "GUARDIAN",
-  "domains": [
-   "VALOR",
-   "BLADE"
-  ],
   "foundation": {
    "features": [
     {
@@ -1065,10 +1013,6 @@
    "en-US": "Warden of Renewal"
   },
   "class": "DRUID",
-  "domains": [
-   "SAGE",
-   "ARCANA"
-  ],
   "spellcastTrait": "INSTINCT",
   "foundation": {
    "features": [
@@ -1149,10 +1093,6 @@
    "en-US": "Warden of the Elements"
   },
   "class": "DRUID",
-  "domains": [
-   "SAGE",
-   "ARCANA"
-  ],
   "spellcastTrait": "INSTINCT",
   "foundation": {
    "features": [
@@ -1257,10 +1197,6 @@
    "en-US": "Wayfinder"
   },
   "class": "RANGER",
-  "domains": [
-   "BONE",
-   "SAGE"
-  ],
   "spellcastTrait": "AGILITY",
   "foundation": {
    "features": [
@@ -1329,10 +1265,6 @@
    "en-US": "Winged Sentinel"
   },
   "class": "SERAPH",
-  "domains": [
-   "SPLENDOR",
-   "VALOR"
-  ],
   "spellcastTrait": "STRENGTH",
   "foundation": {
    "features": [
@@ -1411,10 +1343,6 @@
    "en-US": "Wordsmith"
   },
   "class": "BARD",
-  "domains": [
-   "GRACE",
-   "CODEX"
-  ],
   "spellcastTrait": "PRESENCE",
   "foundation": {
    "features": [

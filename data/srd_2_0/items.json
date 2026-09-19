@@ -4,7 +4,6 @@
   "name": {
    "en-US": "Premium Bedroll"
   },
-  "set": "core",
   "roll": 1,
   "features": [
    {
@@ -23,7 +22,6 @@
   "name": {
    "en-US": "Piper Whistle"
   },
-  "set": "core",
   "roll": 2,
   "features": [
    {
@@ -42,7 +40,6 @@
   "name": {
    "en-US": "Charging Quiver"
   },
-  "set": "core",
   "roll": 3,
   "features": [
    {
@@ -61,7 +58,6 @@
   "name": {
    "en-US": "Alistair’s Torch"
   },
-  "set": "core",
   "roll": 4,
   "features": [
    {
@@ -80,7 +76,6 @@
   "name": {
    "en-US": "Speaking Orbs"
   },
-  "set": "core",
   "roll": 5,
   "features": [
    {
@@ -99,7 +94,6 @@
   "name": {
    "en-US": "Manacles"
   },
-  "set": "core",
   "roll": 6,
   "features": [
    {
@@ -118,7 +112,6 @@
   "name": {
    "en-US": "Arcane Cloak"
   },
-  "set": "core",
   "roll": 7,
   "features": [
    {
@@ -137,7 +130,6 @@
   "name": {
    "en-US": "Woven Net"
   },
-  "set": "core",
   "roll": 8,
   "features": [
    {
@@ -156,7 +148,6 @@
   "name": {
    "en-US": "Fire Jar"
   },
-  "set": "core",
   "roll": 9,
   "features": [
    {
@@ -175,7 +166,6 @@
   "name": {
    "en-US": "Suspended Rod"
   },
-  "set": "core",
   "roll": 10,
   "features": [
    {
@@ -194,7 +184,6 @@
   "name": {
    "en-US": "Glamour Stone"
   },
-  "set": "core",
   "roll": 11,
   "features": [
    {
@@ -213,7 +202,6 @@
   "name": {
    "en-US": "Empty Chest"
   },
-  "set": "core",
   "roll": 12,
   "features": [
    {
@@ -232,7 +220,6 @@
   "name": {
    "en-US": "Companion Case"
   },
-  "set": "core",
   "roll": 13,
   "features": [
    {
@@ -251,7 +238,6 @@
   "name": {
    "en-US": "Piercing Arrows"
   },
-  "set": "core",
   "roll": 14,
   "features": [
    {
@@ -270,7 +256,6 @@
   "name": {
    "en-US": "Valorstone"
   },
-  "set": "core",
   "roll": 15,
   "features": [
    {
@@ -289,7 +274,6 @@
   "name": {
    "en-US": "Skeleton Key"
   },
-  "set": "core",
   "roll": 16,
   "features": [
    {
@@ -308,7 +292,6 @@
   "name": {
    "en-US": "Arcane Prism"
   },
-  "set": "core",
   "roll": 17,
   "features": [
    {
@@ -327,7 +310,6 @@
   "name": {
    "en-US": "Minor Stamina Potion Recipe"
   },
-  "set": "core",
   "roll": 18,
   "features": [
    {
@@ -346,7 +328,6 @@
   "name": {
    "en-US": "Minor Health Potion Recipe"
   },
-  "set": "core",
   "roll": 19,
   "features": [
    {
@@ -365,7 +346,6 @@
   "name": {
    "en-US": "Homing Compasses"
   },
-  "set": "core",
   "roll": 20,
   "features": [
    {
@@ -384,7 +364,6 @@
   "name": {
    "en-US": "Corrector Sprite"
   },
-  "set": "core",
   "roll": 21,
   "features": [
    {
@@ -403,7 +382,6 @@
   "name": {
    "en-US": "Gecko Gloves"
   },
-  "set": "core",
   "roll": 22,
   "features": [
    {
@@ -422,7 +400,6 @@
   "name": {
    "en-US": "Lorekeeper"
   },
-  "set": "core",
   "roll": 23,
   "features": [
    {
@@ -441,7 +418,6 @@
   "name": {
    "en-US": "Vial of Darksmoke Recipe"
   },
-  "set": "core",
   "roll": 24,
   "features": [
    {
@@ -460,7 +436,6 @@
   "name": {
    "en-US": "Bloodstone"
   },
-  "set": "core",
   "roll": 25,
   "features": [
    {
@@ -479,7 +454,6 @@
   "name": {
    "en-US": "Greatstone"
   },
-  "set": "core",
   "roll": 26,
   "features": [
    {
@@ -498,7 +472,6 @@
   "name": {
    "en-US": "Glider"
   },
-  "set": "core",
   "roll": 27,
   "features": [
    {
@@ -517,7 +490,6 @@
   "name": {
    "en-US": "Ring of Silence"
   },
-  "set": "core",
   "roll": 28,
   "features": [
    {
@@ -536,7 +508,6 @@
   "name": {
    "en-US": "Calming Pendant"
   },
-  "set": "core",
   "roll": 29,
   "features": [
    {
@@ -555,7 +526,6 @@
   "name": {
    "en-US": "Dual Flask"
   },
-  "set": "core",
   "roll": 30,
   "features": [
    {
@@ -574,7 +544,6 @@
   "name": {
    "en-US": "Bag of Ficklesand"
   },
-  "set": "core",
   "roll": 31,
   "features": [
    {
@@ -593,7 +562,6 @@
   "name": {
    "en-US": "Ring of Resistance"
   },
-  "set": "core",
   "roll": 32,
   "features": [
    {
@@ -612,7 +580,6 @@
   "name": {
    "en-US": "Phoenix Feather"
   },
-  "set": "core",
   "roll": 33,
   "features": [
    {
@@ -631,7 +598,6 @@
   "name": {
    "en-US": "Box of Many Goods"
   },
-  "set": "core",
   "roll": 34,
   "features": [
    {
@@ -650,7 +616,6 @@
   "name": {
    "en-US": "Airblade Charm"
   },
-  "set": "core",
   "roll": 35,
   "features": [
    {
@@ -669,7 +634,6 @@
   "name": {
    "en-US": "Portal Seed"
   },
-  "set": "core",
   "roll": 36,
   "features": [
    {
@@ -688,7 +652,6 @@
   "name": {
    "en-US": "Paragon’s Chain"
   },
-  "set": "core",
   "roll": 37,
   "features": [
    {
@@ -707,7 +670,6 @@
   "name": {
    "en-US": "Elusive Amulet"
   },
-  "set": "core",
   "roll": 38,
   "features": [
    {
@@ -726,7 +688,6 @@
   "name": {
    "en-US": "Hopekeeper Locket"
   },
-  "set": "core",
   "roll": 39,
   "features": [
    {
@@ -745,7 +706,6 @@
   "name": {
    "en-US": "Infinite Bag"
   },
-  "set": "core",
   "roll": 40,
   "features": [
    {
@@ -764,7 +724,6 @@
   "name": {
    "en-US": "Stride Relic"
   },
-  "set": "core",
   "roll": 41,
   "features": [
    {
@@ -783,7 +742,6 @@
   "name": {
    "en-US": "Bolster Relic"
   },
-  "set": "core",
   "roll": 42,
   "features": [
    {
@@ -802,7 +760,6 @@
   "name": {
    "en-US": "Control Relic"
   },
-  "set": "core",
   "roll": 43,
   "features": [
    {
@@ -821,7 +778,6 @@
   "name": {
    "en-US": "Attune Relic"
   },
-  "set": "core",
   "roll": 44,
   "features": [
    {
@@ -840,7 +796,6 @@
   "name": {
    "en-US": "Charm Relic"
   },
-  "set": "core",
   "roll": 45,
   "features": [
    {
@@ -859,7 +814,6 @@
   "name": {
    "en-US": "Enlighten Relic"
   },
-  "set": "core",
   "roll": 46,
   "features": [
    {
@@ -878,7 +832,6 @@
   "name": {
    "en-US": "Honing Relic"
   },
-  "set": "core",
   "roll": 47,
   "features": [
    {
@@ -897,7 +850,6 @@
   "name": {
    "en-US": "Flickerfly Pendant"
   },
-  "set": "core",
   "roll": 48,
   "features": [
    {
@@ -916,7 +868,6 @@
   "name": {
    "en-US": "Lakestrider Boots"
   },
-  "set": "core",
   "roll": 49,
   "features": [
    {
@@ -935,7 +886,6 @@
   "name": {
    "en-US": "Clay Companion"
   },
-  "set": "core",
   "roll": 50,
   "features": [
    {
@@ -954,7 +904,6 @@
   "name": {
    "en-US": "Mythic Dust Recipe"
   },
-  "set": "core",
   "roll": 51,
   "features": [
    {
@@ -973,7 +922,6 @@
   "name": {
    "en-US": "Shard of Memory"
   },
-  "set": "core",
   "roll": 52,
   "features": [
    {
@@ -992,7 +940,6 @@
   "name": {
    "en-US": "Gem of Alacrity"
   },
-  "set": "core",
   "roll": 53,
   "features": [
    {
@@ -1011,7 +958,6 @@
   "name": {
    "en-US": "Gem of Might"
   },
-  "set": "core",
   "roll": 54,
   "features": [
    {
@@ -1030,7 +976,6 @@
   "name": {
    "en-US": "Gem of Precision"
   },
-  "set": "core",
   "roll": 55,
   "features": [
    {
@@ -1049,7 +994,6 @@
   "name": {
    "en-US": "Gem of Insight"
   },
-  "set": "core",
   "roll": 56,
   "features": [
    {
@@ -1068,7 +1012,6 @@
   "name": {
    "en-US": "Gem of Audacity"
   },
-  "set": "core",
   "roll": 57,
   "features": [
    {
@@ -1087,7 +1030,6 @@
   "name": {
    "en-US": "Gem of Sagacity"
   },
-  "set": "core",
   "roll": 58,
   "features": [
    {
@@ -1106,7 +1048,6 @@
   "name": {
    "en-US": "Ring of Unbreakable Resolve"
   },
-  "set": "core",
   "roll": 59,
   "features": [
    {
@@ -1125,7 +1066,6 @@
   "name": {
    "en-US": "Belt of Unity"
   },
-  "set": "core",
   "roll": 60,
   "features": [
    {
@@ -1144,7 +1084,6 @@
   "name": {
    "en-US": "Caltrops"
   },
-  "set": "hopeandfear",
   "roll": 1,
   "features": [
    {
@@ -1163,7 +1102,6 @@
   "name": {
    "en-US": "Grapnel"
   },
-  "set": "hopeandfear",
   "roll": 2,
   "features": [
    {
@@ -1182,7 +1120,6 @@
   "name": {
    "en-US": "Ball Bearings"
   },
-  "set": "hopeandfear",
   "roll": 3,
   "features": [
    {
@@ -1201,7 +1138,6 @@
   "name": {
    "en-US": "Box of Dragon Dust"
   },
-  "set": "hopeandfear",
   "roll": 4,
   "features": [
    {
@@ -1220,7 +1156,6 @@
   "name": {
    "en-US": "Nighthawker’s Ring"
   },
-  "set": "hopeandfear",
   "roll": 5,
   "features": [
    {
@@ -1239,7 +1174,6 @@
   "name": {
    "en-US": "Elven Spyglass"
   },
-  "set": "hopeandfear",
   "roll": 6,
   "features": [
    {
@@ -1258,7 +1192,6 @@
   "name": {
    "en-US": "Gourmet Granules"
   },
-  "set": "hopeandfear",
   "roll": 7,
   "features": [
    {
@@ -1277,7 +1210,6 @@
   "name": {
    "en-US": "Collapsible Pole"
   },
-  "set": "hopeandfear",
   "roll": 8,
   "features": [
    {
@@ -1296,7 +1228,6 @@
   "name": {
    "en-US": "Blackwing Quill"
   },
-  "set": "hopeandfear",
   "roll": 9,
   "features": [
    {
@@ -1315,7 +1246,6 @@
   "name": {
    "en-US": "Silee’s Folding Knife"
   },
-  "set": "hopeandfear",
   "roll": 10,
   "features": [
    {
@@ -1334,7 +1264,6 @@
   "name": {
    "en-US": "Windup Toy"
   },
-  "set": "hopeandfear",
   "roll": 11,
   "features": [
    {
@@ -1353,7 +1282,6 @@
   "name": {
    "en-US": "Loaded Dice"
   },
-  "set": "hopeandfear",
   "roll": 12,
   "features": [
    {
@@ -1372,7 +1300,6 @@
   "name": {
    "en-US": "Hollowbark Horn"
   },
-  "set": "hopeandfear",
   "roll": 13,
   "features": [
    {
@@ -1391,7 +1318,6 @@
   "name": {
    "en-US": "Self-Tying Rope"
   },
-  "set": "hopeandfear",
   "roll": 14,
   "features": [
    {
@@ -1410,7 +1336,6 @@
   "name": {
    "en-US": "Thief’s Compass"
   },
-  "set": "hopeandfear",
   "roll": 15,
   "features": [
    {
@@ -1429,7 +1354,6 @@
   "name": {
    "en-US": "Traveler’s Bell"
   },
-  "set": "hopeandfear",
   "roll": 16,
   "features": [
    {
@@ -1448,7 +1372,6 @@
   "name": {
    "en-US": "Mandragorian Torch"
   },
-  "set": "hopeandfear",
   "roll": 17,
   "features": [
    {
@@ -1467,7 +1390,6 @@
   "name": {
    "en-US": "Boots of Supple Mystique"
   },
-  "set": "hopeandfear",
   "roll": 18,
   "features": [
    {
@@ -1486,7 +1408,6 @@
   "name": {
    "en-US": "Zephyr’s Jar"
   },
-  "set": "hopeandfear",
   "roll": 19,
   "features": [
    {
@@ -1505,7 +1426,6 @@
   "name": {
    "en-US": "Returning Ring"
   },
-  "set": "hopeandfear",
   "roll": 20,
   "features": [
    {
@@ -1524,7 +1444,6 @@
   "name": {
    "en-US": "Kingfisher’s Net"
   },
-  "set": "hopeandfear",
   "roll": 21,
   "features": [
    {
@@ -1543,7 +1462,6 @@
   "name": {
    "en-US": "Titan’s Girdle"
   },
-  "set": "hopeandfear",
   "roll": 22,
   "features": [
    {
@@ -1562,7 +1480,6 @@
   "name": {
    "en-US": "Iron Veil"
   },
-  "set": "hopeandfear",
   "roll": 23,
   "features": [
    {
@@ -1581,7 +1498,6 @@
   "name": {
    "en-US": "Furball Bag"
   },
-  "set": "hopeandfear",
   "roll": 24,
   "features": [
    {
@@ -1600,7 +1516,6 @@
   "name": {
    "en-US": "Whisperstep Anklet"
   },
-  "set": "hopeandfear",
   "roll": 25,
   "features": [
    {
@@ -1619,7 +1534,6 @@
   "name": {
    "en-US": "Enchanter’s Loupe"
   },
-  "set": "hopeandfear",
   "roll": 26,
   "features": [
    {
@@ -1638,7 +1552,6 @@
   "name": {
    "en-US": "Escher’s Mirrorball"
   },
-  "set": "hopeandfear",
   "roll": 27,
   "features": [
    {
@@ -1657,7 +1570,6 @@
   "name": {
    "en-US": "Cheater’s Coin"
   },
-  "set": "hopeandfear",
   "roll": 28,
   "features": [
    {
@@ -1676,7 +1588,6 @@
   "name": {
    "en-US": "Gravewarden’s Bell"
   },
-  "set": "hopeandfear",
   "roll": 29,
   "features": [
    {
@@ -1695,7 +1606,6 @@
   "name": {
    "en-US": "Reliquary of the Sightless Saint"
   },
-  "set": "hopeandfear",
   "roll": 30,
   "features": [
    {
@@ -1714,7 +1624,6 @@
   "name": {
    "en-US": "Map of Revelation"
   },
-  "set": "hopeandfear",
   "roll": 31,
   "features": [
    {
@@ -1733,7 +1642,6 @@
   "name": {
    "en-US": "Dagginae’s Obsidian Slate"
   },
-  "set": "hopeandfear",
   "roll": 32,
   "features": [
    {
@@ -1752,7 +1660,6 @@
   "name": {
    "en-US": "Gadiman’s Backpack"
   },
-  "set": "hopeandfear",
   "roll": 33,
   "features": [
    {
@@ -1771,7 +1678,6 @@
   "name": {
    "en-US": "Eclipse Coin"
   },
-  "set": "hopeandfear",
   "roll": 34,
   "features": [
    {
@@ -1790,7 +1696,6 @@
   "name": {
    "en-US": "Sorcerer’s Hat"
   },
-  "set": "hopeandfear",
   "roll": 35,
   "features": [
    {
@@ -1809,7 +1714,6 @@
   "name": {
    "en-US": "Ghoulskin Gloves"
   },
-  "set": "hopeandfear",
   "roll": 36,
   "features": [
    {
@@ -1828,7 +1732,6 @@
   "name": {
    "en-US": "Gloves of Alacrity"
   },
-  "set": "hopeandfear",
   "roll": 37,
   "features": [
    {
@@ -1847,7 +1750,6 @@
   "name": {
    "en-US": "Insomniac’s Periapt"
   },
-  "set": "hopeandfear",
   "roll": 38,
   "features": [
    {
@@ -1866,7 +1768,6 @@
   "name": {
    "en-US": "Wildrider’s Saddle"
   },
-  "set": "hopeandfear",
   "roll": 39,
   "features": [
    {
@@ -1885,7 +1786,6 @@
   "name": {
    "en-US": "Soul-Twin Circlets"
   },
-  "set": "hopeandfear",
   "roll": 40,
   "features": [
    {
@@ -1904,7 +1804,6 @@
   "name": {
    "en-US": "Namer’s Oracle"
   },
-  "set": "hopeandfear",
   "roll": 41,
   "features": [
    {
@@ -1923,7 +1822,6 @@
   "name": {
    "en-US": "Crucible Frames"
   },
-  "set": "hopeandfear",
   "roll": 42,
   "features": [
    {
@@ -1942,7 +1840,6 @@
   "name": {
    "en-US": "Two-Faced Aegis Brooch"
   },
-  "set": "hopeandfear",
   "roll": 43,
   "features": [
    {
@@ -1961,7 +1858,6 @@
   "name": {
    "en-US": "Knockback Bracelets"
   },
-  "set": "hopeandfear",
   "roll": 44,
   "features": [
    {
@@ -1980,7 +1876,6 @@
   "name": {
    "en-US": "Force Disc"
   },
-  "set": "hopeandfear",
   "roll": 45,
   "features": [
    {
@@ -1999,7 +1894,6 @@
   "name": {
    "en-US": "Molepaw Mittens"
   },
-  "set": "hopeandfear",
   "roll": 46,
   "features": [
    {
@@ -2018,7 +1912,6 @@
   "name": {
    "en-US": "Timekeeper’s Pendant"
   },
-  "set": "hopeandfear",
   "roll": 47,
   "features": [
    {
@@ -2037,7 +1930,6 @@
   "name": {
    "en-US": "Iron Dagger Pendant"
   },
-  "set": "hopeandfear",
   "roll": 48,
   "features": [
    {
@@ -2056,7 +1948,6 @@
   "name": {
    "en-US": "Collar of Ascendancy"
   },
-  "set": "hopeandfear",
   "roll": 49,
   "features": [
    {
@@ -2075,7 +1966,6 @@
   "name": {
    "en-US": "Temporal Sanctuary"
   },
-  "set": "hopeandfear",
   "roll": 50,
   "features": [
    {
@@ -2094,7 +1984,6 @@
   "name": {
    "en-US": "Hero’s Helm"
   },
-  "set": "hopeandfear",
   "roll": 51,
   "features": [
    {
@@ -2113,7 +2002,6 @@
   "name": {
    "en-US": "Rings of Friendship"
   },
-  "set": "hopeandfear",
   "roll": 52,
   "features": [
    {
@@ -2132,7 +2020,6 @@
   "name": {
    "en-US": "Rings of Camaraderie"
   },
-  "set": "hopeandfear",
   "roll": 53,
   "features": [
    {
@@ -2151,7 +2038,6 @@
   "name": {
    "en-US": "Rings of Alliance"
   },
-  "set": "hopeandfear",
   "roll": 54,
   "features": [
    {
@@ -2170,7 +2056,6 @@
   "name": {
    "en-US": "Phobophage’s Circlet"
   },
-  "set": "hopeandfear",
   "roll": 55,
   "features": [
    {
@@ -2189,7 +2074,6 @@
   "name": {
    "en-US": "Quillshawl"
   },
-  "set": "hopeandfear",
   "roll": 56,
   "features": [
    {
@@ -2208,7 +2092,6 @@
   "name": {
    "en-US": "Warp Pendant"
   },
-  "set": "hopeandfear",
   "roll": 57,
   "features": [
    {
@@ -2227,7 +2110,6 @@
   "name": {
    "en-US": "Portal Frames"
   },
-  "set": "hopeandfear",
   "roll": 58,
   "features": [
    {
@@ -2246,7 +2128,6 @@
   "name": {
    "en-US": "Communion Relic"
   },
-  "set": "hopeandfear",
   "roll": 59,
   "features": [
    {
@@ -2265,7 +2146,6 @@
   "name": {
    "en-US": "Augur’s Relic"
   },
-  "set": "hopeandfear",
   "roll": 60,
   "features": [
    {

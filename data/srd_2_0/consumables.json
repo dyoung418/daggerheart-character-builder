@@ -4,7 +4,6 @@
   "name": {
    "en-US": "Stride Potion"
   },
-  "set": "core",
   "roll": 1,
   "features": [
    {
@@ -23,7 +22,6 @@
   "name": {
    "en-US": "Bolster Potion"
   },
-  "set": "core",
   "roll": 2,
   "features": [
    {
@@ -42,7 +40,6 @@
   "name": {
    "en-US": "Control Potion"
   },
-  "set": "core",
   "roll": 3,
   "features": [
    {
@@ -61,7 +58,6 @@
   "name": {
    "en-US": "Attune Potion"
   },
-  "set": "core",
   "roll": 4,
   "features": [
    {
@@ -80,7 +76,6 @@
   "name": {
    "en-US": "Charm Potion"
   },
-  "set": "core",
   "roll": 5,
   "features": [
    {
@@ -99,7 +94,6 @@
   "name": {
    "en-US": "Enlighten Potion"
   },
-  "set": "core",
   "roll": 6,
   "features": [
    {
@@ -118,7 +112,6 @@
   "name": {
    "en-US": "Minor Health Potion"
   },
-  "set": "core",
   "roll": 7,
   "features": [
    {
@@ -137,7 +130,6 @@
   "name": {
    "en-US": "Minor Stamina Potion"
   },
-  "set": "core",
   "roll": 8,
   "features": [
    {
@@ -156,7 +148,6 @@
   "name": {
    "en-US": "Grindletooth Venom"
   },
-  "set": "core",
   "roll": 9,
   "features": [
    {
@@ -175,7 +166,6 @@
   "name": {
    "en-US": "Varik Leaves"
   },
-  "set": "core",
   "roll": 10,
   "features": [
    {
@@ -194,7 +184,6 @@
   "name": {
    "en-US": "Vial of Moondrip"
   },
-  "set": "core",
   "roll": 11,
   "features": [
    {
@@ -213,7 +202,6 @@
   "name": {
    "en-US": "Unstable Arcane Shard"
   },
-  "set": "core",
   "roll": 12,
   "features": [
    {
@@ -232,7 +220,6 @@
   "name": {
    "en-US": "Potion of Stability"
   },
-  "set": "core",
   "roll": 13,
   "features": [
    {
@@ -251,7 +238,6 @@
   "name": {
    "en-US": "Improved Grindletooth Venom"
   },
-  "set": "core",
   "roll": 14,
   "features": [
    {
@@ -270,7 +256,6 @@
   "name": {
    "en-US": "Morphing Clay"
   },
-  "set": "core",
   "roll": 15,
   "features": [
    {
@@ -289,7 +274,6 @@
   "name": {
    "en-US": "Vial of Darksmoke"
   },
-  "set": "core",
   "roll": 16,
   "features": [
    {
@@ -308,7 +292,6 @@
   "name": {
    "en-US": "Jumping Root"
   },
-  "set": "core",
   "roll": 17,
   "features": [
    {
@@ -327,7 +310,6 @@
   "name": {
    "en-US": "Snap Powder"
   },
-  "set": "core",
   "roll": 18,
   "features": [
    {
@@ -346,7 +328,6 @@
   "name": {
    "en-US": "Health Potion"
   },
-  "set": "core",
   "roll": 19,
   "features": [
    {
@@ -365,7 +346,6 @@
   "name": {
    "en-US": "Stamina Potion"
   },
-  "set": "core",
   "roll": 20,
   "features": [
    {
@@ -384,7 +364,6 @@
   "name": {
    "en-US": "Armor Stitcher"
   },
-  "set": "core",
   "roll": 21,
   "features": [
    {
@@ -403,7 +382,6 @@
   "name": {
    "en-US": "Gill Salve"
   },
-  "set": "core",
   "roll": 22,
   "features": [
    {
@@ -422,7 +400,6 @@
   "name": {
    "en-US": "Replication Parchment"
   },
-  "set": "core",
   "roll": 23,
   "features": [
    {
@@ -441,7 +418,6 @@
   "name": {
    "en-US": "Improved Arcane Shard"
   },
-  "set": "core",
   "roll": 24,
   "features": [
    {
@@ -460,7 +436,6 @@
   "name": {
    "en-US": "Major Stride Potion"
   },
-  "set": "core",
   "roll": 25,
   "features": [
    {
@@ -479,7 +454,6 @@
   "name": {
    "en-US": "Major Bolster Potion"
   },
-  "set": "core",
   "roll": 26,
   "features": [
    {
@@ -498,7 +472,6 @@
   "name": {
    "en-US": "Major Control Potion"
   },
-  "set": "core",
   "roll": 27,
   "features": [
    {
@@ -517,7 +490,6 @@
   "name": {
    "en-US": "Major Attune Potion"
   },
-  "set": "core",
   "roll": 28,
   "features": [
    {
@@ -536,7 +508,6 @@
   "name": {
    "en-US": "Major Charm Potion"
   },
-  "set": "core",
   "roll": 29,
   "features": [
    {
@@ -555,7 +526,6 @@
   "name": {
    "en-US": "Major Enlighten Potion"
   },
-  "set": "core",
   "roll": 30,
   "features": [
    {
@@ -574,7 +544,6 @@
   "name": {
    "en-US": "Blood of the Yorgi"
   },
-  "set": "core",
   "roll": 31,
   "features": [
    {
@@ -593,7 +562,6 @@
   "name": {
    "en-US": "Homet’s Secret Potion"
   },
-  "set": "core",
   "roll": 32,
   "features": [
    {
@@ -612,7 +580,6 @@
   "name": {
    "en-US": "Redthorn Saliva"
   },
-  "set": "core",
   "roll": 33,
   "features": [
    {
@@ -631,7 +598,6 @@
   "name": {
    "en-US": "Channelstone"
   },
-  "set": "core",
   "roll": 34,
   "features": [
    {
@@ -650,7 +616,6 @@
   "name": {
    "en-US": "Mythic Dust"
   },
-  "set": "core",
   "roll": 35,
   "features": [
    {
@@ -669,7 +634,6 @@
   "name": {
    "en-US": "Acidpaste"
   },
-  "set": "core",
   "roll": 36,
   "features": [
    {
@@ -688,7 +652,6 @@
   "name": {
    "en-US": "Hopehold Flare"
   },
-  "set": "core",
   "roll": 37,
   "features": [
    {
@@ -707,7 +670,6 @@
   "name": {
    "en-US": "Major Arcane Shard"
   },
-  "set": "core",
   "roll": 38,
   "features": [
    {
@@ -726,7 +688,6 @@
   "name": {
    "en-US": "Featherbone"
   },
-  "set": "core",
   "roll": 39,
   "features": [
    {
@@ -745,7 +706,6 @@
   "name": {
    "en-US": "Circle of the Void"
   },
-  "set": "core",
   "roll": 40,
   "features": [
    {
@@ -764,7 +724,6 @@
   "name": {
    "en-US": "Sun Tree Sap"
   },
-  "set": "core",
   "roll": 41,
   "features": [
    {
@@ -783,7 +742,6 @@
   "name": {
    "en-US": "Dripfang Poison"
   },
-  "set": "core",
   "roll": 42,
   "features": [
    {
@@ -802,7 +760,6 @@
   "name": {
    "en-US": "Major Health Potion"
   },
-  "set": "core",
   "roll": 43,
   "features": [
    {
@@ -821,7 +778,6 @@
   "name": {
    "en-US": "Major Stamina Potion"
   },
-  "set": "core",
   "roll": 44,
   "features": [
    {
@@ -840,7 +796,6 @@
   "name": {
    "en-US": "Ogre Musk"
   },
-  "set": "core",
   "roll": 45,
   "features": [
    {
@@ -859,7 +814,6 @@
   "name": {
    "en-US": "Wingsprout"
   },
-  "set": "core",
   "roll": 46,
   "features": [
    {
@@ -878,7 +832,6 @@
   "name": {
    "en-US": "Jar of Lost Voices"
   },
-  "set": "core",
   "roll": 47,
   "features": [
    {
@@ -897,7 +850,6 @@
   "name": {
    "en-US": "Dragonbloom Tea"
   },
-  "set": "core",
   "roll": 48,
   "features": [
    {
@@ -916,7 +868,6 @@
   "name": {
    "en-US": "Bridge Seed"
   },
-  "set": "core",
   "roll": 49,
   "features": [
    {
@@ -935,7 +886,6 @@
   "name": {
    "en-US": "Sleeping Sap"
   },
-  "set": "core",
   "roll": 50,
   "features": [
    {
@@ -954,7 +904,6 @@
   "name": {
    "en-US": "Feast of Xuria"
   },
-  "set": "core",
   "roll": 51,
   "features": [
    {
@@ -973,7 +922,6 @@
   "name": {
    "en-US": "Bonding Honey"
   },
-  "set": "core",
   "roll": 52,
   "features": [
    {
@@ -992,7 +940,6 @@
   "name": {
    "en-US": "Shrinking Potion"
   },
-  "set": "core",
   "roll": 53,
   "features": [
    {
@@ -1011,7 +958,6 @@
   "name": {
    "en-US": "Growing Potion"
   },
-  "set": "core",
   "roll": 54,
   "features": [
    {
@@ -1030,7 +976,6 @@
   "name": {
    "en-US": "Knowledge Stone"
   },
-  "set": "core",
   "roll": 55,
   "features": [
    {
@@ -1049,7 +994,6 @@
   "name": {
    "en-US": "Sweet Moss"
   },
-  "set": "core",
   "roll": 56,
   "features": [
    {
@@ -1068,7 +1012,6 @@
   "name": {
    "en-US": "Blinding Orb"
   },
-  "set": "core",
   "roll": 57,
   "features": [
    {
@@ -1087,7 +1030,6 @@
   "name": {
    "en-US": "Death Tea"
   },
-  "set": "core",
   "roll": 58,
   "features": [
    {
@@ -1106,7 +1048,6 @@
   "name": {
    "en-US": "Mirror of Marigold"
   },
-  "set": "core",
   "roll": 59,
   "features": [
    {
@@ -1125,7 +1066,6 @@
   "name": {
    "en-US": "Stardrop"
   },
-  "set": "core",
   "roll": 60,
   "features": [
    {
@@ -1144,7 +1084,6 @@
   "name": {
    "en-US": "Warding Candle"
   },
-  "set": "hopeandfear",
   "roll": 1,
   "features": [
    {
@@ -1163,7 +1102,6 @@
   "name": {
    "en-US": "Iridian Dust"
   },
-  "set": "hopeandfear",
   "roll": 2,
   "features": [
    {
@@ -1182,7 +1120,6 @@
   "name": {
    "en-US": "Verglasian Seed"
   },
-  "set": "hopeandfear",
   "roll": 3,
   "features": [
    {
@@ -1201,7 +1138,6 @@
   "name": {
    "en-US": "Cupbearer’s Bezoar"
   },
-  "set": "hopeandfear",
   "roll": 4,
   "features": [
    {
@@ -1220,7 +1156,6 @@
   "name": {
    "en-US": "Mossmantle Potion"
   },
-  "set": "hopeandfear",
   "roll": 5,
   "features": [
    {
@@ -1239,7 +1174,6 @@
   "name": {
    "en-US": "Lyrebird Lozenge"
   },
-  "set": "hopeandfear",
   "roll": 6,
   "features": [
    {
@@ -1258,7 +1192,6 @@
   "name": {
    "en-US": "Vial of Featherfall"
   },
-  "set": "hopeandfear",
   "roll": 7,
   "features": [
    {
@@ -1277,7 +1210,6 @@
   "name": {
    "en-US": "Chimeric Saliva"
   },
-  "set": "hopeandfear",
   "roll": 8,
   "features": [
    {
@@ -1296,7 +1228,6 @@
   "name": {
    "en-US": "Packet of Space Dust"
   },
-  "set": "hopeandfear",
   "roll": 9,
   "features": [
    {
@@ -1315,7 +1246,6 @@
   "name": {
    "en-US": "Pipeweed"
   },
-  "set": "hopeandfear",
   "roll": 10,
   "features": [
    {
@@ -1334,7 +1264,6 @@
   "name": {
    "en-US": "Deathseer’s Powder"
   },
-  "set": "hopeandfear",
   "roll": 11,
   "features": [
    {
@@ -1353,7 +1282,6 @@
   "name": {
    "en-US": "Slayer’s Salt"
   },
-  "set": "hopeandfear",
   "roll": 12,
   "features": [
    {
@@ -1372,7 +1300,6 @@
   "name": {
    "en-US": "Yakamel Milk"
   },
-  "set": "hopeandfear",
   "roll": 13,
   "features": [
    {
@@ -1391,7 +1318,6 @@
   "name": {
    "en-US": "Glowmoss Mushroom"
   },
-  "set": "hopeandfear",
   "roll": 14,
   "features": [
    {
@@ -1410,7 +1336,6 @@
   "name": {
    "en-US": "Red Ooze Oil"
   },
-  "set": "hopeandfear",
   "roll": 15,
   "features": [
    {
@@ -1429,7 +1354,6 @@
   "name": {
    "en-US": "Instant Camp"
   },
-  "set": "hopeandfear",
   "roll": 16,
   "features": [
    {
@@ -1448,7 +1372,6 @@
   "name": {
    "en-US": "Bundle of Spiderlegs"
   },
-  "set": "hopeandfear",
   "roll": 17,
   "features": [
    {
@@ -1467,7 +1390,6 @@
   "name": {
    "en-US": "Ciscan Fog Bottle"
   },
-  "set": "hopeandfear",
   "roll": 18,
   "features": [
    {
@@ -1486,7 +1408,6 @@
   "name": {
    "en-US": "Snapthorn Seed"
   },
-  "set": "hopeandfear",
   "roll": 19,
   "features": [
    {
@@ -1505,7 +1426,6 @@
   "name": {
    "en-US": "Sprite Bottle"
   },
-  "set": "hopeandfear",
   "roll": 20,
   "features": [
    {
@@ -1524,7 +1444,6 @@
   "name": {
    "en-US": "Gravity Bomb"
   },
-  "set": "hopeandfear",
   "roll": 21,
   "features": [
    {
@@ -1543,7 +1462,6 @@
   "name": {
    "en-US": "Gossip Flower"
   },
-  "set": "hopeandfear",
   "roll": 22,
   "features": [
    {
@@ -1562,7 +1480,6 @@
   "name": {
    "en-US": "Displacement Token"
   },
-  "set": "hopeandfear",
   "roll": 23,
   "features": [
    {
@@ -1581,7 +1498,6 @@
   "name": {
    "en-US": "Night Hag’s Dust"
   },
-  "set": "hopeandfear",
   "roll": 24,
   "features": [
    {
@@ -1600,7 +1516,6 @@
   "name": {
    "en-US": "Self-Sewing Thread"
   },
-  "set": "hopeandfear",
   "roll": 25,
   "features": [
    {
@@ -1619,7 +1534,6 @@
   "name": {
    "en-US": "Stonemason’s Fortune"
   },
-  "set": "hopeandfear",
   "roll": 26,
   "features": [
    {
@@ -1638,7 +1552,6 @@
   "name": {
    "en-US": "Mnemonic Potion"
   },
-  "set": "hopeandfear",
   "roll": 27,
   "features": [
    {
@@ -1657,7 +1570,6 @@
   "name": {
    "en-US": "Salamander Salve"
   },
-  "set": "hopeandfear",
   "roll": 28,
   "features": [
    {
@@ -1676,7 +1588,6 @@
   "name": {
    "en-US": "Green Ooze Oil"
   },
-  "set": "hopeandfear",
   "roll": 29,
   "features": [
    {
@@ -1695,7 +1606,6 @@
   "name": {
    "en-US": "Sunlight Orb"
   },
-  "set": "hopeandfear",
   "roll": 30,
   "features": [
    {
@@ -1714,7 +1624,6 @@
   "name": {
    "en-US": "Moonlight Orb"
   },
-  "set": "hopeandfear",
   "roll": 31,
   "features": [
    {
@@ -1733,7 +1642,6 @@
   "name": {
    "en-US": "Midas Flask"
   },
-  "set": "hopeandfear",
   "roll": 32,
   "features": [
    {
@@ -1752,7 +1660,6 @@
   "name": {
    "en-US": "Staff of Reversal"
   },
-  "set": "hopeandfear",
   "roll": 33,
   "features": [
    {
@@ -1771,7 +1678,6 @@
   "name": {
    "en-US": "Berserker’s Brew"
   },
-  "set": "hopeandfear",
   "roll": 34,
   "features": [
    {
@@ -1790,7 +1696,6 @@
   "name": {
    "en-US": "Emberite Shard"
   },
-  "set": "hopeandfear",
   "roll": 35,
   "features": [
    {
@@ -1809,7 +1714,6 @@
   "name": {
    "en-US": "Arcticite Shard"
   },
-  "set": "hopeandfear",
   "roll": 36,
   "features": [
    {
@@ -1828,7 +1732,6 @@
   "name": {
    "en-US": "Fulgurite Shard"
   },
-  "set": "hopeandfear",
   "roll": 37,
   "features": [
    {
@@ -1847,7 +1750,6 @@
   "name": {
    "en-US": "Demiurge’s Draught"
   },
-  "set": "hopeandfear",
   "roll": 38,
   "features": [
    {
@@ -1866,7 +1768,6 @@
   "name": {
    "en-US": "Cockerel Claw Tea"
   },
-  "set": "hopeandfear",
   "roll": 39,
   "features": [
    {
@@ -1885,7 +1786,6 @@
   "name": {
    "en-US": "Potion of Vigilance"
   },
-  "set": "hopeandfear",
   "roll": 40,
   "features": [
    {
@@ -1904,7 +1804,6 @@
   "name": {
    "en-US": "Cacophonous Concoction"
   },
-  "set": "hopeandfear",
   "roll": 41,
   "features": [
    {
@@ -1923,7 +1822,6 @@
   "name": {
    "en-US": "Nightmare Mead"
   },
-  "set": "hopeandfear",
   "roll": 42,
   "features": [
    {
@@ -1942,7 +1840,6 @@
   "name": {
    "en-US": "Stake of Abjuration"
   },
-  "set": "hopeandfear",
   "roll": 43,
   "features": [
    {
@@ -1961,7 +1858,6 @@
   "name": {
    "en-US": "Psychopomp’s Shroud"
   },
-  "set": "hopeandfear",
   "roll": 44,
   "features": [
    {
@@ -1980,7 +1876,6 @@
   "name": {
    "en-US": "Phial of Deep Ink"
   },
-  "set": "hopeandfear",
   "roll": 45,
   "features": [
    {
@@ -1999,7 +1894,6 @@
   "name": {
    "en-US": "Mesmer’s Tonic"
   },
-  "set": "hopeandfear",
   "roll": 46,
   "features": [
    {
@@ -2018,7 +1912,6 @@
   "name": {
    "en-US": "Invisibility Potion"
   },
-  "set": "hopeandfear",
   "roll": 47,
   "features": [
    {
@@ -2037,7 +1930,6 @@
   "name": {
    "en-US": "Formoid Serum"
   },
-  "set": "hopeandfear",
   "roll": 48,
   "features": [
    {
@@ -2056,7 +1948,6 @@
   "name": {
    "en-US": "Steelskin Salve"
   },
-  "set": "hopeandfear",
   "roll": 49,
   "features": [
    {
@@ -2075,7 +1966,6 @@
   "name": {
    "en-US": "Godling’s Pomelo"
   },
-  "set": "hopeandfear",
   "roll": 50,
   "features": [
    {
@@ -2094,7 +1984,6 @@
   "name": {
    "en-US": "Snakeskin Spirit"
   },
-  "set": "hopeandfear",
   "roll": 51,
   "features": [
    {
@@ -2113,7 +2002,6 @@
   "name": {
    "en-US": "Magic-User’s Malison"
   },
-  "set": "hopeandfear",
   "roll": 52,
   "features": [
    {
@@ -2132,7 +2020,6 @@
   "name": {
    "en-US": "Quintessential Severant"
   },
-  "set": "hopeandfear",
   "roll": 53,
   "features": [
    {
@@ -2151,7 +2038,6 @@
   "name": {
    "en-US": "Mask of the Echoed Self"
   },
-  "set": "hopeandfear",
   "roll": 54,
   "features": [
    {
@@ -2170,7 +2056,6 @@
   "name": {
    "en-US": "Necroprancer’s Bell"
   },
-  "set": "hopeandfear",
   "roll": 55,
   "features": [
    {
@@ -2189,7 +2074,6 @@
   "name": {
    "en-US": "Drakemantle"
   },
-  "set": "hopeandfear",
   "roll": 56,
   "features": [
    {
@@ -2208,7 +2092,6 @@
   "name": {
    "en-US": "Gambler’s Fallacy"
   },
-  "set": "hopeandfear",
   "roll": 57,
   "features": [
    {
@@ -2227,7 +2110,6 @@
   "name": {
    "en-US": "Lionheart Tonic"
   },
-  "set": "hopeandfear",
   "roll": 58,
   "features": [
    {
@@ -2246,7 +2128,6 @@
   "name": {
    "en-US": "Tears of the Undying Hero"
   },
-  "set": "hopeandfear",
   "roll": 59,
   "features": [
    {
@@ -2265,7 +2146,6 @@
   "name": {
    "en-US": "Featherstep Potion"
   },
-  "set": "hopeandfear",
   "roll": 60,
   "features": [
    {

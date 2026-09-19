@@ -12,10 +12,6 @@
    }
   ],
   "class": "RANGER",
-  "domains": [
-   "BONE",
-   "SAGE"
-  ],
   "spellcastTrait": "AGILITY",
   "foundation": {
    "features": [
@@ -108,10 +104,6 @@
    }
   ],
   "class": "WARRIOR",
-  "domains": [
-   "BLADE",
-   "BONE"
-  ],
   "foundation": {
    "features": [
     {
@@ -186,10 +178,6 @@
    }
   ],
   "class": "WARRIOR",
-  "domains": [
-   "BLADE",
-   "BONE"
-  ],
   "foundation": {
    "features": [
     {
@@ -252,10 +240,6 @@
    }
   ],
   "class": "SERAPH",
-  "domains": [
-   "SPLENDOR",
-   "VALOR"
-  ],
   "spellcastTrait": "STRENGTH",
   "foundation": {
    "features": [
@@ -331,10 +315,6 @@
    }
   ],
   "class": "SORCERER",
-  "domains": [
-   "MIDNIGHT",
-   "ARCANA"
-  ],
   "spellcastTrait": "INSTINCT",
   "foundation": {
    "features": [
@@ -414,10 +394,6 @@
    }
   ],
   "class": "ROGUE",
-  "domains": [
-   "MIDNIGHT",
-   "GRACE"
-  ],
   "spellcastTrait": "FINESSE",
   "foundation": {
    "features": [
@@ -505,10 +481,6 @@
    }
   ],
   "class": "SORCERER",
-  "domains": [
-   "MIDNIGHT",
-   "ARCANA"
-  ],
   "spellcastTrait": "INSTINCT",
   "foundation": {
    "features": [
@@ -588,10 +560,6 @@
    }
   ],
   "class": "WIZARD",
-  "domains": [
-   "CODEX",
-   "SPLENDOR"
-  ],
   "spellcastTrait": "KNOWLEDGE",
   "foundation": {
    "features": [
@@ -691,10 +659,6 @@
    }
   ],
   "class": "WIZARD",
-  "domains": [
-   "CODEX",
-   "SPLENDOR"
-  ],
   "spellcastTrait": "KNOWLEDGE",
   "foundation": {
    "features": [
@@ -794,10 +758,6 @@
    }
   ],
   "class": "GUARDIAN",
-  "domains": [
-   "VALOR",
-   "BLADE"
-  ],
   "foundation": {
    "features": [
     {
@@ -896,10 +856,6 @@
    }
   ],
   "class": "ROGUE",
-  "domains": [
-   "MIDNIGHT",
-   "GRACE"
-  ],
   "spellcastTrait": "FINESSE",
   "foundation": {
    "features": [
@@ -1005,10 +961,6 @@
    }
   ],
   "class": "BARD",
-  "domains": [
-   "GRACE",
-   "CODEX"
-  ],
   "spellcastTrait": "PRESENCE",
   "foundation": {
    "features": [
@@ -1085,10 +1037,6 @@
    }
   ],
   "class": "GUARDIAN",
-  "domains": [
-   "VALOR",
-   "BLADE"
-  ],
   "foundation": {
    "features": [
     {
@@ -1163,10 +1111,6 @@
    }
   ],
   "class": "DRUID",
-  "domains": [
-   "SAGE",
-   "ARCANA"
-  ],
   "spellcastTrait": "INSTINCT",
   "foundation": {
    "features": [
@@ -1254,10 +1198,6 @@
    }
   ],
   "class": "DRUID",
-  "domains": [
-   "SAGE",
-   "ARCANA"
-  ],
   "spellcastTrait": "INSTINCT",
   "foundation": {
    "features": [
@@ -1369,10 +1309,6 @@
    }
   ],
   "class": "RANGER",
-  "domains": [
-   "BONE",
-   "SAGE"
-  ],
   "spellcastTrait": "AGILITY",
   "foundation": {
    "features": [
@@ -1448,10 +1384,6 @@
    }
   ],
   "class": "SERAPH",
-  "domains": [
-   "SPLENDOR",
-   "VALOR"
-  ],
   "spellcastTrait": "STRENGTH",
   "foundation": {
    "features": [
@@ -1537,10 +1469,6 @@
    }
   ],
   "class": "BARD",
-  "domains": [
-   "GRACE",
-   "CODEX"
-  ],
   "spellcastTrait": "PRESENCE",
   "foundation": {
    "features": [
@@ -1629,10 +1557,6 @@
    }
   ],
   "class": "ASSASSIN",
-  "domains": [
-   "BLADE",
-   "MIDNIGHT"
-  ],
   "spellcastTrait": "AGILITY",
   "foundation": {
    "features": [
@@ -1732,10 +1656,6 @@
    }
   ],
   "class": "ASSASSIN",
-  "domains": [
-   "BLADE",
-   "MIDNIGHT"
-  ],
   "spellcastTrait": "KNOWLEDGE",
   "foundation": {
    "features": [
@@ -1864,10 +1784,6 @@
    }
   ],
   "class": "BRAWLER",
-  "domains": [
-   "VALOR",
-   "BONE"
-  ],
   "foundation": {
    "features": [
     {
@@ -1966,10 +1882,6 @@
    }
   ],
   "class": "BRAWLER",
-  "domains": [
-   "VALOR",
-   "BONE"
-  ],
   "foundation": {
    "features": [
     {
@@ -2078,10 +1990,6 @@
    }
   ],
   "class": "WARLOCK",
-  "domains": [
-   "DREAD",
-   "GRACE"
-  ],
   "spellcastTrait": "PRESENCE",
   "foundation": {
    "features": [
@@ -2181,10 +2089,6 @@
    }
   ],
   "class": "WARLOCK",
-  "domains": [
-   "DREAD",
-   "GRACE"
-  ],
   "spellcastTrait": "PRESENCE",
   "foundation": {
    "features": [
@@ -2284,10 +2188,6 @@
    }
   ],
   "class": "WITCH",
-  "domains": [
-   "SAGE",
-   "DREAD"
-  ],
   "spellcastTrait": "KNOWLEDGE",
   "foundation": {
    "features": [
@@ -2375,10 +2275,6 @@
    }
   ],
   "class": "WITCH",
-  "domains": [
-   "SAGE",
-   "DREAD"
-  ],
   "spellcastTrait": "INSTINCT",
   "foundation": {
    "features": [
