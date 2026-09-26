@@ -49,9 +49,9 @@ let templatePromise = null;
  * The template bytes, or null when this browser hasn't got the template installed.
  *
  * Memoised because characters.js asks on startup and buildSheetPdf() asks again for every export,
- * and the template is 457,303 bytes (measured 2026-09-05, after the save that added `class-tracks`;
- * the two earlier readings several comments quote are 469,823 on 2026-09-01, after the page-2
- * normalisation, and 453,448 before it).
+ * and the template is 458,903 bytes (measured 2026-09-26, after the save that re-laid page 2's
+ * class-guide column; earlier readings several comments quote are 457,303 on 2026-09-05, 469,823 on
+ * 2026-09-01, after the page-2 normalisation, and 453,448 before it).
  *
  * @returns {Promise<Uint8Array|null>}
  */

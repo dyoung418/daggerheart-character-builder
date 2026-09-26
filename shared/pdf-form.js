@@ -6,16 +6,18 @@
 // enough to emit by hand. This file does the opposite job on the opposite kind of file: the
 // official character sheet is a two-page form somebody drew in Master PDF Editor
 // (data/sheet/sheet-template.pdf, a symlink into the private content repo), full of art, fonts
-// and 183 form widgets we could not begin to author. We do not want to author it. We want to put
-// 57 strings and 46 ticks into it — 57 of its 72 text fields, and 46 of its 111 checkboxes
+// and 184 form widgets we could not begin to author. We do not want to author it. We want to put
+// 62 strings and 46 ticks into it — 62 of its 73 text fields, and 46 of its 111 checkboxes
 // (sheet-fields.js's header says which boxes it leaves blank, and the two different reasons it
 // leaves them) — and hand back the same file.
 //
-// Every count in this header was measured in that template on 2026-09-05, after the save that
-// added `class-tracks`: 457,303 bytes, 183 live widgets, 72 /Tx and 111 /Btn. Two earlier readings
-// of the same file are quoted in places below — 469,823 bytes on 2026-09-01, after the page-2
-// normalisation, and 453,448 before it. Only the /Tx count has ever moved, and only by that one
-// field; the checkbox population is the same 111 it has always been.
+// Every count in this header was measured in that template on 2026-09-26, after the save that
+// added `suggested-secondary-weapon` and re-laid page 2's class-guide column: 458,903 bytes, 184
+// live widgets, 73 /Tx and 111 /Btn. Earlier readings of the same file are quoted in places below —
+// 457,303 bytes on 2026-09-05 (after `class-tracks`), 469,823 on 2026-09-01 (after the page-2
+// normalisation), and 453,448 before that. Only the /Tx count has ever moved, one field per save
+// (`class-tracks`, then `suggested-secondary-weapon`); the checkbox population is the same 111 it
+// has always been.
 //
 // One thing does get DRAWN rather than filled, and it is not a field at all: an `overlays` option
 // appends a content stream to a page, under its annotations. shared/sheet-marks.js is the only
@@ -714,7 +716,8 @@ export function rectOf(dict) {
  * the same shape again at the last moment (its COLOUR_OPERATORS), because it is the file that
  * actually writes it.
  *
- * The size comes back and is deliberately not used: all 71 /DA strings in this template read
+ * The size comes back and is deliberately not used: every /DA in this template — 73, as of
+ * 2026-09-26, and tools/sheet/check_template_fonts.py fails a save that breaks it — reads
  * `/Helvetica 0 Tf …`, and `0 Tf` means "pick a size that fits", which is the whole job
  * shared/pdf-text.js does. Honouring a template's FIXED size would mean drawing a block we have
  * not proved fits the box — which is Firefox's bug (pdf.worker.mjs:54240) with our name on it. It
