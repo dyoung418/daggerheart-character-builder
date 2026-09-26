@@ -154,6 +154,13 @@ const {
 } = await import(`../shared/transfer.js${RUN}`);
 const { fileSlug, plural, titleCase } = await import(`../shared/text.js${RUN}`);
 const {
+  LEAD_INS,
+  gearText,
+  guideFor,
+  resolveGear,
+  traitsLine,
+} = await import(`../shared/class-guide.js${RUN}`);
+const {
   asciiBytes,
   buildPdf,
   formatNumber,
@@ -6826,8 +6833,15 @@ group("Fitting: the assertion that stands in for a reader we cannot run");
     return shown.every((line, i) => {
       const width = measureOf(line, size);
       // A descender's room under the last baseline, and every line inside the drawable width and
-      // placed so it ends inside it — which is one assertion about the fit and one about /Q.
-      if (at[i].y - LAYOUT.DESCENT * size < 0) return false;
+      // placed so it ends inside it — which is one assertion about the fit and one about /Q. The
+      // room is measured from the CLIP, which the emitter draws INSET up from the box floor, not
+      // from the floor itself: measured from 0, this passed a Bard's "Knowledge" whose g the /AP
+      // then cut off, because the fitter had made the same mistake and the two agreed. Multiline
+      // only: the single-line branch sizes against the FULL box height by design (fitSingle's
+      // header), which leaves a bbox-deep descender up to about 1pt under the clip there too —
+      // reported 2026-09-26 and not changed, because that sizing is what every stat circle and the
+      // name banner were approved at. It is still held to the box floor.
+      if (at[i].y - LAYOUT.DESCENT * size < (box.multiline ? LAYOUT.INSET : 0)) return false;
       if (width > box.width - 2 * LAYOUT.INSET) return false;
       if (at[i].x < 0 || at[i].x + width > box.width - LAYOUT.INSET + 1e-9) return false;
       // The TOP is checked on the single-line branch only, and deliberately: what 1.156 buys there
@@ -6885,6 +6899,20 @@ group("Fitting: the assertion that stands in for a reader we cannot run");
   eq("and the sweep really did lay out 60 fields, none of them blank",
     [boxes.length * values.length, drewNothing], [60, []]);
 
+  // The case that found the floor mistake, as literals: the Bard guide's suggested traits in the
+  // page-2 box they were cut in (182 × 24.9 in the template). Two lines at 10.5pt put the last
+  // baseline at 2.68, and the g of "Knowledge" 0.2em under it — below the clip at 1, above the box
+  // floor at 0. The sweep above has no value that lands in that one-point band, which is why it
+  // stayed green.
+  const guideRow = { width: 182, height: 24.9, multiline: true };
+  const guideTraits = "0 Agility, \u22121 Strength, +1 Finesse, 0 Instinct, +2 Presence, +1 Knowledge";
+  check("a two-line guide box leaves its last line's descenders above the clip, not just above the floor",
+    drawingFits(guideTraits, guideRow));
+  // The control: it is still two lines, so the case is still the one that was cut rather than one
+  // that fell to a single line and stopped testing the bottom of the box.
+  eq("and it is still two lines, so the last one is the one sitting on the clip",
+    fitLines(guideTraits, guideRow).lines.length, 2);
+
   // FIREFOX'S BUG, ENCODED AS A TEST. pdf.worker.mjs:54240 accepts a size when `chunks × fontSize ≤
   // height` and then renders the block at `height / numberOfLines ≈ 1.35 × fontSize`, so what it
   // draws is about 35% taller than what it measured, runs out of the bottom of the field, and is
@@ -6906,15 +6934,16 @@ group("Fitting: the assertion that stands in for a reader we cannot run");
   eq("ours refuses 12 and takes the largest size whose laid-out block fits, which is 10.75",
     ff.size, 10.75);
   check("and what it then draws is inside the box", drawingFits("a\nb\nc\nd", ffBox));
-  // The boundary, which is what says the fitter is not simply timid: one point more overflows, by
-  // six hundredths of a point.
+  // The boundary, which is what says the fitter is not simply timid: the next step up, 11, leaves
+  // its descenders just over a point under the clip.
   check("while 11 would not, so 10.75 is the largest that fits and not the first that looked safe",
-    lastBaseline(4, 11, ffBox.height) < LAYOUT.DESCENT * 11 && firefoxAccepts(4, 11, ffBox.height));
+    lastBaseline(4, 11, ffBox.height) < LAYOUT.INSET + LAYOUT.DESCENT * 11 && firefoxAccepts(4, 11, ffBox.height));
   // And the quarter-point ladder is what buys that: whole points would have stopped at 10, three
-  // quarters of a point smaller, for a box that had the room. 49 − 4.253 × size ≥ 0.207 × size
-  // solves to 10.987, and 10.75 is the largest step at or under it.
+  // quarters of a point smaller, for a box that had the room. 49 − 4.253 × size ≥ 1 + 0.207 × size
+  // (the descender's room is counted from the clip, one point up) solves to 10.762, and 10.75 is
+  // the largest step at or under it.
   eq("the step below the true limit is taken, not the whole point below it",
-    Math.floor(10.987 / LAYOUT.SIZE_STEP) * LAYOUT.SIZE_STEP, 10.75);
+    Math.floor(10.762 / LAYOUT.SIZE_STEP) * LAYOUT.SIZE_STEP, 10.75);
 
   // A multiline box on this sheet is sized for a LIST, not for its contents: `inventory-items` is
   // 294.5 × 91.2pt and often holds one short line. Uncapped, this fitter puts a potion name in it
@@ -7454,7 +7483,7 @@ group("An overlay is appended to a page's content, under the annotations and bes
 
 // ---------- the sheet's fields ----------
 
-// The template's 56 text fields and the 46 checkboxes the sheet answers, spelled the way
+// The 62 text fields and the 46 checkboxes the sheet answers, spelled the way
 // data/sheet/sheet-template.pdf spells them. Written out here rather than read off the module
 // under test: this list IS the contract between sheet-fields.js and a PDF nothing in this repo
 // can open, and a list derived from the thing it is checking would agree with any rename.
@@ -7477,6 +7506,11 @@ const SHEET_TEXT_FIELDS = [
   // Page two. `name-pg2` rather than a second `name`: two live fields sharing a /T is a template
   // readForm refuses, because nothing can know which one a value was meant for.
   "name-pg2", "background", "appearance", "connections",
+  // Page two's left column: the class guide's suggestions, which are the class's printed text
+  // rather than the character's state (sheet-fields.js's header). `suggested-secondary-weapon` is
+  // the one the class-guides re-save added (184 fields).
+  "suggested-traits", "suggested-primary-weapon", "suggested-secondary-weapon", "suggested-armor",
+  "inventory-initial-options",
 ];
 // The six trait marks, then the level-up grid: nine rows across three tiers, spelled the way the
 // template spells them. A single-box row carries no index — "lu-experience-2", not "-2-1".
@@ -8609,6 +8643,486 @@ group("Hope & Fear is in data/srd_2_0/, in the edition the SRD published");
   check("the Focus feature text is the refocus rule",
     /Clear your Focus track, then roll a number of d6s equal to your Instinct/.test(
       ma.foundation.features[1].description[0].paragraph["en-US"]));
+}
+
+// ---------- class guides ----------
+//
+// Page 2 of an official class sheet, as shared/class-guide.js hands it to the wizard and the PDF.
+// The fixtures copy the SRD 2.0 records they're named for, trimmed to the fields a guide line
+// reads; the last group below runs the same functions over the real data/ files.
+
+const gFeature = (name, text) => ({ name: { "en-US": name }, description: [{ paragraph: { "en-US": text } }] });
+const gWeapon = (id, name, trait, dice, modifier, burden, features = []) => ({
+  id, name: { "en-US": name }, trait, range: "MELEE",
+  damage: { dice, ...(modifier ? { modifier } : {}), type: "PHYSICAL" }, burden, features,
+});
+const gArmor = (id, name, major, severe, score, features = []) => ({
+  id, name: { "en-US": name }, baseMajorThreshold: major, baseSevereThreshold: severe, baseScore: score, features,
+});
+const QUICK = "When you make an attack, you can mark a Stress to target another creature within range.";
+const G_WEAPONS = [
+  gWeapon("srd_2_0_weapon_rapier", "Rapier", "PRESENCE", "D8", 0, "ONE_HANDED", [gFeature("Quick", QUICK)]),
+  gWeapon("srd_2_0_weapon_small_dagger", "Small Dagger", "FINESSE", "D8", 0, "ONE_HANDED",
+    [gFeature("Paired", "+2 to primary weapon damage to targets within Melee range")]),
+  gWeapon("srd_2_0_weapon_battleaxe", "Battleaxe", "STRENGTH", "D10", 3, "TWO_HANDED"),
+  gWeapon("srd_2_0_weapon_longsword", "Longsword", "AGILITY", "D10", 3, "TWO_HANDED"),
+];
+const G_ARMORS = [
+  gArmor("srd_2_0_armor_gambeson_armor", "Gambeson Armor", 5, 11, 3, [gFeature("Flexible", "+1 to Evasion")]),
+  gArmor("srd_2_0_armor_chainmail_armor", "Chainmail Armor", 7, 15, 4, [gFeature("Heavy", "−1 to Evasion")]),
+  gArmor("srd_2_0_armor_leather_armor", "Leather Armor", 6, 13, 3),
+];
+const G_BARD = {
+  id: "srd_2_0_class_bard", name: "BARD", domains: ["GRACE", "CODEX"],
+  classFeatures: [gFeature("Rally", "Once per session, describe how you rally the party…")],
+  hopeFeature: gFeature("Make a Scene", "Spend 3 Hope to temporarily Distract a target…"),
+  classItems: [{ "en-US": "A romance novel" }, { "en-US": "A letter never opened" }],
+  characterGuide: {
+    suggestedTraits: { AGILITY: 0, STRENGTH: -1, FINESSE: 1, INSTINCT: 0, PRESENCE: 2, KNOWLEDGE: 1 },
+    suggestedPrimaryWeapon: "Rapier",
+    suggestedSecondaryWeapon: "Small Dagger",
+    suggestedArmor: "Gambeson Armor",
+    spellCarrier: { prompt: { "en-US": "Decide what you carry your spells in" },
+      examples: { "en-US": "songbook, journal, etc." } },
+    characterDescription: {
+      clothes: [{ "en-US": "extravagant" }, { "en-US": "fancy" }],
+      eyes: [{ "en-US": "seafoam" }],
+      body: [{ "en-US": "lanky" }],
+      skin: [{ "en-US": "fine sand" }],
+      attitude: [{ "en-US": "a barkeep" }],
+    },
+  },
+};
+const G_GUARDIAN = {
+  id: "srd_2_0_class_guardian", name: "GUARDIAN", domains: ["VALOR", "BLADE"],
+  classFeatures: [gFeature("Unstoppable", "Once per long rest, you can become Unstoppable.")],
+  classItems: [{ "en-US": "A totem from your mentor" }, { "en-US": "A secret key" }],
+  characterGuide: {
+    suggestedTraits: { AGILITY: 1, STRENGTH: 2, FINESSE: -1, INSTINCT: 0, PRESENCE: 1, KNOWLEDGE: 0 },
+    suggestedPrimaryWeapon: "Battleaxe",
+    suggestedArmor: "Chainmail Armor",
+  },
+};
+// The real Brawler's id and feature name, and nothing else of it: the profile has to come out of
+// effects.js's catalogue by way of the class's own feature list.
+const G_BRAWLER = {
+  id: "srd_2_0_class_brawler", name: "BRAWLER", domains: ["BONE", "VALOR"],
+  classFeatures: [gFeature("I Am the Weapon", "You have a primary weapon called Brawler’s Strike…"),
+    gFeature("Combo Strike", "Your Combo Die starts as a d4.")],
+  hopeFeature: gFeature("Square Up", "Spend 3 Hope…"),
+  characterGuide: {
+    suggestedTraits: { AGILITY: 1, STRENGTH: 1, FINESSE: 0, INSTINCT: 2, PRESENCE: 0, KNOWLEDGE: -1 },
+    suggestedPrimaryWeapon: "Brawler’s Strike",
+    suggestedPrimaryWeaponTrait: "INSTINCT",
+    suggestedArmor: "Gambeson Armor",
+  },
+};
+const G_BLOOD_HUNTER = {
+  id: "void_class_blood_hunter", name: "BLOOD HUNTER", domains: ["BLADE", "BLOOD"],
+  classItems: [{ "en-US": "A steel needle" }, { "en-US": "A vial holding a foe's blood" }],
+  characterGuide: {
+    suggestedArmor: "Leather Armor",
+    variants: [
+      { label: "Mutant/Specter", subclasses: ["Order of the Mutant", "Order of the Specter"],
+        suggestedTraits: { AGILITY: 2, STRENGTH: -1, FINESSE: 1, INSTINCT: 1, PRESENCE: 0, KNOWLEDGE: 0 },
+        suggestedPrimaryWeapon: "Longsword" },
+      { label: "Lycan", subclasses: ["Order of the Lycan"],
+        suggestedTraits: { AGILITY: 1, STRENGTH: 2, FINESSE: -1, INSTINCT: 1, PRESENCE: 0, KNOWLEDGE: 0 },
+        suggestedPrimaryWeapon: "Battleaxe" },
+    ],
+    characterDescription: { eyes: [{ "en-US": "seafoam" }] },
+  },
+};
+const gCtx = (cls, extra = {}) => ({ weapons: G_WEAPONS, armors: G_ARMORS, disabled: new Set(), cls, ...extra });
+
+group("A class guide reads the way the official guide prints it");
+{
+  const before = JSON.stringify(G_BARD);
+  const g = guideFor(G_BARD, null);
+  eq("traits come out under the lowercase keys the trait arithmetic uses", g.traits,
+    { agility: 0, strength: -1, finesse: 1, instinct: 0, presence: 2, knowledge: 1 });
+  // A real minus (U+2212), and zero unsigned: the guide's own typesetting.
+  eq("and print as the guide's line", traitsLine(g.traits),
+    "0 Agility, −1 Strength, +1 Finesse, 0 Instinct, +2 Presence, +1 Knowledge");
+  eq("the equipment is the names as stored", [g.primary, g.secondary, g.armor],
+    ["Rapier", "Small Dagger", "Gambeson Armor"]);
+
+  const ctx = gCtx(G_BARD);
+  eq("the primary: name - Trait Range - damage - Burden, then its feature",
+    gearText(resolveGear(g.primary, "weapon", ctx)),
+    { line: "Rapier - Presence Melee - d8 phy - One-Handed", feature: `Quick: ${QUICK}` });
+  eq("the secondary, the same way",
+    gearText(resolveGear(g.secondary, "weapon", ctx)),
+    { line: "Small Dagger - Finesse Melee - d8 phy - One-Handed",
+      feature: "Paired: +2 to primary weapon damage to targets within Melee range" });
+  eq("the armor: thresholds and score, then its feature",
+    gearText(resolveGear(g.armor, "armor", ctx)),
+    { line: "Gambeson Armor - Thresholds 5/11 - Score 3", feature: "Flexible: +1 to Evasion" });
+  eq("a damage modifier and a two-handed burden print as the guide sets them",
+    gearText(resolveGear("Battleaxe", "weapon", ctx)),
+    { line: "Battleaxe - Strength Melee - d10+3 phy - Two-Handed", feature: "" });
+  eq("several features are one per line",
+    gearText({ record: { ...G_WEAPONS[0], features: [gFeature("Quick", "A."), gFeature("Reliable", "+1 to attack rolls")] } }).feature,
+    "Quick: A.\nReliable: +1 to attack rolls");
+
+  eq("the spell carrier is the printed prompt and examples, as plain strings", g.spellCarrier,
+    { prompt: "Decide what you carry your spells in", examples: "songbook, journal, etc." });
+  eq("the description lists are plain strings under the five fixed keys", g.description, {
+    clothes: ["extravagant", "fancy"], eyes: ["seafoam"], body: ["lanky"], skin: ["fine sand"], attitude: ["a barkeep"],
+  });
+  eq("the lead-ins are the app's strings, one per key, in that order", LEAD_INS, {
+    clothes: "Clothes that are", eyes: "Eyes like", body: "Body that’s",
+    skin: "Skin the color of", attitude: "Attitude like",
+  });
+  eq("the AND EITHER pair is the class's own classItems", g.classItems,
+    ["A romance novel", "A letter never opened"]);
+  check("a Bard's primary names no suggested trait", !("primaryTrait" in g));
+  check("and reading the guide leaves the class record as it was", JSON.stringify(G_BARD) === before);
+}
+
+group("A class whose guide suggests no secondary weapon has none");
+{
+  const g = guideFor(G_GUARDIAN, null);
+  check("no secondary at all, rather than an empty one", !("secondary" in g));
+  check("no spell carrier, because the Guardian's guide prints none", !("spellCarrier" in g));
+  check("no description either, when the record carries none", !("description" in g));
+  eq("the primary and armor still render",
+    [gearText(resolveGear(g.primary, "weapon", gCtx(G_GUARDIAN))).line,
+      gearText(resolveGear(g.armor, "armor", gCtx(G_GUARDIAN))).line],
+    ["Battleaxe - Strength Melee - d10+3 phy - Two-Handed", "Chainmail Armor - Thresholds 7/15 - Score 4"]);
+  eq("its traits line", traitsLine(g.traits),
+    "+1 Agility, +2 Strength, −1 Finesse, 0 Instinct, +1 Presence, 0 Knowledge");
+}
+
+group("The Brawler's primary is the fists its own class feature grants");
+{
+  const g = guideFor(G_BRAWLER, null);
+  eq("the guide's name is kept as printed", g.primary, "Brawler’s Strike");
+  eq("the suggested trait is passed along, lowercased, as a hint", g.primaryTrait, "instinct");
+
+  // No weapon record has this name, so it falls through to the profile the class's own I Am the
+  // Weapon feature grants — found by the class id and feature name, and the catalogue's own object.
+  const r = resolveGear(g.primary, "weapon", gCtx(G_BRAWLER));
+  // Equal rather than identical: this file imports effects.js with a run token and class-guide.js
+  // imports it without one, so the two hold different copies of the one catalogue.
+  eq("it resolves to the unarmed profile effects.js declares for that feature",
+    r.unarmed, EFFECTS["class_brawler:I Am the Weapon"].unarmedProfile);
+  const text = gearText(r);
+  eq("and prints the rule's profile: no trait on the line, range and both dice",
+    text.line, "Brawler’s Strike - Melee - d8+d6 phy");
+  eq("with the profile's own note as its feature", text.feature, "Brawler's Strike uses a trait of your choice.");
+  // THE ONE THAT MATTERS. The guide prints `Instinct Melee`; the rule is "a trait of your choice",
+  // and a suggestion never overrides a rule.
+  check("the guide's Instinct appears nowhere in what's printed",
+    !/instinct/i.test(`${text.line} ${text.feature}`));
+
+  eq("another class's guide naming it gets nothing: the profile is the Brawler's own",
+    resolveGear("Brawler’s Strike", "weapon", gCtx(G_BARD)), { missing: "Brawler’s Strike" });
+  eq("and a profile is never armor",
+    resolveGear("Brawler’s Strike", "armor", gCtx(G_BRAWLER)), { missing: "Brawler’s Strike" });
+  eq("a weapon record of that name would come first",
+    resolveGear("Brawler’s Strike", "weapon", gCtx(G_BRAWLER, {
+      weapons: [gWeapon("hb_weapon_strike", "Brawler's Strike", "STRENGTH", "D6", 0, "ONE_HANDED")],
+    })).record?.id, "hb_weapon_strike");
+
+  // The same fallback for a content source's own class, which proves it isn't keyed on anything
+  // the SRD happens to call its Brawler: the profile comes out of that source's effects.json.
+  const pugilist = { id: "homebrew_class_pugilist", name: "PUGILIST", domains: ["BONE"],
+    classFeatures: [gFeature("Iron Fists", "…")],
+    characterGuide: { suggestedPrimaryWeapon: "Iron Fist" } };
+  const overlay = { "homebrew_class_pugilist:Iron Fists": { unarmedProfile: {
+    name: { "en-US": "Iron Fist" }, traits: ["STRENGTH", "FINESSE"], range: "MELEE",
+    damage: { dice: "D6", type: "PHYSICAL" } } } };
+  const own = resolveGear("Iron Fist", "weapon", gCtx(pugilist, { effects: overlay, sourceNames: ["homebrew"] }));
+  eq("a homebrew class's profile resolves through its source's effects",
+    gearText(own), { line: "Iron Fist - Strength or Finesse Melee - d6 phy", feature: "" });
+  eq("and without that overlay, nothing answers to the name",
+    resolveGear("Iron Fist", "weapon", gCtx(pugilist)), { missing: "Iron Fist" });
+}
+
+group("A Blood Hunter's suggestion depends on the order they joined");
+{
+  const lycan = guideFor(G_BLOOD_HUNTER, "Order of the Lycan");
+  eq("the Lycan gets the Lycan's label, traits and primary",
+    [lycan.label, lycan.primary, traitsLine(lycan.traits)],
+    ["Lycan", "Battleaxe", "+1 Agility, +2 Strength, −1 Finesse, +1 Instinct, 0 Presence, 0 Knowledge"]);
+  eq("and keeps what every variant shares", lycan.armor, "Leather Armor");
+  check("a chosen variant lists no others", !("variants" in lycan));
+
+  const specter = guideFor(G_BLOOD_HUNTER, "Order of the Specter");
+  eq("the Specter shares a variant with the Mutant",
+    [specter.label, specter.primary, specter.traits?.agility], ["Mutant/Specter", "Longsword", 2]);
+  eq("so does the Mutant", guideFor(G_BLOOD_HUNTER, "Order of the Mutant").label, "Mutant/Specter");
+
+  const open = guideFor(G_BLOOD_HUNTER, null);
+  eq("with no subclass yet, every variant is offered with its label",
+    open.variants?.map((v) => v.label), ["Mutant/Specter", "Lycan"]);
+  check("and there is no one set of traits or primary to show",
+    !("traits" in open) && !("primary" in open));
+  eq("what they share is still there at the top", open.armor, "Leather Armor");
+  eq("each variant is a whole suggestion: its own traits and primary, and the shared armor",
+    open.variants?.map((v) => [v.primary, v.armor, v.traits?.strength]),
+    [["Longsword", "Leather Armor", -1], ["Battleaxe", "Leather Armor", 2]]);
+  eq("and says which subclasses it's for", open.variants?.[0].subclasses,
+    ["Order of the Mutant", "Order of the Specter"]);
+  eq("the description is on the top level and on every variant",
+    [open.description?.eyes, open.variants?.[1].description?.eyes], [["seafoam"], ["seafoam"]]);
+  // Defensive: the data keeps a varying field off the top level, but a record that repeats one
+  // there must not have it shown as THE suggestion beside the variants that disagree with it.
+  const repeated = { ...G_BLOOD_HUNTER, characterGuide: { ...G_BLOOD_HUNTER.characterGuide, suggestedPrimaryWeapon: "Rapier" } };
+  check("a top-level field some variant replaces is left off the undecided top level",
+    !("primary" in guideFor(repeated, null)));
+  eq("while the variant that matches still replaces it", guideFor(repeated, "Order of the Lycan").primary, "Battleaxe");
+  eq("a subclass no variant names is treated as no subclass",
+    guideFor(G_BLOOD_HUNTER, "Order of the Ghoul").variants?.map((v) => v.label), ["Mutant/Specter", "Lycan"]);
+}
+
+group("Gear names compare with their apostrophes folded");
+{
+  const straight = gWeapon("hb_weapon_hunters_bow", "Hunter's Bow", "AGILITY", "D6", 0, "TWO_HANDED");
+  const curly = gWeapon("hb_weapon_wardens_axe", "Warden’s Axe", "STRENGTH", "D8", 0, "ONE_HANDED");
+  const ctx = gCtx(G_BARD, { weapons: [straight, curly] });
+  eq("a curly guide name finds a straight record", resolveGear("Hunter’s Bow", "weapon", ctx).record?.id, straight.id);
+  eq("a straight guide name finds a curly record", resolveGear("Warden's Axe", "weapon", ctx).record?.id, curly.id);
+  eq("and the record's own spelling is what prints",
+    gearText(resolveGear("Hunter’s Bow", "weapon", ctx)).line, "Hunter's Bow - Agility Melee - d6 phy - Two-Handed");
+  eq("case is folded too, as the merge folds it", resolveGear("rapier", "weapon", gCtx(G_BARD)).record?.id,
+    "srd_2_0_weapon_rapier");
+}
+
+group("A name nothing answers to is reported, never thrown");
+{
+  eq("an unknown weapon is missing, by the name the guide gave",
+    resolveGear("Sword of Nowhere", "weapon", gCtx(G_BARD)), { missing: "Sword of Nowhere" });
+  eq("an unknown armor too", resolveGear("Plate of Nowhere", "armor", gCtx(G_BARD)), { missing: "Plate of Nowhere" });
+  eq("and prints as just its name", gearText({ missing: "Sword of Nowhere" }), { line: "Sword of Nowhere", feature: "" });
+  eq("a page that loaded no gear gets missing, not an exception", resolveGear("Rapier", "weapon", {}), { missing: "Rapier" });
+  eq("so does no name at all", resolveGear(undefined, "weapon", gCtx(G_BARD)), { missing: "" });
+  const tagged = G_WEAPONS.map((w) => ({ ...w, contentSource: "homebrew" }));
+  eq("a record in a switched-off source doesn't count",
+    resolveGear("Rapier", "weapon", gCtx(G_BARD, { weapons: tagged, disabled: new Set(["homebrew"]) })), { missing: "Rapier" });
+}
+
+group("A class with no guide has nothing to suggest");
+{
+  eq("no characterGuide, no guide", guideFor({ id: "hb_class_seer", name: "SEER", domains: ["ARCANA"] }, null), null);
+  eq("no class either", guideFor(null, null), null);
+  eq("an absent resolution prints nothing", gearText(null), { line: "", feature: "" });
+  eq("and absent traits make an empty line", traitsLine(undefined), "");
+}
+
+group("With both SRD editions loaded, the later edition's gear is the suggestion");
+{
+  // Two Rapiers and two Gambesons, told apart by a stat that differs; a blade only SRD 1.0 printed.
+  const { db } = mergeSources([
+    source("srd_1_0", {
+      weapons: [gWeapon("srd_1_0_weapon_rapier", "Rapier", "PRESENCE", "D6", 0, "ONE_HANDED"),
+        gWeapon("srd_1_0_weapon_retired_blade", "Retired Blade", "AGILITY", "D8", 0, "ONE_HANDED")],
+      armors: [gArmor("srd_1_0_armor_gambeson_armor", "Gambeson Armor", 4, 10, 3)],
+    }),
+    source("srd_2_0", {
+      weapons: [gWeapon("srd_2_0_weapon_rapier", "Rapier", "PRESENCE", "D8", 0, "ONE_HANDED")],
+      armors: [gArmor("srd_2_0_armor_gambeson_armor", "Gambeson Armor", 5, 11, 3)],
+    }),
+  ]);
+  const ctx = (disabled) => ({ weapons: db.weapons, armors: db.armors, disabled: new Set(disabled), cls: G_BARD });
+  eq("the db really does hold both Rapiers, so the next checks test something",
+    db.weapons.filter((w) => w.name["en-US"] === "Rapier").map((w) => w.id).sort(),
+    ["srd_1_0_weapon_rapier", "srd_2_0_weapon_rapier"]);
+  eq("both on: SRD 2.0's Rapier", resolveGear("Rapier", "weapon", ctx([])).record?.id, "srd_2_0_weapon_rapier");
+  eq("and SRD 2.0's Gambeson", resolveGear("Gambeson Armor", "armor", ctx([])).record?.id, "srd_2_0_armor_gambeson_armor");
+  eq("which is what prints", gearText(resolveGear("Rapier", "weapon", ctx([]))).line,
+    "Rapier - Presence Melee - d8 phy - One-Handed");
+  eq("SRD 2.0 switched off: SRD 1.0's", [
+    resolveGear("Rapier", "weapon", ctx(["srd_2_0"])).record?.id,
+    resolveGear("Gambeson Armor", "armor", ctx(["srd_2_0"])).record?.id,
+  ], ["srd_1_0_weapon_rapier", "srd_1_0_armor_gambeson_armor"]);
+  eq("SRD 1.0 switched off: SRD 2.0's", resolveGear("Rapier", "weapon", ctx(["srd_1_0"])).record?.id,
+    "srd_2_0_weapon_rapier");
+  eq("gear only the earlier edition printed still resolves with both on",
+    resolveGear("Retired Blade", "weapon", ctx([])).record?.id, "srd_1_0_weapon_retired_blade");
+  eq("both off: missing", resolveGear("Rapier", "weapon", ctx(["srd_1_0", "srd_2_0"])), { missing: "Rapier" });
+}
+
+group("Every gear name the shipped guides print resolves, to SRD 2.0, with both editions on");
+{
+  const read = async (path) => (await fetch(`../data/${path}.json${RUN}`)).json();
+  const [c1, w1, a1, c2, w2, a2] = await Promise.all(["srd_1_0/classes", "srd_1_0/weapons", "srd_1_0/armors",
+    "srd_2_0/classes", "srd_2_0/weapons", "srd_2_0/armors"].map(read));
+  const { db } = mergeSources([
+    source("srd_1_0", { classes: c1, weapons: w1, armors: a1 }),
+    source("srd_2_0", { classes: c2, weapons: w2, armors: a2 }),
+  ]);
+  const ctxFor = (cls) => ({ weapons: db.weapons, armors: db.armors, disabled: new Set(), cls,
+    sourceNames: db.sourceNames });
+  const guided = visibleRecords(db.classes, new Set()).filter((c) => c.characterGuide);
+  const wrong = [];
+  let resolved = 0;
+  for (const cls of guided) {
+    const g = guideFor(cls, null);
+    for (const one of [g, ...(g.variants || [])]) {
+      for (const [name, kind] of [[one.primary, "weapon"], [one.secondary, "weapon"], [one.armor, "armor"]]) {
+        if (!name) continue;
+        const r = resolveGear(name, kind, ctxFor(cls));
+        if (r.missing !== undefined) wrong.push(`${cls.name}: ${name} is missing`);
+        else if (r.record && r.record.contentSource !== "srd_2_0") wrong.push(`${cls.name}: ${name} came from ${r.record.contentSource}`);
+        else resolved += 1;
+      }
+    }
+  }
+  eq("the thirteen SRD 2.0 guides are the ones found", guided.length, 13);
+  eq("every name resolves, and to the later edition", wrong, []);
+  // 13 primaries, 13 armors, and the Bard, Druid, Rogue, Seraph, Warlock and Witch's secondaries.
+  eq("all 32 of them", resolved, 32);
+  // The positive control: the same loop has to be able to say "missing".
+  eq("a name the data doesn't hold is still reported", resolveGear("Not A Weapon", "weapon", ctxFor(guided[0])),
+    { missing: "Not A Weapon" });
+
+  const brawler = guided.find((c) => c.id === "srd_2_0_class_brawler");
+  eq("the real Brawler's primary is its own Strike, with the rule's any-trait note",
+    gearText(resolveGear(guideFor(brawler, null).primary, "weapon", ctxFor(brawler))),
+    { line: "Brawler’s Strike - Melee - d8+d6 phy", feature: "Brawler's Strike uses a trait of your choice." });
+  const bard = guideFor(guided.find((c) => c.name === "BARD"), null);
+  eq("the real Bard's page, line for line", [
+    traitsLine(bard.traits),
+    gearText(resolveGear(bard.primary, "weapon", ctxFor(null))).line,
+    gearText(resolveGear(bard.secondary, "weapon", ctxFor(null))).line,
+    gearText(resolveGear(bard.armor, "armor", ctxFor(null))),
+  ], [
+    "0 Agility, −1 Strength, +1 Finesse, 0 Instinct, +2 Presence, +1 Knowledge",
+    "Rapier - Presence Melee - d8 phy - One-Handed",
+    "Small Dagger - Finesse Melee - d8 phy - One-Handed",
+    { line: "Gambeson Armor - Thresholds 5/11 - Score 3", feature: "Flexible: +1 to Evasion" },
+  ]);
+}
+
+// The same guides on the official sheet's page two. What a line SAYS is class-guide.js's, and is
+// tested above; what's left to test here is which box gets which line, how a box stacks them, and
+// the sheet's own handling of the text on the way out.
+const G_SHEET_FIELDS = ["suggested-traits", "suggested-primary-weapon", "suggested-secondary-weapon",
+  "suggested-armor", "inventory-initial-options"];
+const gSub = (id, name) => ({ id, name: { "en-US": name }, foundation: { features: [] } });
+const G_SHEET_DB = {
+  ...CSV_DB,
+  classes: [...CSV_DB.classes, ...[G_BARD, G_GUARDIAN, G_BRAWLER, G_BLOOD_HUNTER]
+    .map((cls) => ({ ...cls, startingHitPoints: 6, startingEvasion: 10 }))],
+  subclasses: [...CSV_DB.subclasses, gSub("g_troubadour", "Troubadour"),
+    gSub("g_lycan", "Order of the Lycan"), gSub("g_mutant", "Order of the Mutant")],
+  // CSV_DB has a Longsword of its own, with Reliable, and nothing tags either with a source, so
+  // the guide's copy has to come first to be the one a name finds.
+  weapons: [...G_WEAPONS, ...CSV_DB.weapons],
+  armors: [...G_ARMORS, ...CSV_DB.armors],
+};
+const gSheet = (classId, subclassId, over = {}, db = G_SHEET_DB, options) =>
+  sheetFieldValues(formChar({ classId, subclassId, ...over }), db, options);
+const gBoxes = (f) => G_SHEET_FIELDS.map((k) => f[k]);
+
+group("The sheet's page two prints the class guide");
+{
+  const plain = sheetFieldValues(formChar(), CSV_DB);
+  eq("a class with no guide answers all five boxes, with nothing",
+    G_SHEET_FIELDS.map((k) => (k in plain ? plain[k] : "unanswered")), ["", "", "", "", ""]);
+
+  const bard = gSheet(G_BARD.id, "g_troubadour");
+  // The minus stays U+2212 in the value; only the drawing substitutes it (winansi.js).
+  eq("the traits box is the guide's line, real minus sign and all", bard["suggested-traits"],
+    "0 Agility, −1 Strength, +1 Finesse, 0 Instinct, +2 Presence, +1 Knowledge");
+  eq("a gear box is the stat line, then the feature on the next line", [
+    bard["suggested-primary-weapon"], bard["suggested-secondary-weapon"], bard["suggested-armor"],
+  ], [
+    `Rapier - Presence Melee - d8 phy - One-Handed\nQuick: ${QUICK}`,
+    "Small Dagger - Finesse Melee - d8 phy - One-Handed\nPaired: +2 to primary weapon damage to targets within Melee range",
+    "Gambeson Armor - Thresholds 5/11 - Score 3\nFlexible: +1 to Evasion",
+  ]);
+  eq("the AND EITHER box is the pair mid-sentence, then a caster's prompt in the guide's capitals",
+    bard["inventory-initial-options"],
+    "a romance novel OR\na letter never opened\n\nTHEN DECIDE WHAT YOU CARRY YOUR SPELLS IN:\nsongbook, journal, etc.");
+  // THE HEADER'S RULE: these boxes are the class's words, never the character's choices.
+  eq("what the character actually carries changes none of it",
+    gBoxes(gSheet(G_BARD.id, "g_troubadour", { equipment: EQUIPPED })), gBoxes(bard));
+
+  const guardian = gSheet(G_GUARDIAN.id, "sub");
+  eq("a guide with no secondary leaves that box empty", guardian["suggested-secondary-weapon"], "");
+  eq("and a class with no spell carrier gets the pair alone, no blank line after it",
+    guardian["inventory-initial-options"], "a totem from your mentor OR\na secret key");
+  eq("a guide that prints no feature for a weapon gives the stat line alone",
+    guardian["suggested-primary-weapon"], "Battleaxe - Strength Melee - d10+3 phy - Two-Handed");
+
+  // asciiQuotes() flattens the guide's curly apostrophe on the way out, as it does every value.
+  const brawler = gSheet(G_BRAWLER.id, "sub");
+  eq("the Brawler's primary is its own Strike, with the rule's any-trait note under it",
+    brawler["suggested-primary-weapon"],
+    "Brawler's Strike - Melee - d8+d6 phy\nBrawler's Strike uses a trait of your choice.");
+  check("and the guide's Instinct is nowhere in that box", !/instinct/i.test(brawler["suggested-primary-weapon"]));
+
+  const lycan = gSheet(G_BLOOD_HUNTER.id, "g_lycan");
+  eq("a subclass that picks a variant gets that variant's traits and primary", [
+    lycan["suggested-traits"], lycan["suggested-primary-weapon"],
+  ], [
+    "+1 Agility, +2 Strength, −1 Finesse, +1 Instinct, 0 Presence, 0 Knowledge",
+    "Battleaxe - Strength Melee - d10+3 phy - Two-Handed",
+  ]);
+  eq("the Mutant gets the other one", gSheet(G_BLOOD_HUNTER.id, "g_mutant")["suggested-primary-weapon"],
+    "Longsword - Agility Melee - d10+3 phy - Two-Handed");
+  // "sub" is the Guardian's Stalwart, which no Blood Hunter variant names: the same as none yet.
+  const undecided = gSheet(G_BLOOD_HUNTER.id, "sub");
+  eq("a subclass no variant names prints every variant, one labelled line each", [
+    undecided["suggested-traits"], undecided["suggested-primary-weapon"],
+  ], [
+    "Mutant/Specter: +2 Agility, −1 Strength, +1 Finesse, +1 Instinct, 0 Presence, 0 Knowledge\n" +
+      "Lycan: +1 Agility, +2 Strength, −1 Finesse, +1 Instinct, 0 Presence, 0 Knowledge",
+    "Mutant/Specter: Longsword - Agility Melee - d10+3 phy - Two-Handed\n" +
+      "Lycan: Battleaxe - Strength Melee - d10+3 phy - Two-Handed",
+  ]);
+  eq("while what every variant shares prints once, unlabelled", undecided["suggested-armor"],
+    "Leather Armor - Thresholds 6/13 - Score 3");
+  eq("and a box no variant fills stays empty", undecided["suggested-secondary-weapon"], "");
+  eq("no subclass at all reads the same as an unnamed one",
+    gBoxes(gSheet(G_BLOOD_HUNTER.id, null)), gBoxes(undecided));
+
+  // The guide is a creation-time page, and a character is created in their first class.
+  const second = (classId, subclassId) => ({ multiclass: { classId, subclassId, domain: "VALOR", level: 5, tier: "foundation" } });
+  eq("a multiclassed Bard's page two is the Bard's",
+    gBoxes(gSheet(G_BARD.id, "g_troubadour", second(G_GUARDIAN.id, "sub"))), gBoxes(bard));
+  eq("and a multiclassed Guardian's is the Guardian's",
+    gSheet(G_GUARDIAN.id, "sub", second(G_BARD.id, "g_troubadour"))["suggested-primary-weapon"],
+    guardian["suggested-primary-weapon"]);
+
+  const lost = { ...G_GUARDIAN, id: "hb_class_lost", characterGuide: { suggestedPrimaryWeapon: "Sword of Nowhere" } };
+  eq("a name nothing answers to prints bare, for the player to go and find",
+    gSheet(lost.id, "sub", {}, { ...G_SHEET_DB, classes: [...G_SHEET_DB.classes, { ...lost, startingHitPoints: 6, startingEvasion: 10 }] })["suggested-primary-weapon"],
+    "Sword of Nowhere");
+}
+
+group("The sheet's suggested gear is the later edition's, whatever the Content toggles say");
+{
+  // Two Rapiers told apart by their dice, merged the way the loader merges them. The loader loads
+  // a switched-off source all the same (content-sources.js's header), so this db is also what a
+  // browser with SRD 2.0 switched off hands the sheet.
+  const { db: merged } = mergeSources([
+    source("srd_1_0", { weapons: [gWeapon("srd_1_0_weapon_rapier", "Rapier", "PRESENCE", "D6", 0, "ONE_HANDED")] }),
+    source("srd_2_0", { weapons: [gWeapon("srd_2_0_weapon_rapier", "Rapier", "PRESENCE", "D8", 0, "ONE_HANDED")] }),
+  ]);
+  const db = { ...G_SHEET_DB, weapons: [...merged.weapons, ...CSV_DB.weapons] };
+  const primary = (options) => gSheet(G_BARD.id, "g_troubadour", {}, db, options)["suggested-primary-weapon"];
+  const d8 = "Rapier - Presence Melee - d8 phy - One-Handed";
+  eq("both editions loaded: the SRD 2.0 Rapier's line, since the merge marked the older one superseded",
+    primary(), d8);
+  // The toggles filter picker lists only, and this box is the guide's words rather than a pick, so
+  // the sheet takes no switched-off list at all. A caller handing one over anyway, the way
+  // sheet-pdf.js once defaulted it from localStorage, changes nothing: SRD 2.0 switched off in the
+  // browser still prints the SRD 2.0 line.
+  eq("SRD 2.0 switched off in the browser: still the SRD 2.0 Rapier's line",
+    primary({ disabled: new Set(["srd_2_0"]) }), d8);
+  eq("both switched off: still the SRD 2.0 line, not the bare name",
+    primary({ disabled: new Set(["srd_1_0", "srd_2_0"]) }), d8);
+  // What does change it is what's loaded. With only SRD 1.0 on disk, SRD 1.0's is the Rapier.
+  const { db: only1 } = mergeSources([
+    source("srd_1_0", { weapons: [gWeapon("srd_1_0_weapon_rapier", "Rapier", "PRESENCE", "D6", 0, "ONE_HANDED")] }),
+  ]);
+  eq("only SRD 1.0 loaded: the SRD 1.0 Rapier's line",
+    gSheet(G_BARD.id, "g_troubadour", {}, { ...G_SHEET_DB, weapons: [...only1.weapons, ...CSV_DB.weapons] })["suggested-primary-weapon"],
+    "Rapier - Presence Melee - d6 phy - One-Handed");
 }
 
 // ---------- report ----------

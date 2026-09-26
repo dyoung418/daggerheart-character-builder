@@ -482,6 +482,20 @@ h1, h2, h3, .btn-primary, .btn-ghost, .btn-small, .top-nav a {
 
 .hint { color: var(--text-dim); font-size: 0.82rem; }
 
+/* The wizard's class-guide shortcuts. .btn-ghost is width: 100% by default, which would put the
+   button on a line of its own and the suggestion it applies on the next; sized to its label it
+   sits beside it, the same override as .result-row button. */
+.field-row .guide-action { width: auto; flex: none; }
+/* One row per description list: its lead-in ("Eyes like") on the left, the chips after it. */
+.guide-description { margin: -0.25rem 0 0.75rem; }
+.guide-description > .hint { margin: 0 0 0.5rem; }
+.guide-description-row { display: flex; gap: 0.6rem; align-items: baseline; margin: 0.35rem 0; }
+.guide-description-row > .hint { flex: none; width: 7.5rem; }
+@media (max-width: 600px) {
+  .guide-description-row { flex-direction: column; gap: 0.25rem; }
+  .guide-description-row > .hint { width: auto; }
+}
+
 .tile-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));

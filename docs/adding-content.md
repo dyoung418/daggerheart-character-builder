@@ -112,7 +112,7 @@ fine; it's title-cased for display. **Required: `id`, `name`, `domains`.**
 #### `characterGuide`
 
 Each official class sheet has a second page, the **character guide**, which prints things the SRD
-document doesn't: suggested traits, a suggested loadout, word lists for describing the character,
+document doesn't: suggested traits, suggested starting equipment, word lists for describing the character,
 and, for three classes, what they carry their spells in. `data/srd_2_0/classes.json` carries these
 under one `characterGuide` object, the class's last key. The placement is the provenance:
 everything inside the object comes from a guide, and everything outside it from the SRD. The words
@@ -139,7 +139,12 @@ and filled-in copies of them, may not be redistributed. `data/srd_1_0/` has no g
 - **`suggestedTraits`** always holds all six, keyed by the trait enum.
 - **Gear is named, not referenced by id.** Names are how `subclasses[].class` already joins, and a
   guide may name gear from another source. A name resolves to a weapon or armor record of that name
-  among the loaded sources. Failing that, it resolves to an unarmed profile (§6, *A better pair of
+  among the records the loader offers, except that an earlier edition's record never answers while
+  the later edition's record that superseded it is on offer: with both SRDs loaded, the Bard's
+  Rapier is the SRD 2.0 one. The creation wizard also passes over sources switched off under
+  Content, because its button sets picks and the toggles govern what the pickers offer. The
+  official sheet doesn't, so it prints the same suggestion whatever a browser has switched off.
+  With no record of that name, a name resolves to an unarmed profile (§6, *A better pair of
   fists*) that the class's own features grant under that name. Only one class needs the fallback:
   the Brawler's primary is `Brawler’s Strike`, which its I Am the Weapon feature grants, and there
   is no weapon record for it. Apostrophes compare folded, because the guide prints `Brawler’s` and
@@ -169,16 +174,17 @@ and filled-in copies of them, may not be redistributed. `data/srd_1_0/` has no g
   the printed words because they differ: the Witch's reads "Decide what you use for your craft".
 - **`characterDescription`** stores the five lists under fixed keys (`clothes`, `eyes`, `body`,
   `skin`, `attitude`), split at the printed commas and kept in lower case as printed. The lead-ins ("Eyes
-  like", "Skin the color of") are the same on every guide, so the app's strings will hold them
-  rather than the data.
+  like", "Skin the color of") are the same on every guide, so the app holds them rather than the
+  data: `LEAD_INS` in `shared/class-guide.js`.
 
 Some of the guide isn't stored. The TAKE and THEN CHOOSE BETWEEN lines are the same on every guide,
 because they're the SRD's own starting-equipment rule. The AND EITHER pair is `classItems`, and the
 background questions and connections are the SRD's lists above.
 
 The whole object is optional, and so is every field in it. A homebrew class needs none of it.
-**Nothing in the app reads `characterGuide` yet.** It is planned for the creation wizard's Traits,
-Equipment and Background steps and for the official sheet PDF.
+Two places in the app read `characterGuide`. The creation wizard offers it as one-click shortcuts on the
+Traits, Equipment and Background steps, and the official sheet PDF prints it in page 2's left
+column. A class without one gets neither, and nothing else changes.
 
 ### subclasses.json
 

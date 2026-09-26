@@ -45,13 +45,21 @@
 // the test is whether a long rest would change it: it clears marks and it does not change maxima.
 //
 // NOTHING TO SAY YET — boxes the template offers a player that the app has no model behind.
-// `gold-*`, the two `inventory1-`/`inventory2-` weapon blocks, `suggested-traits`,
-// `suggested-primary-weapon`, `suggested-armor` and `inventory-initial-options`. The app tracks
-// no money at all (csv-export.js emits a literal "handfuls: 0, bags: 0, chests: 0" for the same
-// reason), no inventory beyond the one potion, and the book's suggested loadouts aren't in
-// data/ at all. These exist for the player to write in by hand.
+// `gold-*` and the two `inventory1-`/`inventory2-` weapon blocks. The app tracks no money at all
+// (csv-export.js emits a literal "handfuls: 0, bags: 0, chests: 0" for the same reason) and no
+// inventory beyond the one potion. These exist for the player to write in by hand.
 //
-// The second group is the one to check before assuming a bug. `inventory1-*` has exactly the
+// Page two's left column used to be in that group and has left it: `suggested-traits`, the
+// three `suggested-*` gear boxes and `inventory-initial-options`. They are answered now because a
+// class's `characterGuide` put the book's suggestions into data/, and answering them does not
+// bend the rule above, because what they say isn't the character's state at all. It is the
+// CLASS's printed text, the words the official guide prints on its page 2, rendered from the same
+// records. A Bard who took a longsword still reads "Rapier" there, because that box asks what the
+// guide suggests and never what was chosen; the boxes that answer the second question are the
+// primary-* and armor-* ones on page one. The only thing read off the character is which class
+// and subclass to ask about.
+//
+// NOTHING TO SAY YET is the group to check before assuming a bug. `inventory1-*` has exactly the
 // shape of `primary-*` — name, trait-range, damage-and-type, feature, burden — so the day the app
 // grows a weapon inventory, filling them is this file gaining a loop and nothing else. Until then
 // they are left alone deliberately, and NOTHING has to be taught to ignore them: fillForm writes
@@ -62,6 +70,7 @@ import { advancementOptionsFor, permanentSubject, spellcastTraitKeys } from "./d
 import { TIER_SLOT_TABLE } from "./advancement.js";
 import { UNARMED, featuresText as sourceFeaturesText } from "./gear.js";
 import { attackText, deriveSheet } from "./sheet-data.js";
+import { gearText, guideFor, resolveGear, traitsLine } from "./class-guide.js";
 
 // What deriveSheet() prints for a value it hasn't got. Repeated rather than imported for the
 // reason card-content.js repeats it: sheet-data.js doesn't export it, and this is the same
@@ -149,8 +158,9 @@ function featuresText(features) {
 // arrive from everywhere \u2014 catalogue prose, a pasted character name, an experience someone typed \u2014
 // so the only place that sees all of them is the finished map. And the map is safe to sweep
 // wholesale for the reason PDF_BULLET's own comment gives at :99: sheetFieldValues() has exactly
-// one non-test caller, sheet-pdf.js:104, so this is PDF-only by construction. The CSV keeps the
-// true characters for its mail-merge consumer, which is the same argument, one sink over.
+// one non-test caller, sheet-pdf.js's buildSheetPdf(), so this is PDF-only by construction. The
+// CSV keeps the true characters for its mail-merge consumer, which is the same argument, one sink
+// over.
 const PDF_QUOTES = /[\u2018\u2019\u201c\u201d]/g;
 const ASCII_QUOTES = { "\u2018": "'", "\u2019": "'", "\u201c": '"', "\u201d": '"' };
 
@@ -228,6 +238,65 @@ const TRAIT_MARK_FIELDS = {
   presence: "pre-marked",
   knowledge: "kno-marked",
 };
+
+// ---- the class guide's boxes ----
+//
+// Everything that decides what a guide SAYS is shared/class-guide.js's: the variant overlay, which
+// record a name resolves to, and the printed spelling of a stat line. The wizard reads the same
+// module, so a Bard's suggested Rapier reads the same on the Equipment step and on paper — unless
+// the browser has switched off the edition it came from, which the wizard honours and this sheet
+// doesn't (sheetFieldValues says why). What is left here is only which box gets which piece, and
+// how the pieces stack inside a box.
+
+// A gear box holds the stat line and then the feature text under it, the way the guide prints
+// both. The Brawler's primary comes back from resolveGear() as the unarmed profile, so its second
+// line is the profile's "a trait of your choice" and never the guide's own Instinct: the
+// suggestion never overrides the rule. A name that resolves to nothing still prints, bare, which
+// is what a player needs to go and find it.
+//
+// PDF_BULLET for the reason featuresText() above gives: gearText() takes its feature text from
+// gear.js, so a list item would arrive as a U+2022 that Chrome draws as a double quote.
+function gearBox(name, kind, ctx) {
+  if (!name) return "";
+  const { line, feature } = gearText(resolveGear(name, kind, ctx));
+  return [line, feature].filter(Boolean).join("\n").replaceAll("\u2022", PDF_BULLET);
+}
+
+// One box's text for a guide that may be split by subclass. A guide with the answer at its top
+// level prints it; one without, which is a variant guide whose character has no subclass that
+// picks a variant (a draft, or a homebrew subclass), prints every variant's answer, each on its
+// own line under its printed label. That's how the official guide prints them, and how the CSV's
+// `guide-*` cells already do: "Mutant/Specter: …" then "Lycan: …". A variant with nothing to say
+// for a box adds no line, so the Blood Hunter's secondary stays as empty as the guide leaves it.
+function guideBox(guide, pick, render) {
+  const own = pick(guide);
+  if (own) return render(own);
+  return (guide.variants || [])
+    .map((variant) => {
+      const said = pick(variant) ? render(pick(variant)) : "";
+      return said ? `${variant.label}: ${said}` : "";
+    })
+    .filter(Boolean)
+    .join("\n");
+}
+
+// "A romance novel" is stored capitalised, as the SRD's own starting-equipment list writes it,
+// and the guide prints it mid-sentence: "a romance novel OR". Only the first letter moves, so a
+// name inside the item keeps its capital.
+const lowerFirst = (item) => (item ? item[0].toLowerCase() + item.slice(1) : "");
+
+// The AND EITHER pair, then for a caster the spell-carrier prompt, laid out as the guide lays
+// them out: "a romance novel OR" / "a letter never opened", a blank line, and "THEN DECIDE WHAT
+// YOU CARRY YOUR SPELLS IN:" over its examples. Upper case, prefix and colon are the guide's
+// typography rather than data, which is why `prompt` is stored in sentence case and dressed
+// here. Plain upper case and no bold: a form field has one font, and the template's is regular.
+function initialOptionsText(guide) {
+  const pair = (guide.classItems || []).map(lowerFirst).join(" OR\n");
+  const carrier = guide.spellCarrier
+    ? `THEN ${guide.spellCarrier.prompt.toUpperCase()}:\n${guide.spellCarrier.examples}`
+    : "";
+  return [pair, carrier].filter(Boolean).join("\n\n");
+}
 
 /**
  * Every field of the official sheet, for one character.
@@ -534,6 +603,43 @@ export function sheetFieldValues(character, db, { loadout = false } = {}) {
   fields.background = text(s.background);
   fields.appearance = text(s.appearance);
   fields.connections = text(s.connections);
+
+  // The left column: the class guide's suggestions, and the AND EITHER box beside them. The
+  // header says why these are the class's words rather than the character's state.
+  //
+  // The PRIMARY class only, and a multiclass leaves it that way on purpose: the guide is a
+  // creation-time page, and a character is created in their starting class. A second class is
+  // taken at a level up, long after traits and equipment were chosen, so its guide has nothing left
+  // to suggest. The subclass is the one fact taken from the character, because it picks the
+  // variant.
+  //
+  // Every box is answered, "" included, for the rule under EVERY FIELD IT ANSWERS above — and ""
+  // for all five is what a class without a characterGuide gets: all of SRD 1.0, and any homebrew
+  // class that hasn't one.
+  //
+  // The gear names resolve with NOTHING switched off, and there is no option to say otherwise. The
+  // Content toggles filter picker lists only (content-sources.js's header), and these boxes are
+  // the guide's words, not a pick: a browser with SRD 2.0 off still gets the SRD 2.0 record for a
+  // name both editions print, because visibleRecords() hides a superseded record while the one
+  // that beat it is loaded. The wizard's shortcut does honour the toggles, because it sets picks.
+  const guide = cls ? guideFor(cls, find(db?.subclasses, subject.subclassId)?.name?.["en-US"] ?? null) : null;
+  // db's own effects and sourceNames ride along so the unarmed fallback consults a content
+  // source's effects.json the way every other effect lookup on this sheet does.
+  const gearCtx = {
+    weapons: db?.weapons, armors: db?.armors, disabled: new Set(), cls,
+    effects: db?.effects, sourceNames: db?.sourceNames,
+  };
+  fields["suggested-traits"] = guide ? guideBox(guide, (g) => g.traits, traitsLine) : "";
+  fields["suggested-primary-weapon"] = guide
+    ? guideBox(guide, (g) => g.primary, (name) => gearBox(name, "weapon", gearCtx))
+    : "";
+  fields["suggested-secondary-weapon"] = guide
+    ? guideBox(guide, (g) => g.secondary, (name) => gearBox(name, "weapon", gearCtx))
+    : "";
+  fields["suggested-armor"] = guide
+    ? guideBox(guide, (g) => g.armor, (name) => gearBox(name, "armor", gearCtx))
+    : "";
+  fields["inventory-initial-options"] = guide ? initialOptionsText(guide) : "";
 
   // ---- the level up grid ----
   //

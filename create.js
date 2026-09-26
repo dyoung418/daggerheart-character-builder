@@ -33,6 +33,7 @@ import {
   weaponRowContent,
 } from "./shared/gear.js";
 import { escapeHtml } from "./shared/escape.js";
+import { guideFor, resolveGear, LEAD_INS, traitsLine } from "./shared/class-guide.js";
 
 const CHAR_STORAGE_KEY = "dh-characters-v1";
 const TRAIT_KEYS = ["agility", "strength", "finesse", "instinct", "presence", "knowledge"];
@@ -222,6 +223,43 @@ function selectedClass() {
 }
 function selectedSubclass() {
   return db.subclasses.find((s) => s.id === character.subclassId) || null;
+}
+
+// ---------- the class's character guide ----------
+//
+// Page 2 of an official class sheet suggests traits, starting equipment and words for an
+// appearance. Three steps offer them, and every one of them is a shortcut to something the step
+// already lets you do by hand: a click writes only what the pickers and text boxes already hold, and nothing about
+// the guide is stored on the character. A class with no guide (SRD 1.0, homebrew) gets no
+// shortcut and no word about it — the step is simply as it was.
+
+// The guide with the variant for this character's subclass already applied, or null.
+function currentGuide() {
+  const cls = selectedClass();
+  return cls ? guideFor(cls, selectedSubclass()?.name["en-US"] ?? null) : null;
+}
+
+// What to offer. guideFor() lists every variant, each complete and labelled, when there's no
+// variant to choose: no subclass yet, which means skipping ahead of the Class step where it's
+// chosen, or a subclass no variant names, such as a homebrew order added to a class that has
+// variants. Either way each variant gets its own button under its printed label.
+const guideOptions = (guide) => guide.variants || [guide];
+
+// A guide button acts and the whole step is rebuilt under it. Borrowing the tiles' focus
+// bookkeeping (restoreFocusAfterRender) keeps a keyboard user on the button they just pressed
+// instead of dropping them back at the top of the document.
+function guideButton(text, focusKey, onClick) {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "btn-ghost btn-small guide-action";
+  btn.textContent = text;
+  btn.dataset.grid = "guide";
+  btn.dataset.choice = focusKey;
+  btn.addEventListener("click", () => {
+    focusAfterRender = { key: "guide", choice: focusKey };
+    onClick();
+  });
+  return btn;
 }
 
 // ---------- per-step validation ----------
@@ -876,6 +914,8 @@ function renderTraitsStep(panel) {
     (levelled ? " These are the starting values: increases gained on level up are added on top." : "");
   panel.appendChild(info);
 
+  renderSuggestedTraits(panel);
+
   const base = character.baseline.traits;
   const usedCount = {};
   for (const v of TRAIT_ARRAY) usedCount[v] = (usedCount[v] || 0) + 1;
@@ -922,6 +962,38 @@ function renderTraitsStep(panel) {
   });
 }
 
+// The guide's suggested traits, one click for all six. Writes the starting values exactly where
+// the selects above do, so the replay puts any level up increases back on top.
+function renderSuggestedTraits(panel) {
+  const guide = currentGuide();
+  if (!guide) return;
+  const sorted = (list) => [...list].sort((a, b) => a - b).join();
+  const base = character.baseline.traits;
+  guideOptions(guide).forEach((option, i) => {
+    const t = option.traits;
+    // Only an arrangement of the step's own +2/+1/+1/0/0/−1: the selects can't show anything else,
+    // so a homebrew guide suggesting another spread would leave them reading "—" over real values.
+    if (!t || sorted(TRAIT_KEYS.map((k) => t[k])) !== sorted(TRAIT_ARRAY)) return;
+    const inUse = TRAIT_KEYS.every((k) => base[k] === t[k]);
+    const row = document.createElement("div");
+    row.className = "field-row";
+    row.appendChild(guideButton(option.label ? `Use suggested traits (${option.label})` : "Use suggested traits",
+      `traits-${i}`, () => {
+        for (const k of TRAIT_KEYS) {
+          character.baseline.traits[k] = t[k];
+          character.traits[k] = t[k];
+        }
+        recomputeCharacter(character);
+        onChange();
+      }));
+    const line = document.createElement("span");
+    line.className = "hint";
+    line.textContent = traitsLine(t) + (inUse ? " — in use" : "");
+    row.appendChild(line);
+    panel.appendChild(row);
+  });
+}
+
 // --- Step 4: Derived info ---
 function renderDerivedStep(panel) {
   const cls = selectedClass();
@@ -965,6 +1037,8 @@ function renderEquipmentStep(panel) {
   // has to answer for a character who gained a second Spellcast trait five levels after creation.
   const spellcastTrait = spellcastTraitKeys(character, db);
   const tier = tierForLevel(character.level);
+
+  renderSuggestedEquipment(panel);
 
   const h3a = document.createElement("h3");
   h3a.textContent = "Primary weapon";
@@ -1071,6 +1145,96 @@ function renderEquipmentStep(panel) {
   panel.appendChild(fixed);
 }
 
+// The guide's suggested equipment: primary, secondary and armor set together, exactly as printed.
+// Exactly means the secondary too — a guide that names none clears it, because a secondary kept
+// beside a suggested two-handed primary is a pairing the rules don't allow. The potion is the
+// player's own choice on every guide, so it's left alone.
+//
+// Offered at every level, because this step is reached from the sheet long after creation. The
+// label says "level 1" so that a levelled character knows what one click brings back: the guide
+// suggests tier 1 gear and nothing later. It never says "loadout", which in this game is the
+// domain cards a character has ready.
+//
+// Names are resolved by class-guide.js among what the pickers here offer, so with both SRD
+// editions loaded the later one's record is the one taken. A primary that is a class feature's
+// fists rather than a weapon (the Brawler's) becomes UNARMED, which is how the primary list
+// already says it. A name that resolves to nothing — its source switched off — disables the
+// button rather than half-applying it.
+function renderSuggestedEquipment(panel) {
+  const guide = currentGuide();
+  if (!guide) return;
+  const cls = selectedClass();
+  const e = character.equipment;
+  // db's own effects and sourceNames too, so a content source's effects.json can grant the fists.
+  const ctx = { weapons: db.weapons, armors: db.armors, disabled: content.disabled, cls,
+                effects: db.effects, sourceNames: db.sourceNames };
+
+  guideOptions(guide).forEach((option, i) => {
+    // Without a primary there's nothing to set: the secondary rule hangs off it.
+    if (!option.primary) return;
+    const primary = resolveGear(option.primary, "weapon", ctx);
+    const secondary = option.secondary ? resolveGear(option.secondary, "weapon", ctx) : null;
+    const armor = option.armor ? resolveGear(option.armor, "armor", ctx) : null;
+    const missing = [primary, secondary, armor].filter((r) => r?.missing).map((r) => r.missing);
+
+    const target = {
+      primaryWeaponId: primary.record?.id ?? (primary.unarmed ? UNARMED : null),
+      secondaryWeaponId: secondary?.record?.id ?? null,
+      armorId: armor?.record?.id,
+    };
+    const inUse = !missing.length && e.primaryWeaponId === target.primaryWeaponId &&
+      e.secondaryWeaponId === target.secondaryWeaponId && (!armor || e.armorId === target.armorId);
+
+    const row = document.createElement("div");
+    row.className = "field-row";
+    const label = option.label
+      ? `Take the suggested level 1 equipment (${option.label})`
+      : "Take the suggested level 1 equipment";
+    // The label stays the same when the button is disabled. The reason goes in the paragraph
+    // below it, tied to it by aria-describedby: .btn-small doesn't wrap, and a reason appended
+    // to the label pushed a 390px page 50-220px wide.
+    const btn = guideButton(label, `equipment-${i}`, () => {
+      // `disabled` stops a pointer and the keyboard, but not a click dispatched from script, and a
+      // half-resolved suggestion is not a smaller version of the whole one: an armor that failed
+      // to resolve is still a truthy {missing}, so `if (armor)` below would write undefined over
+      // the character's armor. Measured: a dispatched click here deleted armorId.
+      if (missing.length) return;
+      e.primaryWeaponId = target.primaryWeaponId;
+      e.secondaryWeaponId = target.secondaryWeaponId;
+      if (armor) e.armorId = target.armorId;
+      onChange();
+    });
+    btn.disabled = missing.length > 0;
+    row.appendChild(btn);
+
+    const what = document.createElement("span");
+    what.className = "hint";
+    what.textContent = `Primary: ${option.primary} · Secondary: ${option.secondary || "none"}` +
+      (option.armor ? ` · Armor: ${option.armor}` : "") + (inUse ? " — in use" : "");
+    row.appendChild(what);
+    panel.appendChild(row);
+
+    if (missing.length) {
+      const why = document.createElement("p");
+      why.className = "hint";
+      why.id = `guide-equipment-missing-${i}`;
+      btn.setAttribute("aria-describedby", why.id);
+      why.textContent = `${missing.join(" and ")} ${missing.length > 1 ? "aren't" : "isn't"} in any content source ` +
+        "that's switched on. Open Content in the top bar to turn one back on.";
+      panel.appendChild(why);
+    }
+
+    // A suggestion only: the trait is picked per attack, so there's nothing lasting to record, and
+    // the weapon itself still says "a trait of your choice".
+    if (option.primaryTrait) {
+      const note = document.createElement("p");
+      note.className = "hint";
+      note.textContent = `The ${titleCase(cls.name)} guide suggests using ${TRAIT_LABELS[option.primaryTrait]} with ${option.primary}.`;
+      panel.appendChild(note);
+    }
+  });
+}
+
 // One picker: an optional "nothing" row, then one <details> per tier of the book. One radio
 // group name per list — it used to fold in the weapon's type and burden, which quietly made the
 // primary list two radio groups, harmless only because every pick re-renders the step.
@@ -1130,7 +1294,105 @@ function renderBackgroundStep(panel) {
     </label>
   `;
   panel.querySelector("#bg-desc").addEventListener("input", (e) => { b.description = e.target.value; persistCurrentCharacter(); });
-  panel.querySelector("#bg-answers").addEventListener("input", (e) => { b.answers = e.target.value; persistCurrentCharacter(); });
+  const appearance = panel.querySelector("#bg-answers");
+  const markUsed = renderAppearanceChoices(panel, appearance);
+  appearance.addEventListener("input", (e) => { b.answers = e.target.value; persistCurrentCharacter(); markUsed(); });
+}
+
+// The guide's five description lists as chips under the Appearance box. A chip adds one line,
+// lead-in and word ("Eyes like seafoam"), at the end of whatever is written — the box is the
+// player's free text, so nothing here ever reads it back apart, merges into it or tidies it. A
+// second pick from the same list is just another line. The lead-ins are the same on every guide,
+// which is why they're the app's strings (LEAD_INS) and not the data's.
+//
+// Returns the function that re-marks the chips whose line is already in the text, for the box's
+// own input handler: typing a line out by hand counts, and deleting one frees its chip.
+function renderAppearanceChoices(panel, textarea) {
+  const description = currentGuide()?.description;
+  const groups = Object.keys(LEAD_INS).filter((key) => description?.[key]?.length);
+  if (!groups.length) return () => {};
+
+  const box = document.createElement("div");
+  box.className = "guide-description";
+  const cls = selectedClass();
+  const hint = document.createElement("p");
+  hint.className = "hint";
+  hint.textContent = `From the ${titleCase(cls.name)} guide: choose one (or more) from each line, or write your own description.`;
+  box.appendChild(hint);
+
+  const chips = [];
+  for (const key of groups) {
+    const row = document.createElement("div");
+    row.className = "guide-description-row";
+    const lead = document.createElement("span");
+    lead.className = "hint";
+    lead.textContent = LEAD_INS[key];
+    row.appendChild(lead);
+    const group = document.createElement("div");
+    group.className = "chip-group";
+    group.setAttribute("role", "group");
+    group.setAttribute("aria-label", LEAD_INS[key]);
+    const rowChips = [];
+    for (const word of description[key]) {
+      const line = `${LEAD_INS[key]} ${word}`;
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "chip";
+      chip.textContent = word;
+      chip.title = `Add “${line}”`;
+      // One Tab stop per row, arrows along it — the tile grids' contract, and for their reason:
+      // forty chips that each swallow a Tab stand between the Appearance box and Next.
+      chip.tabIndex = rowChips.length ? -1 : 0;
+      const at = rowChips.length;
+      chip.addEventListener("keydown", (e) => {
+        // Measured on the keypress rather than once up front: the row wraps with the page width.
+        const to = nextIndex(e.key, at, rowChips.length, columnsIn(rowChips));
+        if (to < 0) return;
+        e.preventDefault();
+        chip.tabIndex = -1;
+        rowChips[to].tabIndex = 0;
+        rowChips[to].focus();
+      });
+      // The line goes in as an edit, through execCommand, and not as an assignment to .value:
+      // assigning wipes the box's undo history, so Ctrl+Z afterwards took back neither the chip's
+      // line nor anything typed before it. The edit fires the box's own input event, which is
+      // what stores the answer and re-marks the chips. Focus comes back to the chip — nothing is
+      // rebuilt — so a keyboard user can go on picking along the row.
+      chip.addEventListener("click", () => {
+        const text = textarea.value;
+        const add = (text === "" || text.endsWith("\n") ? "" : "\n") + line;
+        textarea.focus({ preventScroll: true });
+        textarea.setSelectionRange(text.length, text.length);
+        if (!document.execCommand("insertText", false, add)) {
+          // A browser without it still gets the line, and the answer stored; only undo is lost.
+          textarea.value = text + add;
+          textarea.dispatchEvent(new Event("input"));
+        }
+        textarea.scrollTop = textarea.scrollHeight;
+        chip.focus({ preventScroll: true });
+      });
+      chips.push({ chip, line });
+      rowChips.push(chip);
+      group.appendChild(chip);
+    }
+    row.appendChild(group);
+    box.appendChild(row);
+  }
+  textarea.closest("label").after(box);
+
+  // "Used" is a whole line of the text matching the chip's, and it's a hint only: the chip still
+  // adds its line again when pressed. Hence a class and not aria-pressed, which would promise that
+  // a second press takes the line back out.
+  function markUsed() {
+    const lines = new Set(textarea.value.split("\n").map((l) => l.trim()));
+    for (const { chip, line } of chips) {
+      const used = lines.has(line);
+      chip.classList.toggle("active", used);
+      chip.setAttribute("aria-label", used ? `${chip.textContent} (already added)` : chip.textContent);
+    }
+  }
+  markUsed();
+  return markUsed;
 }
 
 // The 2 Experiences chosen at character creation, as opposed to the ones granted by the

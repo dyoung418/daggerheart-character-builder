@@ -30,9 +30,10 @@
 // leading AND from the same first baseline the emitter below is about to draw with.
 // `lines × fontSize` is the shape of the bug. Every accepted layout satisfies
 //
-//     h − 1 − 0.905×size − (lines−1) × LEADING × size ≥ DESCENT × size   (the LAST baseline the
-//                                                                        emitter will write,
-//                                                                        with room under it)
+//     h − 1 − 0.905×size − (lines−1) × LEADING × size ≥ 1 + DESCENT × size   (the LAST baseline
+//                                                                            the emitter will
+//                                                                            write, with room
+//                                                                            above the CLIP)
 //     max line width                                 ≤ width − 2
 //
 // The first inequality is deliberately expressed as a baseline and not as a block height. The
@@ -453,7 +454,7 @@ function fitMultiline(codes, box, measure) {
   for (let n = STEPS_MAX; n >= STEPS_MIN; n--) {
     const size = stepSize(n);
     const lines = wrapLines(codes, width, size, measure);
-    if (lastBaseline(lines.length, size, box.height) >= DESCENT * size
+    if (lastBaseline(lines.length, size, box.height) >= INSET + DESCENT * size
       && widestLine(lines, size, measure) <= width) {
       return { size, lines, truncated: false };
     }
@@ -465,11 +466,11 @@ function fitMultiline(codes, box, measure) {
   const lines = wrapLines(codes, width, size, measure);
   // At least one line even in a box too short to hold one: drawing a clipped line and reporting it
   // beats drawing nothing. Unreachable on the real sheet — its shortest multiline box is 16.0pt
-  // tall, and one 6pt line puts its baseline at 9.57pt with 1.24pt of descender to spare.
-  // Solved from lastBaseline() rather than restated, so the floor keeps exactly as many lines as
-  // the loop above would have accepted: boxHeight − INSET − FIRST_BASELINE·s − (n−1)·LEADING·s ≥
-  // DESCENT·s.
-  const room = box.height - INSET - (FIRST_BASELINE + DESCENT) * size;
+  // tall, and one 6pt line puts its baseline at 9.57pt, where its 1.24pt descender clears the clip
+  // with room to spare. Solved from lastBaseline() rather than restated, so the floor keeps exactly
+  // as many lines as the loop above would have accepted: boxHeight − INSET − FIRST_BASELINE·s −
+  // (n−1)·LEADING·s ≥ INSET + DESCENT·s.
+  const room = box.height - 2 * INSET - (FIRST_BASELINE + DESCENT) * size;
   const maxLines = Math.max(1, 1 + Math.floor(room / (LEADING * size)));
   if (lines.length <= maxLines) return { size, lines, truncated: false };
   const kept = lines.slice(0, maxLines);
@@ -526,7 +527,13 @@ function fitSingle(codes, box, measure) {
 /**
  * Where the LAST of `count` lines puts its baseline, measured up from the bottom of the box —
  * written once so the size loop above and the floor's line count below cannot come to disagree
- * about what "fits" means. A block fits when this leaves room for a descender: `>= DESCENT×size`.
+ * about what "fits" means. A block fits when this leaves room for a descender ABOVE THE CLIP:
+ * `>= INSET + DESCENT×size`. The clip starts INSET up from the box floor (drawOps' `re W n`), so a
+ * baseline measured from the floor has to clear that point first. Until 2026-09-26 the predicate
+ * was `>= DESCENT×size`, measured from the floor, and the band between 0 and INSET was where the
+ * last line's descenders went: every last-line g, j, p, y and comma sat up to 0.7pt under the clip
+ * on the boxes that came out tightest (the page-2 guide boxes, heritage on page 1), cut off
+ * without a note, because the fitter believed the block fit.
  *
  * THIS IS THE PREDICATE, and it is deliberately not the simpler `count×LEADING + DESCENT <=
  * height − 2×INSET`. That form charges every line a full leading, including the first, which no

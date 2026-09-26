@@ -97,6 +97,14 @@ export function sheetTemplate() {
  *   printers, and this file is the app's edge. True, because the checkbox in characters.js is
  *   checked by default and the two must not be able to disagree — see that modal for the wording
  *   and shared/pdf-form.js's header for what each mode costs.
+ *
+ *   There is no `disabled`, and its absence is deliberate. The Content toggles filter the picker
+ *   lists and nothing else (shared/content-sources.js's header), and this sheet is not a picker:
+ *   page 2's suggested-* boxes print what the class guide suggests, never what the character
+ *   picked. So they resolve every name with nothing switched off, and a browser with SRD 2.0 off
+ *   still prints the SRD 2.0 record for a name both editions print, because that is the record the
+ *   name answers to while it is loaded. The wizard's shortcut is the one that consults the
+ *   toggles, because it sets picks.
  * @returns {Promise<{bytes: Uint8Array, fellBack: (null|object), truncated: string[]}>}
  *
  * A RECORD, NOT BARE BYTES, following buildDeckPdf (card-pdf.js:808) — and for its reason, not for
