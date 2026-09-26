@@ -1152,9 +1152,13 @@ export function fillForm(bytes, values, options) {
  *   /NeedAppearances has no opinion about it and neither does the fallback. An empty string draws
  *   nothing rather than appending an empty stream, so a caller can hand over a whole page's worth
  *   of "maybe" without testing it first.
+ *
+ *   `maxSizes` — field name → the largest size, in points, to draw that field at when appearances
+ *   are on. The fitter still shrinks below it and never goes above it. With appearances off the
+ *   reader sizes the text, so it is ignored.
  * @returns {{bytes: Uint8Array, fellBack: FillReport["fellBack"], truncated: string[]}}
  */
-export function fillFormWithReport(bytes, values, { appearances = false, overlays = null } = {}) {
+export function fillFormWithReport(bytes, values, { appearances = false, overlays = null, maxSizes = null } = {}) {
   if (!values || typeof values !== "object") {
     throw new TypeError(`pdf-form.js: values must be an object of field name → value, got ${typeof values}`);
   }
@@ -1209,7 +1213,7 @@ export function fillFormWithReport(bytes, values, { appearances = false, overlay
     ourFont = { name: freeFontName(form.acroForm.dict), obj: Math.max(trailer.size, highest + 1) };
   }
 
-  const drawn = appearances && ourFont ? drawFields(texts, ourFont) : { streams: null, fellBack: null, truncated: [] };
+  const drawn = appearances && ourFont ? drawFields(texts, ourFont, maxSizes) : { streams: null, fellBack: null, truncated: [] };
 
   for (const { field, value } of ticks) {
     const state = value ? onStateOf(field.dict.trim()) : "Off";
@@ -1428,11 +1432,13 @@ export function fillFormWithReport(bytes, values, { appearances = false, overlay
  *            fellBack: (null|object), truncated: string[]}}
  *   `streams` is keyed by WIDGET object number and null when the document fell back.
  */
-function drawFields(texts, ourFont) {
+function drawFields(texts, ourFont, maxSizes = null) {
   const ordered = [...texts].sort((a, b) => a.field.obj - b.field.obj);
   const laid = ordered.map(({ name, field, value }) => {
-    // fieldBox() names the field in its own refusals, so it stays outside the try.
-    const box = fieldBox(field.dict, name);
+    // fieldBox() names the field in its own refusals, so it stays outside the try. A caller's
+    // per-field ceiling rides on the box; the template has no way to say it (its /DA says 0 Tf,
+    // "fit", for every field, and tools/sheet/check_template_fonts.py keeps it that way).
+    const box = { ...fieldBox(field.dict, name), ...(maxSizes?.[name] ? { maxSize: maxSizes[name] } : {}) };
     // textAppearance() cannot name it — it is handed a box and never learns whose — so its errors
     // are re-thrown with the field on them here, the only place that knows both. "box.width is 0.5"
     // without a field name is a message that sends someone reading 71 widgets by hand.

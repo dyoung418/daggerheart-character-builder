@@ -86,6 +86,7 @@ const {
   deriveSheet,
 } = await import(`../shared/sheet-data.js${RUN}`);
 const {
+  GUIDE_MAX_SIZES,
   sheetFieldValues,
 } = await import(`../shared/sheet-fields.js${RUN}`);
 const {
@@ -9013,9 +9014,48 @@ const G_SHEET_DB = {
   weapons: [...G_WEAPONS, ...CSV_DB.weapons],
   armors: [...G_ARMORS, ...CSV_DB.armors],
 };
-const gSheet = (classId, subclassId, over = {}, db = G_SHEET_DB, options) =>
-  sheetFieldValues(formChar({ classId, subclassId, ...over }), db, options);
+// The five boxes hold no-break spaces so a long line wraps only at its separators (the next
+// group tests where they go). Everything else here is about the words, so they read as plain spaces.
+const gSheet = (classId, subclassId, over = {}, db = G_SHEET_DB, options) => {
+  const fields = sheetFieldValues(formChar({ classId, subclassId, ...over }), db, options);
+  for (const key of G_SHEET_FIELDS) {
+    if (typeof fields[key] === "string") fields[key] = fields[key].replaceAll("\u00a0", " ");
+  }
+  return fields;
+};
 const gBoxes = (f) => G_SHEET_FIELDS.map((k) => f[k]);
+
+group("A guide box wraps only between its parts, and never above 9pt");
+{
+  const raw = sheetFieldValues(formChar({ classId: G_BARD.id, subclassId: "g_troubadour" }), G_SHEET_DB);
+  eq("each stat-line segment holds together with no-break spaces; the separators are plain",
+    raw["suggested-primary-weapon"].split("\n")[0],
+    "Rapier - Presence\u00a0Melee - d8\u00a0phy - One-Handed");
+  eq("and each trait keeps its number, with a plain space after each comma",
+    raw["suggested-traits"],
+    "0\u00a0Agility, \u22121\u00a0Strength, +1\u00a0Finesse, 0\u00a0Instinct, +2\u00a0Presence, +1\u00a0Knowledge");
+  // A width that forces a wrap: the break lands after a separator, never inside "d8+1 phy".
+  const narrow = wrapLines("Scimitar - Presence\u00a0Melee - d8+1\u00a0phy - One-Handed", 150, 9);
+  check("a narrow box breaks the stat line only at a separator",
+    narrow.length > 1 && narrow.every((line) => !/^phy|d8\+1$/.test(line)), JSON.stringify(narrow));
+  // CONTROL: the same line with plain spaces does break inside the damage, which is the defect.
+  const plain = wrapLines("Scimitar - Presence Melee - d8+1 phy - One-Handed", 150, 9);
+  check("control: with plain spaces the same width splits a segment",
+    plain.some((line) => /d8\+1$|^phy/.test(line) || /Presence$|^Melee/.test(line)), JSON.stringify(plain));
+
+  eq("the cap covers exactly the five guide boxes, at the labels' 9pt",
+    Object.entries(GUIDE_MAX_SIZES).sort(), G_SHEET_FIELDS.map((k) => [k, 9]).sort());
+  const box = { width: 182, height: 56.5, multiline: true };
+  check("control: a short value in a tall box fits well above 9pt uncapped",
+    fitLines("a totem from your mentor OR\na secret key", box).size > 9);
+  eq("capped, it stops at 9pt", fitLines("a totem from your mentor OR\na secret key", { ...box, maxSize: 9 }).size, 9);
+  const long = "x ".repeat(400);
+  check("and a value that needs less still shrinks below the cap",
+    fitLines(long, { ...box, maxSize: 9 }).size < 9);
+  let refused = false;
+  try { fitLines("a", { ...box, maxSize: 4 }); } catch { refused = true; }
+  check("a cap under the 6pt floor is refused, not silently ignored", refused);
+}
 
 group("The sheet's page two prints the class guide");
 {

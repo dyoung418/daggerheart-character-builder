@@ -451,7 +451,11 @@ function fitCodes(codes, box) {
  */
 function fitMultiline(codes, box, measure) {
   const width = box.width - 2 * INSET;
-  for (let n = STEPS_MAX; n >= STEPS_MIN; n--) {
+  // A box may lower the ceiling (box.maxSize), never the floor. The class-guide boxes on page 2 ask
+  // for 9pt: left to the 12pt ladder, a short value there printed half again as large as the
+  // template's own 8pt lines around it, and a stat line broke mid-profile ("d8+1 / phy").
+  const top = box.maxSize ? Math.min(STEPS_MAX, Math.floor(box.maxSize / SIZE_STEP)) : STEPS_MAX;
+  for (let n = top; n >= STEPS_MIN; n--) {
     const size = stepSize(n);
     const lines = wrapLines(codes, width, size, measure);
     if (lastBaseline(lines.length, size, box.height) >= INSET + DESCENT * size
@@ -726,6 +730,11 @@ function fontName(name) {
  * @param {Box} box
  */
 function checkBox(box) {
+  if ("maxSize" in box && box.maxSize !== undefined &&
+      (typeof box.maxSize !== "number" || !(box.maxSize >= MIN_SIZE))) {
+    throw new RangeError(`pdf-text.js: box.maxSize is ${JSON.stringify(box.maxSize)}; it caps the size, ` +
+      `so it can't be below the ${MIN_SIZE}pt floor`);
+  }
   for (const key of ["width", "height"]) {
     const value = box[key];
     if (typeof value !== "number" || !Number.isFinite(value) || value <= 2 * INSET) {

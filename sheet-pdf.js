@@ -32,7 +32,7 @@
 // check.
 
 import { fillFormWithReport } from "./shared/pdf-form.js";
-import { sheetFieldValues } from "./shared/sheet-fields.js";
+import { GUIDE_MAX_SIZES, sheetFieldValues } from "./shared/sheet-fields.js";
 import { slotMarkOps } from "./shared/sheet-marks.js";
 
 const TEMPLATE_PATH = "data/sheet/sheet-template.pdf";
@@ -140,5 +140,7 @@ export async function buildSheetPdf(character, db, { loadout, appearances = true
   // the drawing and the number printed beside it have to be the same fact, and two derivations of
   // one number is how they stop being.
   const values = sheetFieldValues(character, db, { loadout });
-  return fillFormWithReport(template, values, { appearances, overlays: { 0: slotMarkOps(values) } });
+  return fillFormWithReport(template, values, {
+    appearances, overlays: { 0: slotMarkOps(values) }, maxSizes: GUIDE_MAX_SIZES,
+  });
 }

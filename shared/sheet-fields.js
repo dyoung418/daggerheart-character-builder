@@ -259,8 +259,31 @@ const TRAIT_MARK_FIELDS = {
 function gearBox(name, kind, ctx) {
   if (!name) return "";
   const { line, feature } = gearText(resolveGear(name, kind, ctx));
-  return [line, feature].filter(Boolean).join("\n").replaceAll("\u2022", PDF_BULLET);
+  return [holdTogether(line, " - "), feature].filter(Boolean).join("\n").replaceAll("\u2022", PDF_BULLET);
 }
+
+// Helvetica is wider than the guides' Overpass, so at the box's width 10 of the 21 stat lines wrap
+// even at 8pt. Where they wrap is what matters: at a plain space the fitter broke "d8+1 phy" into
+// "d8+1" / "phy". A no-break space inside each segment leaves only the separators to break at, so a
+// long line wraps as "Scimitar - Presence Melee - d8+1 phy -" / "One-Handed". pdf-text.js's
+// wrapLines() breaks at 0x20 only and draws 0xA0 as the space it is (WinAnsi has it), so the change
+// is in the text and nothing in the fitter.
+const holdTogether = (text, separator) =>
+  text.split(separator).map((part) => part.replaceAll(" ", "\u00a0")).join(separator);
+
+/**
+ * The largest size, in points, the export draws each class-guide box at (fillFormWithReport's
+ * `maxSizes`). Left to the fitter's 12pt ceiling, a short value printed half again as large as the
+ * template's own 8pt lines beside it. 9pt is the labels' size. The fitter still shrinks below it,
+ * down to its 6pt floor.
+ */
+export const GUIDE_MAX_SIZES = Object.freeze({
+  "suggested-traits": 9,
+  "suggested-primary-weapon": 9,
+  "suggested-secondary-weapon": 9,
+  "suggested-armor": 9,
+  "inventory-initial-options": 9,
+});
 
 // One box's text for a guide that may be split by subclass. A guide with the answer at its top
 // level prints it; one without, which is a variant guide whose character has no subclass that
@@ -629,7 +652,9 @@ export function sheetFieldValues(character, db, { loadout = false } = {}) {
     weapons: db?.weapons, armors: db?.armors, disabled: new Set(), cls,
     effects: db?.effects, sourceNames: db?.sourceNames,
   };
-  fields["suggested-traits"] = guide ? guideBox(guide, (g) => g.traits, traitsLine) : "";
+  fields["suggested-traits"] = guide
+    ? guideBox(guide, (g) => g.traits, (traits) => holdTogether(traitsLine(traits), ", "))
+    : "";
   fields["suggested-primary-weapon"] = guide
     ? guideBox(guide, (g) => g.primary, (name) => gearBox(name, "weapon", gearCtx))
     : "";
