@@ -109,6 +109,77 @@ not have them, and an export of that source writes both columns empty rather tha
 because a class names it and cards carry it, nothing else. A class name with more than one word is
 fine; it's title-cased for display. **Required: `id`, `name`, `domains`.**
 
+#### `characterGuide`
+
+Each official class sheet has a second page, the **character guide**, which prints things the SRD
+document doesn't: suggested traits, a suggested loadout, word lists for describing the character,
+and, for three classes, what they carry their spells in. `data/srd_2_0/classes.json` carries these
+under one `characterGuide` object, the class's last key. The placement is the provenance:
+everything inside the object comes from a guide, and everything outside it from the SRD. The words
+and numbers on those sheets are DPCGL content just as the SRD's are. Only the sheet PDFs themselves,
+and filled-in copies of them, may not be redistributed. `data/srd_1_0/` has no guides.
+
+```json
+"characterGuide": {
+  "suggestedTraits": { "AGILITY": 0, "STRENGTH": -1, "FINESSE": 1,
+                       "INSTINCT": 0, "PRESENCE": 2, "KNOWLEDGE": 1 },
+  "suggestedPrimaryWeapon": "Rapier",
+  "suggestedSecondaryWeapon": "Small Dagger",
+  "suggestedArmor": "Gambeson Armor",
+  "spellCarrier": { "prompt":   { "en-US": "Decide what you carry your spells in" },
+                    "examples": { "en-US": "songbook, journal, etc." } },
+  "characterDescription": {
+    "clothes":  [{ "en-US": "extravagant" }, { "en-US": "fancy" }, …],
+    "eyes": […], "body": […], "skin": […],
+    "attitude": [{ "en-US": "a barkeep" }, …]
+  }
+}
+```
+
+- **`suggestedTraits`** always holds all six, keyed by the trait enum.
+- **Gear is named, not referenced by id.** Names are how `subclasses[].class` already joins, and a
+  guide may name gear from another source. A name resolves to a weapon or armor record of that name
+  among the loaded sources. Failing that, it resolves to an unarmed profile (§6, *A better pair of
+  fists*) that the class's own features grant under that name. Only one class needs the fallback:
+  the Brawler's primary is `Brawler’s Strike`, which its I Am the Weapon feature grants, and there
+  is no weapon record for it. Apostrophes compare folded, because the guide prints `Brawler’s` and
+  `shared/effects.js` spells it `Brawler's`. The guide's printed stat line and feature text aren't
+  stored. They're rendered from the record, so an errata'd weapon can never disagree with its own
+  suggestion. `suggestedSecondaryWeapon` is absent where the guide prints none.
+- **`suggestedPrimaryWeaponTrait`** appears only where the suggested primary offers "a trait of your
+  choice". Today that's only the Brawler, whose guide prints `Brawler’s Strike - Instinct Melee`.
+  The field is a suggestion and **never overrides the rule**: the profile still reads "a trait of
+  your choice". It is **never stored on a character** either. The trait is picked per attack, so
+  there is no lasting choice to record.
+- **`variants`** is for a guide that prints different suggestions per subclass. No SRD 2.0 class
+  needs it. Any field shared by every variant stays at the top level. Each entry holds `label` (as
+  printed), `subclasses` (a list of subclass `name`s), and whatever differs, and its
+  `suggestedTraits` is always the complete six, never only the ones that changed. A reader takes
+  the top level overlaid by the variant that names the character's subclass:
+  ```json
+  "variants": [
+    { "label": "Tide/Storm", "subclasses": ["Tidecaller", "Stormcaller"],
+      "suggestedTraits": { … all six … }, "suggestedPrimaryWeapon": "Longsword" },
+    { "label": "Stone", "subclasses": ["Stonecaller"],
+      "suggestedTraits": { … all six … }, "suggestedPrimaryWeapon": "Battleaxe" }
+  ]
+  ```
+- **`spellCarrier`** is on the Bard, the Wizard and the Witch only. The name is from the SRD's
+  own Step 5 ("whichever class-specific item you selected to carry your spells"). `prompt` holds
+  the printed words because they differ: the Witch's reads "Decide what you use for your craft".
+- **`characterDescription`** stores the five lists under fixed keys (`clothes`, `eyes`, `body`,
+  `skin`, `attitude`), split at the printed commas and kept in lower case as printed. The lead-ins ("Eyes
+  like", "Skin the color of") are the same on every guide, so the app's strings will hold them
+  rather than the data.
+
+Some of the guide isn't stored. The TAKE and THEN CHOOSE BETWEEN lines are the same on every guide,
+because they're the SRD's own starting-equipment rule. The AND EITHER pair is `classItems`, and the
+background questions and connections are the SRD's lists above.
+
+The whole object is optional, and so is every field in it. A homebrew class needs none of it.
+**Nothing in the app reads `characterGuide` yet.** It is planned for the creation wizard's Traits,
+Equipment and Background steps and for the official sheet PDF.
+
 ### subclasses.json
 
 ```json

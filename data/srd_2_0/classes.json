@@ -70,7 +70,160 @@
    {
     "en-US": "Why do you grab my hand at night?"
    }
-  ]
+  ],
+  "characterGuide": {
+   "suggestedTraits": {
+    "AGILITY": 0,
+    "STRENGTH": -1,
+    "FINESSE": 1,
+    "INSTINCT": 0,
+    "PRESENCE": 2,
+    "KNOWLEDGE": 1
+   },
+   "suggestedPrimaryWeapon": "Rapier",
+   "suggestedSecondaryWeapon": "Small Dagger",
+   "suggestedArmor": "Gambeson Armor",
+   "spellCarrier": {
+    "prompt": {
+     "en-US": "Decide what you carry your spells in"
+    },
+    "examples": {
+     "en-US": "songbook, journal, etc."
+    }
+   },
+   "characterDescription": {
+    "clothes": [
+     {
+      "en-US": "extravagant"
+     },
+     {
+      "en-US": "fancy"
+     },
+     {
+      "en-US": "loud"
+     },
+     {
+      "en-US": "oversized"
+     },
+     {
+      "en-US": "ragged"
+     },
+     {
+      "en-US": "sleek"
+     },
+     {
+      "en-US": "wild"
+     }
+    ],
+    "eyes": [
+     {
+      "en-US": "carnations"
+     },
+     {
+      "en-US": "earth"
+     },
+     {
+      "en-US": "endless ocean"
+     },
+     {
+      "en-US": "fire"
+     },
+     {
+      "en-US": "ivy"
+     },
+     {
+      "en-US": "lilacs"
+     },
+     {
+      "en-US": "night"
+     },
+     {
+      "en-US": "seafoam"
+     },
+     {
+      "en-US": "winter"
+     }
+    ],
+    "body": [
+     {
+      "en-US": "broad"
+     },
+     {
+      "en-US": "carved"
+     },
+     {
+      "en-US": "curvy"
+     },
+     {
+      "en-US": "lanky"
+     },
+     {
+      "en-US": "rotund"
+     },
+     {
+      "en-US": "short"
+     },
+     {
+      "en-US": "stocky"
+     },
+     {
+      "en-US": "tall"
+     },
+     {
+      "en-US": "thin"
+     },
+     {
+      "en-US": "tiny"
+     },
+     {
+      "en-US": "toned"
+     }
+    ],
+    "skin": [
+     {
+      "en-US": "ashes"
+     },
+     {
+      "en-US": "clover"
+     },
+     {
+      "en-US": "falling snow"
+     },
+     {
+      "en-US": "fine sand"
+     },
+     {
+      "en-US": "obsidian"
+     },
+     {
+      "en-US": "rose"
+     },
+     {
+      "en-US": "sapphire"
+     },
+     {
+      "en-US": "wisteria"
+     }
+    ],
+    "attitude": [
+     {
+      "en-US": "a barkeep"
+     },
+     {
+      "en-US": "a magician"
+     },
+     {
+      "en-US": "a ringmaster"
+     },
+     {
+      "en-US": "a rock star"
+     },
+     {
+      "en-US": "a swashbuckler"
+     }
+    ]
+   }
+  }
  },
  {
   "id": "srd_2_0_class_druid",
@@ -155,7 +308,152 @@
    {
     "en-US": "What affectionate nickname have you given me?"
    }
-  ]
+  ],
+  "characterGuide": {
+   "suggestedTraits": {
+    "AGILITY": 1,
+    "STRENGTH": 0,
+    "FINESSE": 1,
+    "INSTINCT": 2,
+    "PRESENCE": -1,
+    "KNOWLEDGE": 0
+   },
+   "suggestedPrimaryWeapon": "Shortstaff",
+   "suggestedSecondaryWeapon": "Round Shield",
+   "suggestedArmor": "Leather Armor",
+   "characterDescription": {
+    "clothes": [
+     {
+      "en-US": "camouflaged"
+     },
+     {
+      "en-US": "grown"
+     },
+     {
+      "en-US": "loose"
+     },
+     {
+      "en-US": "natural"
+     },
+     {
+      "en-US": "patchwork"
+     },
+     {
+      "en-US": "regal"
+     },
+     {
+      "en-US": "scraps"
+     }
+    ],
+    "eyes": [
+     {
+      "en-US": "carnations"
+     },
+     {
+      "en-US": "earth"
+     },
+     {
+      "en-US": "endless ocean"
+     },
+     {
+      "en-US": "fire"
+     },
+     {
+      "en-US": "ivy"
+     },
+     {
+      "en-US": "lilacs"
+     },
+     {
+      "en-US": "night"
+     },
+     {
+      "en-US": "seafoam"
+     },
+     {
+      "en-US": "winter"
+     }
+    ],
+    "body": [
+     {
+      "en-US": "broad"
+     },
+     {
+      "en-US": "carved"
+     },
+     {
+      "en-US": "curvy"
+     },
+     {
+      "en-US": "lanky"
+     },
+     {
+      "en-US": "rotund"
+     },
+     {
+      "en-US": "short"
+     },
+     {
+      "en-US": "stocky"
+     },
+     {
+      "en-US": "tall"
+     },
+     {
+      "en-US": "thin"
+     },
+     {
+      "en-US": "tiny"
+     },
+     {
+      "en-US": "toned"
+     }
+    ],
+    "skin": [
+     {
+      "en-US": "ashes"
+     },
+     {
+      "en-US": "clover"
+     },
+     {
+      "en-US": "falling snow"
+     },
+     {
+      "en-US": "fine sand"
+     },
+     {
+      "en-US": "obsidian"
+     },
+     {
+      "en-US": "rose"
+     },
+     {
+      "en-US": "sapphire"
+     },
+     {
+      "en-US": "wisteria"
+     }
+    ],
+    "attitude": [
+     {
+      "en-US": "a firecracker"
+     },
+     {
+      "en-US": "a fox"
+     },
+     {
+      "en-US": "a guide"
+     },
+     {
+      "en-US": "a hippie"
+     },
+     {
+      "en-US": "a witch"
+     }
+    ]
+   }
+  }
  },
  {
   "id": "srd_2_0_class_guardian",
@@ -246,7 +544,151 @@
    {
     "en-US": "What lie have you told me about yourself that I absolutely believe?"
    }
-  ]
+  ],
+  "characterGuide": {
+   "suggestedTraits": {
+    "AGILITY": 1,
+    "STRENGTH": 2,
+    "FINESSE": -1,
+    "INSTINCT": 0,
+    "PRESENCE": 1,
+    "KNOWLEDGE": 0
+   },
+   "suggestedPrimaryWeapon": "Battleaxe",
+   "suggestedArmor": "Chainmail Armor",
+   "characterDescription": {
+    "clothes": [
+     {
+      "en-US": "casual"
+     },
+     {
+      "en-US": "intricate"
+     },
+     {
+      "en-US": "loose"
+     },
+     {
+      "en-US": "padded"
+     },
+     {
+      "en-US": "royal"
+     },
+     {
+      "en-US": "tactical"
+     },
+     {
+      "en-US": "weathered"
+     }
+    ],
+    "eyes": [
+     {
+      "en-US": "carnations"
+     },
+     {
+      "en-US": "earth"
+     },
+     {
+      "en-US": "endless ocean"
+     },
+     {
+      "en-US": "fire"
+     },
+     {
+      "en-US": "ivy"
+     },
+     {
+      "en-US": "lilacs"
+     },
+     {
+      "en-US": "night"
+     },
+     {
+      "en-US": "seafoam"
+     },
+     {
+      "en-US": "winter"
+     }
+    ],
+    "body": [
+     {
+      "en-US": "broad"
+     },
+     {
+      "en-US": "carved"
+     },
+     {
+      "en-US": "curvy"
+     },
+     {
+      "en-US": "lanky"
+     },
+     {
+      "en-US": "rotund"
+     },
+     {
+      "en-US": "short"
+     },
+     {
+      "en-US": "stocky"
+     },
+     {
+      "en-US": "tall"
+     },
+     {
+      "en-US": "thin"
+     },
+     {
+      "en-US": "tiny"
+     },
+     {
+      "en-US": "toned"
+     }
+    ],
+    "skin": [
+     {
+      "en-US": "ashes"
+     },
+     {
+      "en-US": "clover"
+     },
+     {
+      "en-US": "falling snow"
+     },
+     {
+      "en-US": "fine sand"
+     },
+     {
+      "en-US": "obsidian"
+     },
+     {
+      "en-US": "rose"
+     },
+     {
+      "en-US": "sapphire"
+     },
+     {
+      "en-US": "wisteria"
+     }
+    ],
+    "attitude": [
+     {
+      "en-US": "a captain"
+     },
+     {
+      "en-US": "a caretaker"
+     },
+     {
+      "en-US": "an elephant"
+     },
+     {
+      "en-US": "a general"
+     },
+     {
+      "en-US": "a wrestler"
+     }
+    ]
+   }
+  }
  },
  {
   "id": "srd_2_0_class_ranger",
@@ -332,7 +774,151 @@
    {
     "en-US": "What threat have you asked me to watch for, and why are you worried about it?"
    }
-  ]
+  ],
+  "characterGuide": {
+   "suggestedTraits": {
+    "AGILITY": 2,
+    "STRENGTH": 0,
+    "FINESSE": 1,
+    "INSTINCT": 1,
+    "PRESENCE": -1,
+    "KNOWLEDGE": 0
+   },
+   "suggestedPrimaryWeapon": "Shortbow",
+   "suggestedArmor": "Leather Armor",
+   "characterDescription": {
+    "clothes": [
+     {
+      "en-US": "flowing"
+     },
+     {
+      "en-US": "muted"
+     },
+     {
+      "en-US": "natural"
+     },
+     {
+      "en-US": "stained"
+     },
+     {
+      "en-US": "tactical"
+     },
+     {
+      "en-US": "tight"
+     },
+     {
+      "en-US": "woven"
+     }
+    ],
+    "eyes": [
+     {
+      "en-US": "carnations"
+     },
+     {
+      "en-US": "earth"
+     },
+     {
+      "en-US": "endless ocean"
+     },
+     {
+      "en-US": "fire"
+     },
+     {
+      "en-US": "ivy"
+     },
+     {
+      "en-US": "lilacs"
+     },
+     {
+      "en-US": "night"
+     },
+     {
+      "en-US": "seafoam"
+     },
+     {
+      "en-US": "winter"
+     }
+    ],
+    "body": [
+     {
+      "en-US": "broad"
+     },
+     {
+      "en-US": "carved"
+     },
+     {
+      "en-US": "curvy"
+     },
+     {
+      "en-US": "lanky"
+     },
+     {
+      "en-US": "rotund"
+     },
+     {
+      "en-US": "short"
+     },
+     {
+      "en-US": "stocky"
+     },
+     {
+      "en-US": "tall"
+     },
+     {
+      "en-US": "thin"
+     },
+     {
+      "en-US": "tiny"
+     },
+     {
+      "en-US": "toned"
+     }
+    ],
+    "skin": [
+     {
+      "en-US": "ashes"
+     },
+     {
+      "en-US": "clover"
+     },
+     {
+      "en-US": "falling snow"
+     },
+     {
+      "en-US": "fine sand"
+     },
+     {
+      "en-US": "obsidian"
+     },
+     {
+      "en-US": "rose"
+     },
+     {
+      "en-US": "sapphire"
+     },
+     {
+      "en-US": "wisteria"
+     }
+    ],
+    "attitude": [
+     {
+      "en-US": "a child"
+     },
+     {
+      "en-US": "a ghost"
+     },
+     {
+      "en-US": "a survivalist"
+     },
+     {
+      "en-US": "a teacher"
+     },
+     {
+      "en-US": "a watchdog"
+     }
+    ]
+   }
+  }
  },
  {
   "id": "srd_2_0_class_rogue",
@@ -433,7 +1019,152 @@
    {
     "en-US": "Who do you know from my past, and how have they influenced your feelings about me?"
    }
-  ]
+  ],
+  "characterGuide": {
+   "suggestedTraits": {
+    "AGILITY": 1,
+    "STRENGTH": -1,
+    "FINESSE": 2,
+    "INSTINCT": 0,
+    "PRESENCE": 1,
+    "KNOWLEDGE": 0
+   },
+   "suggestedPrimaryWeapon": "Dagger",
+   "suggestedSecondaryWeapon": "Small Dagger",
+   "suggestedArmor": "Gambeson Armor",
+   "characterDescription": {
+    "clothes": [
+     {
+      "en-US": "clean"
+     },
+     {
+      "en-US": "dark"
+     },
+     {
+      "en-US": "inconspicuous"
+     },
+     {
+      "en-US": "leather"
+     },
+     {
+      "en-US": "scary"
+     },
+     {
+      "en-US": "tactical"
+     },
+     {
+      "en-US": "tight"
+     }
+    ],
+    "eyes": [
+     {
+      "en-US": "carnations"
+     },
+     {
+      "en-US": "earth"
+     },
+     {
+      "en-US": "endless ocean"
+     },
+     {
+      "en-US": "fire"
+     },
+     {
+      "en-US": "ivy"
+     },
+     {
+      "en-US": "lilacs"
+     },
+     {
+      "en-US": "night"
+     },
+     {
+      "en-US": "seafoam"
+     },
+     {
+      "en-US": "winter"
+     }
+    ],
+    "body": [
+     {
+      "en-US": "broad"
+     },
+     {
+      "en-US": "carved"
+     },
+     {
+      "en-US": "curvy"
+     },
+     {
+      "en-US": "lanky"
+     },
+     {
+      "en-US": "rotund"
+     },
+     {
+      "en-US": "short"
+     },
+     {
+      "en-US": "stocky"
+     },
+     {
+      "en-US": "tall"
+     },
+     {
+      "en-US": "thin"
+     },
+     {
+      "en-US": "tiny"
+     },
+     {
+      "en-US": "toned"
+     }
+    ],
+    "skin": [
+     {
+      "en-US": "ashes"
+     },
+     {
+      "en-US": "clover"
+     },
+     {
+      "en-US": "falling snow"
+     },
+     {
+      "en-US": "fine sand"
+     },
+     {
+      "en-US": "obsidian"
+     },
+     {
+      "en-US": "rose"
+     },
+     {
+      "en-US": "sapphire"
+     },
+     {
+      "en-US": "wisteria"
+     }
+    ],
+    "attitude": [
+     {
+      "en-US": "a bandit"
+     },
+     {
+      "en-US": "a con artist"
+     },
+     {
+      "en-US": "a gambler"
+     },
+     {
+      "en-US": "a mob boss"
+     },
+     {
+      "en-US": "a pirate"
+     }
+    ]
+   }
+  }
  },
  {
   "id": "srd_2_0_class_seraph",
@@ -506,7 +1237,152 @@
    {
     "en-US": "You’ve told me to protect one member of our party above all others, even yourself. Who are they and why?"
    }
-  ]
+  ],
+  "characterGuide": {
+   "suggestedTraits": {
+    "AGILITY": 0,
+    "STRENGTH": 2,
+    "FINESSE": 0,
+    "INSTINCT": 1,
+    "PRESENCE": 1,
+    "KNOWLEDGE": -1
+   },
+   "suggestedPrimaryWeapon": "Hallowed Axe",
+   "suggestedSecondaryWeapon": "Round Shield",
+   "suggestedArmor": "Chainmail Armor",
+   "characterDescription": {
+    "clothes": [
+     {
+      "en-US": "glowing"
+     },
+     {
+      "en-US": "rippling"
+     },
+     {
+      "en-US": "ornate"
+     },
+     {
+      "en-US": "tight"
+     },
+     {
+      "en-US": "modest"
+     },
+     {
+      "en-US": "strange"
+     },
+     {
+      "en-US": "natural"
+     }
+    ],
+    "eyes": [
+     {
+      "en-US": "carnations"
+     },
+     {
+      "en-US": "earth"
+     },
+     {
+      "en-US": "endless ocean"
+     },
+     {
+      "en-US": "fire"
+     },
+     {
+      "en-US": "ivy"
+     },
+     {
+      "en-US": "lilacs"
+     },
+     {
+      "en-US": "night"
+     },
+     {
+      "en-US": "seafoam"
+     },
+     {
+      "en-US": "winter"
+     }
+    ],
+    "body": [
+     {
+      "en-US": "broad"
+     },
+     {
+      "en-US": "carved"
+     },
+     {
+      "en-US": "curvy"
+     },
+     {
+      "en-US": "lanky"
+     },
+     {
+      "en-US": "rotund"
+     },
+     {
+      "en-US": "short"
+     },
+     {
+      "en-US": "stocky"
+     },
+     {
+      "en-US": "tall"
+     },
+     {
+      "en-US": "thin"
+     },
+     {
+      "en-US": "tiny"
+     },
+     {
+      "en-US": "toned"
+     }
+    ],
+    "skin": [
+     {
+      "en-US": "ashes"
+     },
+     {
+      "en-US": "clover"
+     },
+     {
+      "en-US": "falling snow"
+     },
+     {
+      "en-US": "fine sand"
+     },
+     {
+      "en-US": "obsidian"
+     },
+     {
+      "en-US": "rose"
+     },
+     {
+      "en-US": "sapphire"
+     },
+     {
+      "en-US": "wisteria"
+     }
+    ],
+    "attitude": [
+     {
+      "en-US": "an angel"
+     },
+     {
+      "en-US": "a doctor"
+     },
+     {
+      "en-US": "an evangelist"
+     },
+     {
+      "en-US": "a monk"
+     },
+     {
+      "en-US": "a priest"
+     }
+    ]
+   }
+  }
  },
  {
   "id": "srd_2_0_class_sorcerer",
@@ -613,7 +1489,148 @@
    {
     "en-US": "Why do we keep our shared past a secret?"
    }
-  ]
+  ],
+  "characterGuide": {
+   "suggestedTraits": {
+    "AGILITY": 0,
+    "STRENGTH": -1,
+    "FINESSE": 1,
+    "INSTINCT": 2,
+    "PRESENCE": 1,
+    "KNOWLEDGE": 0
+   },
+   "suggestedPrimaryWeapon": "Dualstaff",
+   "suggestedArmor": "Gambeson Armor",
+   "characterDescription": {
+    "clothes": [
+     {
+      "en-US": "always moving"
+     },
+     {
+      "en-US": "flamboyant"
+     },
+     {
+      "en-US": "inconspicuous"
+     },
+     {
+      "en-US": "layered"
+     },
+     {
+      "en-US": "ornate"
+     },
+     {
+      "en-US": "tight"
+     }
+    ],
+    "eyes": [
+     {
+      "en-US": "carnations"
+     },
+     {
+      "en-US": "earth"
+     },
+     {
+      "en-US": "endless ocean"
+     },
+     {
+      "en-US": "fire"
+     },
+     {
+      "en-US": "ivy"
+     },
+     {
+      "en-US": "lilacs"
+     },
+     {
+      "en-US": "night"
+     },
+     {
+      "en-US": "seafoam"
+     },
+     {
+      "en-US": "winter"
+     }
+    ],
+    "body": [
+     {
+      "en-US": "broad"
+     },
+     {
+      "en-US": "carved"
+     },
+     {
+      "en-US": "curvy"
+     },
+     {
+      "en-US": "lanky"
+     },
+     {
+      "en-US": "rotund"
+     },
+     {
+      "en-US": "short"
+     },
+     {
+      "en-US": "stocky"
+     },
+     {
+      "en-US": "tall"
+     },
+     {
+      "en-US": "thin"
+     },
+     {
+      "en-US": "tiny"
+     },
+     {
+      "en-US": "toned"
+     }
+    ],
+    "skin": [
+     {
+      "en-US": "ashes"
+     },
+     {
+      "en-US": "clover"
+     },
+     {
+      "en-US": "falling snow"
+     },
+     {
+      "en-US": "fine sand"
+     },
+     {
+      "en-US": "obsidian"
+     },
+     {
+      "en-US": "rose"
+     },
+     {
+      "en-US": "sapphire"
+     },
+     {
+      "en-US": "wisteria"
+     }
+    ],
+    "attitude": [
+     {
+      "en-US": "a celebrity"
+     },
+     {
+      "en-US": "a commander"
+     },
+     {
+      "en-US": "a politician"
+     },
+     {
+      "en-US": "a prankster"
+     },
+     {
+      "en-US": "a wolf in sheep’s clothing"
+     }
+    ]
+   }
+  }
  },
  {
   "id": "srd_2_0_class_warrior",
@@ -711,7 +1728,151 @@
    {
     "en-US": "What fear am I helping you overcome?"
    }
-  ]
+  ],
+  "characterGuide": {
+   "suggestedTraits": {
+    "AGILITY": 2,
+    "STRENGTH": 1,
+    "FINESSE": 0,
+    "INSTINCT": 1,
+    "PRESENCE": -1,
+    "KNOWLEDGE": 0
+   },
+   "suggestedPrimaryWeapon": "Longsword",
+   "suggestedArmor": "Chainmail Armor",
+   "characterDescription": {
+    "clothes": [
+     {
+      "en-US": "bold"
+     },
+     {
+      "en-US": "patched"
+     },
+     {
+      "en-US": "reinforced"
+     },
+     {
+      "en-US": "royal"
+     },
+     {
+      "en-US": "sleek"
+     },
+     {
+      "en-US": "sparing"
+     },
+     {
+      "en-US": "weathered"
+     }
+    ],
+    "eyes": [
+     {
+      "en-US": "carnations"
+     },
+     {
+      "en-US": "earth"
+     },
+     {
+      "en-US": "endless ocean"
+     },
+     {
+      "en-US": "fire"
+     },
+     {
+      "en-US": "ivy"
+     },
+     {
+      "en-US": "lilacs"
+     },
+     {
+      "en-US": "night"
+     },
+     {
+      "en-US": "seafoam"
+     },
+     {
+      "en-US": "winter"
+     }
+    ],
+    "body": [
+     {
+      "en-US": "broad"
+     },
+     {
+      "en-US": "carved"
+     },
+     {
+      "en-US": "curvy"
+     },
+     {
+      "en-US": "lanky"
+     },
+     {
+      "en-US": "rotund"
+     },
+     {
+      "en-US": "short"
+     },
+     {
+      "en-US": "stocky"
+     },
+     {
+      "en-US": "tall"
+     },
+     {
+      "en-US": "thin"
+     },
+     {
+      "en-US": "tiny"
+     },
+     {
+      "en-US": "toned"
+     }
+    ],
+    "skin": [
+     {
+      "en-US": "ashes"
+     },
+     {
+      "en-US": "clover"
+     },
+     {
+      "en-US": "falling snow"
+     },
+     {
+      "en-US": "fine sand"
+     },
+     {
+      "en-US": "obsidian"
+     },
+     {
+      "en-US": "rose"
+     },
+     {
+      "en-US": "sapphire"
+     },
+     {
+      "en-US": "wisteria"
+     }
+    ],
+    "attitude": [
+     {
+      "en-US": "a bull"
+     },
+     {
+      "en-US": "a dedicated soldier"
+     },
+     {
+      "en-US": "a gladiator"
+     },
+     {
+      "en-US": "a hero"
+     },
+     {
+      "en-US": "a hired hand"
+     }
+    ]
+   }
+  }
  },
  {
   "id": "srd_2_0_class_wizard",
@@ -801,7 +1962,159 @@
    {
     "en-US": "What secret about yourself have you entrusted only to me?"
    }
-  ]
+  ],
+  "characterGuide": {
+   "suggestedTraits": {
+    "AGILITY": -1,
+    "STRENGTH": 0,
+    "FINESSE": 0,
+    "INSTINCT": 1,
+    "PRESENCE": 1,
+    "KNOWLEDGE": 2
+   },
+   "suggestedPrimaryWeapon": "Greatstaff",
+   "suggestedArmor": "Leather Armor",
+   "spellCarrier": {
+    "prompt": {
+     "en-US": "Decide what you carry your spells in"
+    },
+    "examples": {
+     "en-US": "large tomes, tarot cards, etc."
+    }
+   },
+   "characterDescription": {
+    "clothes": [
+     {
+      "en-US": "beautiful"
+     },
+     {
+      "en-US": "clean"
+     },
+     {
+      "en-US": "common"
+     },
+     {
+      "en-US": "flowing"
+     },
+     {
+      "en-US": "layered"
+     },
+     {
+      "en-US": "patchwork"
+     },
+     {
+      "en-US": "tight"
+     }
+    ],
+    "eyes": [
+     {
+      "en-US": "carnations"
+     },
+     {
+      "en-US": "earth"
+     },
+     {
+      "en-US": "endless ocean"
+     },
+     {
+      "en-US": "fire"
+     },
+     {
+      "en-US": "ivy"
+     },
+     {
+      "en-US": "lilacs"
+     },
+     {
+      "en-US": "night"
+     },
+     {
+      "en-US": "seafoam"
+     },
+     {
+      "en-US": "winter"
+     }
+    ],
+    "body": [
+     {
+      "en-US": "broad"
+     },
+     {
+      "en-US": "carved"
+     },
+     {
+      "en-US": "curvy"
+     },
+     {
+      "en-US": "lanky"
+     },
+     {
+      "en-US": "rotund"
+     },
+     {
+      "en-US": "short"
+     },
+     {
+      "en-US": "stocky"
+     },
+     {
+      "en-US": "tall"
+     },
+     {
+      "en-US": "thin"
+     },
+     {
+      "en-US": "tiny"
+     },
+     {
+      "en-US": "toned"
+     }
+    ],
+    "skin": [
+     {
+      "en-US": "ashes"
+     },
+     {
+      "en-US": "clover"
+     },
+     {
+      "en-US": "falling snow"
+     },
+     {
+      "en-US": "fine sand"
+     },
+     {
+      "en-US": "obsidian"
+     },
+     {
+      "en-US": "rose"
+     },
+     {
+      "en-US": "sapphire"
+     },
+     {
+      "en-US": "wisteria"
+     }
+    ],
+    "attitude": [
+     {
+      "en-US": "an eccentric"
+     },
+     {
+      "en-US": "a librarian"
+     },
+     {
+      "en-US": "a lit fuse"
+     },
+     {
+      "en-US": "a philosopher"
+     },
+     {
+      "en-US": "a professor"
+     }
+    ]
+   }
+  }
  },
  {
   "id": "srd_2_0_class_assassin",
@@ -891,7 +2204,154 @@
    {
     "en-US": "What secret about myself did I tell you, and how did it change your view of me?"
    }
-  ]
+  ],
+  "characterGuide": {
+   "suggestedTraits": {
+    "AGILITY": 2,
+    "STRENGTH": -1,
+    "FINESSE": 1,
+    "INSTINCT": 0,
+    "PRESENCE": 0,
+    "KNOWLEDGE": 1
+   },
+   "suggestedPrimaryWeapon": "Katana",
+   "suggestedArmor": "Brigandine Armor",
+   "characterDescription": {
+    "clothes": [
+     {
+      "en-US": "finely tailored"
+     },
+     {
+      "en-US": "hooded"
+     },
+     {
+      "en-US": "incognito"
+     },
+     {
+      "en-US": "padded for silence"
+     },
+     {
+      "en-US": "sinister"
+     },
+     {
+      "en-US": "weathered"
+     }
+    ],
+    "eyes": [
+     {
+      "en-US": "carnations"
+     },
+     {
+      "en-US": "earth"
+     },
+     {
+      "en-US": "endless ocean"
+     },
+     {
+      "en-US": "fire"
+     },
+     {
+      "en-US": "ivy"
+     },
+     {
+      "en-US": "lilacs"
+     },
+     {
+      "en-US": "night"
+     },
+     {
+      "en-US": "seafoam"
+     },
+     {
+      "en-US": "winter"
+     }
+    ],
+    "body": [
+     {
+      "en-US": "broad"
+     },
+     {
+      "en-US": "carved"
+     },
+     {
+      "en-US": "curvy"
+     },
+     {
+      "en-US": "lanky"
+     },
+     {
+      "en-US": "rotund"
+     },
+     {
+      "en-US": "short"
+     },
+     {
+      "en-US": "stocky"
+     },
+     {
+      "en-US": "tall"
+     },
+     {
+      "en-US": "thin"
+     },
+     {
+      "en-US": "tiny"
+     },
+     {
+      "en-US": "toned"
+     }
+    ],
+    "skin": [
+     {
+      "en-US": "ashes"
+     },
+     {
+      "en-US": "clover"
+     },
+     {
+      "en-US": "falling snow"
+     },
+     {
+      "en-US": "fine sand"
+     },
+     {
+      "en-US": "obsidian"
+     },
+     {
+      "en-US": "rose"
+     },
+     {
+      "en-US": "sapphire"
+     },
+     {
+      "en-US": "wisteria"
+     }
+    ],
+    "attitude": [
+     {
+      "en-US": "a butcher"
+     },
+     {
+      "en-US": "a coiled viper"
+     },
+     {
+      "en-US": "a hidden razor"
+     },
+     {
+      "en-US": "a hunter"
+     },
+     {
+      "en-US": "a judge"
+     },
+     {
+      "en-US": "a merchant"
+     },
+     {
+      "en-US": "an owl"
+     }
+    ]
+   }
+  }
  },
  {
   "id": "srd_2_0_class_brawler",
@@ -981,7 +2441,152 @@
    {
     "en-US": "I still haven’t forgiven you for something you said to me. What was it, and why did you say it?"
    }
-  ]
+  ],
+  "characterGuide": {
+   "suggestedTraits": {
+    "AGILITY": 1,
+    "STRENGTH": 1,
+    "FINESSE": 0,
+    "INSTINCT": 2,
+    "PRESENCE": 0,
+    "KNOWLEDGE": -1
+   },
+   "suggestedPrimaryWeapon": "Brawler’s Strike",
+   "suggestedPrimaryWeaponTrait": "INSTINCT",
+   "suggestedArmor": "Brigandine Armor",
+   "characterDescription": {
+    "clothes": [
+     {
+      "en-US": "bright"
+     },
+     {
+      "en-US": "haphazard"
+     },
+     {
+      "en-US": "practical"
+     },
+     {
+      "en-US": "pristine"
+     },
+     {
+      "en-US": "someone else’s"
+     },
+     {
+      "en-US": "standard-issue"
+     }
+    ],
+    "eyes": [
+     {
+      "en-US": "carnations"
+     },
+     {
+      "en-US": "earth"
+     },
+     {
+      "en-US": "endless ocean"
+     },
+     {
+      "en-US": "fire"
+     },
+     {
+      "en-US": "ivy"
+     },
+     {
+      "en-US": "lilacs"
+     },
+     {
+      "en-US": "night"
+     },
+     {
+      "en-US": "seafoam"
+     },
+     {
+      "en-US": "winter"
+     }
+    ],
+    "body": [
+     {
+      "en-US": "broad"
+     },
+     {
+      "en-US": "carved"
+     },
+     {
+      "en-US": "curvy"
+     },
+     {
+      "en-US": "lanky"
+     },
+     {
+      "en-US": "rotund"
+     },
+     {
+      "en-US": "short"
+     },
+     {
+      "en-US": "stocky"
+     },
+     {
+      "en-US": "tall"
+     },
+     {
+      "en-US": "thin"
+     },
+     {
+      "en-US": "tiny"
+     },
+     {
+      "en-US": "toned"
+     }
+    ],
+    "skin": [
+     {
+      "en-US": "ashes"
+     },
+     {
+      "en-US": "clover"
+     },
+     {
+      "en-US": "falling snow"
+     },
+     {
+      "en-US": "fine sand"
+     },
+     {
+      "en-US": "obsidian"
+     },
+     {
+      "en-US": "rose"
+     },
+     {
+      "en-US": "sapphire"
+     },
+     {
+      "en-US": "wisteria"
+     }
+    ],
+    "attitude": [
+     {
+      "en-US": "a flowing river"
+     },
+     {
+      "en-US": "a golden retriever"
+     },
+     {
+      "en-US": "a loose cannon"
+     },
+     {
+      "en-US": "a parent"
+     },
+     {
+      "en-US": "a protector"
+     },
+     {
+      "en-US": "a veteran"
+     }
+    ]
+   }
+  }
  },
  {
   "id": "srd_2_0_class_warlock",
@@ -1071,7 +2676,161 @@
    {
     "en-US": "I once did something very foolish, and you’ve never let me live it down. What was it?"
    }
-  ]
+  ],
+  "characterGuide": {
+   "suggestedTraits": {
+    "AGILITY": 1,
+    "STRENGTH": -1,
+    "FINESSE": 0,
+    "INSTINCT": 1,
+    "PRESENCE": 2,
+    "KNOWLEDGE": 0
+   },
+   "suggestedPrimaryWeapon": "Scimitar",
+   "suggestedSecondaryWeapon": "Fighting Cloak",
+   "suggestedArmor": "Mage Robes",
+   "characterDescription": {
+    "clothes": [
+     {
+      "en-US": "billowing"
+     },
+     {
+      "en-US": "lavish"
+     },
+     {
+      "en-US": "luminous"
+     },
+     {
+      "en-US": "mended"
+     },
+     {
+      "en-US": "neat"
+     },
+     {
+      "en-US": "sacred"
+     },
+     {
+      "en-US": "shadowy"
+     },
+     {
+      "en-US": "smoking"
+     }
+    ],
+    "eyes": [
+     {
+      "en-US": "carnations"
+     },
+     {
+      "en-US": "earth"
+     },
+     {
+      "en-US": "endless ocean"
+     },
+     {
+      "en-US": "fire"
+     },
+     {
+      "en-US": "ivy"
+     },
+     {
+      "en-US": "lilacs"
+     },
+     {
+      "en-US": "night"
+     },
+     {
+      "en-US": "seafoam"
+     },
+     {
+      "en-US": "winter"
+     }
+    ],
+    "body": [
+     {
+      "en-US": "broad"
+     },
+     {
+      "en-US": "carved"
+     },
+     {
+      "en-US": "curvy"
+     },
+     {
+      "en-US": "lanky"
+     },
+     {
+      "en-US": "rotund"
+     },
+     {
+      "en-US": "short"
+     },
+     {
+      "en-US": "stocky"
+     },
+     {
+      "en-US": "tall"
+     },
+     {
+      "en-US": "thin"
+     },
+     {
+      "en-US": "tiny"
+     },
+     {
+      "en-US": "toned"
+     }
+    ],
+    "skin": [
+     {
+      "en-US": "ashes"
+     },
+     {
+      "en-US": "clover"
+     },
+     {
+      "en-US": "falling snow"
+     },
+     {
+      "en-US": "fine sand"
+     },
+     {
+      "en-US": "obsidian"
+     },
+     {
+      "en-US": "rose"
+     },
+     {
+      "en-US": "sapphire"
+     },
+     {
+      "en-US": "wisteria"
+     }
+    ],
+    "attitude": [
+     {
+      "en-US": "a coming storm"
+     },
+     {
+      "en-US": "a devotee"
+     },
+     {
+      "en-US": "a hot mess"
+     },
+     {
+      "en-US": "a jester"
+     },
+     {
+      "en-US": "a live wire"
+     },
+     {
+      "en-US": "a monarch"
+     },
+     {
+      "en-US": "a soothsayer"
+     }
+    ]
+   }
+  }
  },
  {
   "id": "srd_2_0_class_witch",
@@ -1169,6 +2928,162 @@
    {
     "en-US": "What do you typically come to me for advice about?"
    }
-  ]
+  ],
+  "characterGuide": {
+   "suggestedTraits": {
+    "AGILITY": 0,
+    "STRENGTH": -1,
+    "FINESSE": 0,
+    "INSTINCT": 2,
+    "PRESENCE": 1,
+    "KNOWLEDGE": 1
+   },
+   "suggestedPrimaryWeapon": "Casting Dagger",
+   "suggestedSecondaryWeapon": "Rune Shield",
+   "suggestedArmor": "Mage Robes",
+   "spellCarrier": {
+    "prompt": {
+     "en-US": "Decide what you use for your craft"
+    },
+    "examples": {
+     "en-US": "a handwritten journal, runestones, etc."
+    }
+   },
+   "characterDescription": {
+    "clothes": [
+     {
+      "en-US": "diaphanous"
+     },
+     {
+      "en-US": "flowing"
+     },
+     {
+      "en-US": "foreboding"
+     },
+     {
+      "en-US": "ragged"
+     },
+     {
+      "en-US": "stately"
+     },
+     {
+      "en-US": "uniquely patterned"
+     }
+    ],
+    "eyes": [
+     {
+      "en-US": "carnations"
+     },
+     {
+      "en-US": "earth"
+     },
+     {
+      "en-US": "endless ocean"
+     },
+     {
+      "en-US": "fire"
+     },
+     {
+      "en-US": "ivy"
+     },
+     {
+      "en-US": "lilacs"
+     },
+     {
+      "en-US": "night"
+     },
+     {
+      "en-US": "seafoam"
+     },
+     {
+      "en-US": "winter"
+     }
+    ],
+    "body": [
+     {
+      "en-US": "broad"
+     },
+     {
+      "en-US": "carved"
+     },
+     {
+      "en-US": "curvy"
+     },
+     {
+      "en-US": "lanky"
+     },
+     {
+      "en-US": "rotund"
+     },
+     {
+      "en-US": "short"
+     },
+     {
+      "en-US": "stocky"
+     },
+     {
+      "en-US": "tall"
+     },
+     {
+      "en-US": "thin"
+     },
+     {
+      "en-US": "tiny"
+     },
+     {
+      "en-US": "toned"
+     }
+    ],
+    "skin": [
+     {
+      "en-US": "ashes"
+     },
+     {
+      "en-US": "clover"
+     },
+     {
+      "en-US": "falling snow"
+     },
+     {
+      "en-US": "fine sand"
+     },
+     {
+      "en-US": "obsidian"
+     },
+     {
+      "en-US": "rose"
+     },
+     {
+      "en-US": "sapphire"
+     },
+     {
+      "en-US": "wisteria"
+     }
+    ],
+    "attitude": [
+     {
+      "en-US": "a candle flame"
+     },
+     {
+      "en-US": "a cat"
+     },
+     {
+      "en-US": "a doctor"
+     },
+     {
+      "en-US": "an old tree"
+     },
+     {
+      "en-US": "an oracle"
+     },
+     {
+      "en-US": "a spider"
+     },
+     {
+      "en-US": "a sunny day"
+     }
+    ]
+   }
+  }
  }
 ]
