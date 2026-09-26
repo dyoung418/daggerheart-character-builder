@@ -3956,7 +3956,7 @@
     "description": [
      {
       "paragraph": {
-       "en-US": "When you are attacked, you can mark an Armor Slot to gain a bonus to your Evasion equal to your available Armor Score against the attack."
+       "en-US": "When you are attacked, you can mark an Armor Slot to gain a bonus to your Evasion equal to your available Armor Slots against the attack."
       }
      }
     ]
